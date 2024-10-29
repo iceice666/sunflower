@@ -1,0 +1,12 @@
+[package]
+name = "sunflower"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sunflower-provider = { path = "./provider" }
+sunflower-player = { path = "./player" }
+
+[workspace]
+resolver = "2"
+members = ["provider", "player"]
