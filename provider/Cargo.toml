@@ -1,0 +1,19 @@
+[package]
+name = "sunflower-provider"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.65"
+tracing = "0.1"
+rodio = "0.19"
+sunflower-player = { path = "../player" }
+
+# local feature
+lofty = { version = "0.21", optional = true }
+
+[features]
+local = ["dep:lofty"]
+yt-dl = ["local"]
+
+default = ["local", "yt-dl"]
