@@ -1,13 +1,18 @@
 mod _impl;
 pub mod error;
-
 use std::{collections::HashMap, fmt::Debug};
 
 pub use _impl::Player;
 use error::PlayerResult;
 
 pub type TrackInfo = HashMap<String, String>;
-pub type TrackSource = Box<dyn rodio::Source<Item = f32> + Send + Sync>;
+type TrackSourceType<T> = Box<dyn rodio::Source<Item = T> + Send + Sync>;
+
+pub enum TrackSource {
+    F32(TrackSourceType<f32>),
+    I16(TrackSourceType<i16>),
+    U16(TrackSourceType<u16>),
+}
 
 pub trait Track: Send + Sync {
     fn info(&self) -> PlayerResult<TrackInfo>;

@@ -11,11 +11,17 @@ pub enum PlayerError {
     #[error("Rodio Play Error: {0}")]
     RodioPlay(#[from] rodio::PlayError),
 
+    #[error("Rodio Decoder Error: {0}")]
+    RodioDecoder(#[from] rodio::decoder::DecoderError),
+
     #[error("Cannot build source: {0}")]
     UnableToBuildSource(String),
 
     #[error("Cannot fetch source infomation: {0}")]
     UnableToFetchSourceInfo(String),
+
+    #[error("Empty track")]
+    EmptyTrack,
 }
 
 pub type PlayerResult<T = ()> = Result<T, PlayerError>;

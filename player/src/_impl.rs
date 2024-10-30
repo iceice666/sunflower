@@ -1,9 +1,15 @@
 use rand::prelude::*;
 use rodio::{OutputStream, Sink};
-use std::{collections::VecDeque, fmt::Debug};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Debug,
+};
 use tracing::{debug, warn};
 
-use crate::{error::PlayerResult, TrackObject};
+use crate::{
+    error::{PlayerError, PlayerResult},
+    TrackObject, TrackSource,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RepeatState {
@@ -80,7 +86,11 @@ impl Player {
             };
 
             debug!("Appending source to sink");
-            self.sink.append(source);
+            match source {
+                TrackSource::F32(source) => self.sink.append(source),
+                TrackSource::I16(source) => self.sink.append(source),
+                TrackSource::U16(source) => self.sink.append(source),
+            }
 
             debug!("Waiting for track to end");
             self.sink.sleep_until_end();
@@ -142,5 +152,11 @@ impl Player {
             RepeatState::Queue => self.repeat = RepeatState::Track,
             RepeatState::Track => self.repeat = RepeatState::None,
         }
+    }
+
+    #[inline]
+    pub fn get_info(&self) -> PlayerResult<HashMap<String, String>> {
+        let track = self.current_track.as_ref().ok_or(PlayerError::EmptyTrack)?;
+        track.info()
     }
 }
