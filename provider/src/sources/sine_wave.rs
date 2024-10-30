@@ -41,7 +41,8 @@ impl Track for SineWaveTrack {
             .take_duration(Duration::from_secs_f32(self.duration))
             .amplify(0.20);
 
-        Ok(Box::new(source))
+
+        Ok(TrackSource::F32(Box::new(source)))
     }
 
     fn get_unique_id(&self) -> String {

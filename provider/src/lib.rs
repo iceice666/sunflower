@@ -5,6 +5,9 @@ use error::ProviderResult;
 pub mod error;
 pub mod sources;
 
+#[cfg(test)]
+mod test;
+
 
 use sunflower_player::TrackObject;
 

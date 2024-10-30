@@ -1,6 +1,8 @@
-use std::{borrow::Borrow, collections::HashMap, path::PathBuf};
+use std::{borrow::Borrow, collections::HashMap, fs::File, io::BufReader, path::PathBuf};
 
 use lofty::{file::TaggedFileExt, read_from_path, tag::Accessor};
+use regex::Regex;
+use rodio::Decoder;
 use sunflower_player::{
     error::{PlayerError, PlayerResult},
     Track, TrackInfo, TrackObject, TrackSource,
@@ -16,6 +18,16 @@ pub struct LocalFileProvider {
     __search_cache: HashMap<String, String>,
 }
 
+impl LocalFileProvider {
+    pub fn new(music_folder: impl AsRef<str>) -> Self {
+        let music_folder = PathBuf::from(music_folder.as_ref());
+        Self {
+            music_folder,
+            __search_cache: HashMap::new(),
+        }
+    }
+}
+
 impl Provider for LocalFileProvider {
     fn get_name(&self) -> String {
         "LocalFileProvider".to_string()
@@ -23,9 +35,12 @@ impl Provider for LocalFileProvider {
 
     fn search(
         &mut self,
-        keyword: impl AsRef<str>,
+        pattern: impl AsRef<str>,
     ) -> ProviderResult<impl Borrow<HashMap<String, String>> + '_> {
-        let keyword = keyword.as_ref().to_lowercase();
+        // Create a regex pattern, case-insensitive by default
+        let regex = Regex::new(&format!("(?i){}", pattern.as_ref()))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+
         let mut result = HashMap::new();
 
         for entry in self.music_folder.read_dir()? {
@@ -36,7 +51,8 @@ impl Provider for LocalFileProvider {
             }
 
             if let Some(filename_str) = path.file_name().and_then(|name| name.to_str()) {
-                if filename_str.to_lowercase().contains(&keyword) {
+                // Use regex matching instead of simple contains
+                if regex.is_match(filename_str) {
                     if let Some(filepath_str) = path.to_str() {
                         result.insert(filename_str.to_string(), filepath_str.to_string());
                     }
@@ -75,7 +91,11 @@ impl LocalFileSource {
 
 impl Track for LocalFileSource {
     fn build_source(&self) -> PlayerResult<TrackSource> {
-        todo!()
+        let file = BufReader::new(File::open(&self.path)?);
+        let source = Decoder::new(file)?;
+        let result = Box::new(source);
+
+        Ok(TrackSource::I16(result))
     }
 
     fn get_unique_id(&self) -> String {
