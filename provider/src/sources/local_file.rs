@@ -1,4 +1,10 @@
-use std::{borrow::Borrow, collections::HashMap, fs::File, io::{self, BufReader}, path::PathBuf};
+use std::{
+    borrow::Borrow,
+    collections::HashMap,
+    fs::File,
+    io::{self, BufReader},
+    path::PathBuf,
+};
 
 use lofty::{file::TaggedFileExt, read_from_path, tag::Accessor};
 use regex::Regex;
