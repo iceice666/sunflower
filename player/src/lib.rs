@@ -1,12 +1,12 @@
 pub(crate) mod _impl;
 pub mod error;
 
+mod interface;
 #[cfg(test)]
 mod tests;
-mod interface;
 
-use interface::*;
 use error::PlayerResult;
+use interface::*;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 use std::{collections::HashMap, fmt::Debug, thread};

@@ -213,10 +213,10 @@ impl Player {
     //     self.sink.stop();
     //     let (__stream, stream_handle) = OutputStream::try_default()?;
     //     let sink = Sink::try_new(&stream_handle)?;
-    // 
+    //
     //     self.sink = sink;
     //     self.__stream = __stream;
-    // 
+    //
     //     Ok(())
     // }
 
