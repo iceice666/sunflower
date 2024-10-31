@@ -59,6 +59,6 @@ impl Track for SineWaveTrack {
     }
 
     fn get_unique_id(&self) -> String {
-        format!("SineWave with {} secs", self.duration)
+        format!("SineWave {} hz {} secs", self.freq, self.duration)
     }
 }

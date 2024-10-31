@@ -778,11 +778,13 @@ dependencies = [
 name = "sunflower-player"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "rand",
  "rodio",
  "symphonia",
  "thiserror",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

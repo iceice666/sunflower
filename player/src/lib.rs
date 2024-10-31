@@ -1,9 +1,15 @@
-mod _impl;
+pub(crate) mod _impl;
 pub mod error;
-use std::{collections::HashMap, fmt::Debug};
 
-pub use _impl::*;
+#[cfg(test)]
+mod tests;
+mod interface;
+
+use interface::*;
 use error::PlayerResult;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread::JoinHandle;
+use std::{collections::HashMap, fmt::Debug, thread};
 
 pub type TrackInfo = HashMap<String, String>;
 type TrackSourceType<T> = Box<dyn rodio::Source<Item = T> + Send + Sync>;
@@ -28,4 +34,20 @@ impl Debug for TrackObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TrackObject({})", self.get_unique_id())
     }
+}
+
+#[cfg(debug_assertions)]
+/// A simple function that starts player thread in the background.
+/// Only for debug use (like unit test).
+pub fn play(
+    callback: impl Send + 'static + FnOnce(Sender<EventRequest>, Receiver<EventResponse>),
+) -> PlayerResult<JoinHandle<()>> {
+    let (player, sender, receiver) = _impl::Player::try_new()?;
+
+    let handle = thread::spawn(|| callback(sender, receiver));
+
+    // This block current thread
+    player.mainloop();
+
+    Ok(handle)
 }

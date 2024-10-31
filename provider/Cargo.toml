@@ -12,10 +12,10 @@ sunflower-player = { path = "../player" }
 regex = { version = "1.5.5", optional = true }
 lofty = { version = "0.21", optional = true }
 
-
 [dev-dependencies]
 tracing-subscriber = "0.3"
 anyhow = "1.0.58"
+
 
 [features]
 local = ["dep:lofty", "dep:regex"]

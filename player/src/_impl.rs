@@ -30,9 +30,13 @@ pub enum EventRequest {
     ToggleShuffle,
 
     NewTrack(TrackObject),
+    ClearPlaylist,
+    RemoveTrack(usize),
+
+    Terminate,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EventResponse {
     Volume(f32),
     Repeat(RepeatState),
@@ -40,7 +44,7 @@ pub enum EventResponse {
     Error(String),
 }
 
-pub struct Player {
+pub(crate) struct Player {
     playlist: Vec<TrackObject>,
     current_track_index: usize,
     is_playing: bool,
@@ -54,6 +58,7 @@ pub struct Player {
     repeat: RepeatState,
     is_shuffle: bool,
     is_playlist_going_backwards: bool,
+    is_terminated: bool,
 }
 
 impl Debug for Player {
@@ -87,14 +92,15 @@ impl Player {
             repeat: RepeatState::None,
             is_shuffle: false,
             is_playlist_going_backwards: false,
+            is_terminated: false,
         };
 
         Ok((this, event_queue_tx, event_response_rx))
     }
 
-    pub fn mainloop(&mut self) {
+    pub fn mainloop(mut self) {
         info!("Starting mainloop");
-        loop {
+        while !self.is_terminated {
             self.dispatch_request();
 
             if !self.is_playing || !self.sink.empty() {
@@ -136,9 +142,10 @@ impl Player {
         };
 
         self.is_playlist_going_backwards = false;
-        trace!(
-            "Player state: index:{}, is_playing:{}, is_shuffle:{}, repeat:{:?}",
+        debug!(
+            "Player state: index:{}/{}, is_playing:{}, is_shuffle:{}, repeat:{:?}",
             self.current_track_index,
+            self.playlist.len(),
             self.is_playing,
             self.is_shuffle,
             self.repeat
@@ -162,6 +169,7 @@ impl Player {
                 EventRequest::Next => self.sink.stop(),
                 EventRequest::Prev => {
                     self.is_playlist_going_backwards = true;
+                    self.current_track_index %= self.playlist.len();
                     self.sink.stop();
                 }
                 EventRequest::GetVolume => {
@@ -188,21 +196,29 @@ impl Player {
                         }
                     }
                 }
+                EventRequest::ClearPlaylist => self.playlist.clear(),
+                EventRequest::RemoveTrack(idx) => {
+                    self.playlist.remove(idx);
+                }
+                EventRequest::Terminate => {
+                    info!("Exiting main loop");
+                    self.is_terminated = true;
+                }
             }
         }
     }
 
-    #[inline]
-    pub fn refresh_sink(&mut self) -> PlayerResult {
-        self.sink.stop();
-        let (__stream, stream_handle) = OutputStream::try_default()?;
-        let sink = Sink::try_new(&stream_handle)?;
-
-        self.sink = sink;
-        self.__stream = __stream;
-
-        Ok(())
-    }
+    // #[inline]
+    // fn refresh_sink(&mut self) -> PlayerResult {
+    //     self.sink.stop();
+    //     let (__stream, stream_handle) = OutputStream::try_default()?;
+    //     let sink = Sink::try_new(&stream_handle)?;
+    // 
+    //     self.sink = sink;
+    //     self.__stream = __stream;
+    // 
+    //     Ok(())
+    // }
 
     #[inline]
     fn append_source(&mut self) {
