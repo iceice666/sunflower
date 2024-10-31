@@ -6,7 +6,7 @@ pub mod error;
 pub mod sources;
 
 #[cfg(test)]
-mod test;
+mod tests;
 
 
 use sunflower_player::TrackObject;

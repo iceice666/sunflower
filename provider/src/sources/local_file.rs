@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::HashMap, fs::File, io::BufReader, path::PathBuf};
+use std::{borrow::Borrow, collections::HashMap, fs::File, io::{self, BufReader}, path::PathBuf};
 
 use lofty::{file::TaggedFileExt, read_from_path, tag::Accessor};
 use regex::Regex;
@@ -35,11 +35,11 @@ impl Provider for LocalFileProvider {
 
     fn search(
         &mut self,
-        pattern: impl AsRef<str>,
+        pattern_regex: impl AsRef<str>,
     ) -> ProviderResult<impl Borrow<HashMap<String, String>> + '_> {
         // Create a regex pattern, case-insensitive by default
-        let regex = Regex::new(&format!("(?i){}", pattern.as_ref()))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+        let regex = Regex::new(&format!("(?i){}", pattern_regex.as_ref()))
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
         let mut result = HashMap::new();
 

@@ -5,6 +5,7 @@ use rodio::{source::SineWave, Source};
 use sunflower_player::error::PlayerResult;
 use sunflower_player::{Track, TrackInfo, TrackObject, TrackSource};
 
+use crate::error::ProviderError;
 use crate::{Provider, ProviderResult};
 
 pub struct SineWaveProvider;
@@ -21,13 +22,26 @@ impl Provider for SineWaveProvider {
         Ok(HashMap::new())
     }
 
-    fn get_track(&self, duration: impl AsRef<str>) -> ProviderResult<TrackObject> {
-        let duration = duration.as_ref().parse().unwrap();
-        Ok(Box::new(SineWaveTrack { duration }))
+    fn get_track(&self, input: impl AsRef<str>) -> ProviderResult<TrackObject> {
+        let (freq, duration) =
+            input
+                .as_ref()
+                .split_once('+')
+                .ok_or(ProviderError::TrackNotFound(
+                    "SineWaveProvider: input should be in format of 'freq+duration'".into(),
+                ))?;
+        let freq = freq.parse().map_err(|_| {
+            ProviderError::TrackNotFound("SineWaveProvider: freq should be a number".into())
+        })?;
+        let duration = duration.parse().map_err(|_| {
+            ProviderError::TrackNotFound("SineWaveProvider: duration should be a number".into())
+        })?;
+        Ok(Box::new(SineWaveTrack { freq, duration }))
     }
 }
 
 pub(crate) struct SineWaveTrack {
+    freq: f32,
     duration: f32,
 }
 
@@ -37,10 +51,9 @@ impl Track for SineWaveTrack {
     }
 
     fn build_source(&self) -> PlayerResult<TrackSource> {
-        let source = SineWave::new(440.0)
+        let source = SineWave::new(self.freq)
             .take_duration(Duration::from_secs_f32(self.duration))
             .amplify(0.20);
-
 
         Ok(TrackSource::F32(Box::new(source)))
     }
