@@ -2,7 +2,7 @@ use std::{
     borrow::Borrow,
     collections::HashMap,
     sync::mpsc::Sender,
-    thread::{self, JoinHandle},
+    thread::{self, sleep, JoinHandle},
     time::Duration,
 };
 
@@ -10,7 +10,7 @@ use crate::{
     sources::{LocalFileProvider, SineWaveProvider},
     Provider,
 };
-use sunflower_player::{EventRequest, Player};
+use sunflower_player::{EventRequest, Player, RepeatState};
 use tracing::level_filters::LevelFilter;
 
 fn play(
@@ -32,7 +32,7 @@ fn play(
 
 #[test]
 fn test_append_track_after_previous_track_ends() -> anyhow::Result<()> {
-   let handle = play(|sender| {
+    let handle = play(|sender| {
         let provider = SineWaveProvider;
         let tracks = vec![
             provider.get_track("440+3").unwrap(),
@@ -51,8 +51,8 @@ fn test_append_track_after_previous_track_ends() -> anyhow::Result<()> {
         sender.send(request).unwrap();
     })?;
 
-   handle.join().unwrap();
-   Ok(())
+    handle.join().unwrap();
+    Ok(())
 }
 
 #[test]
@@ -81,7 +81,38 @@ fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
             sender.send(EventRequest::NewTrack(track)).unwrap();
         }
     })?
-    .join().unwrap();
+    .join()
+    .unwrap();
+
+    Ok(())
+}
+
+#[test]
+fn test_request() -> anyhow::Result<()> {
+    play(|sender| {
+        let provider = SineWaveProvider;
+        let track = provider.get_track("440+30").unwrap();
+        sender.send(EventRequest::NewTrack(track)).unwrap();
+        sleep(Duration::from_secs(2));
+        sender.send(EventRequest::Pause).unwrap();
+        sleep(Duration::from_secs(2));
+        sender.send(EventRequest::Play).unwrap();
+        sleep(Duration::from_secs(2));
+        sender.send(EventRequest::SetVolume(0.1)).unwrap();
+        sleep(Duration::from_secs(2));
+        sender.send(EventRequest::SetVolume(0.5)).unwrap();
+        sleep(Duration::from_secs(2));
+        sender
+            .send(EventRequest::SetRepeat(RepeatState::Track))
+            .unwrap();
+        sender.send(EventRequest::Next).unwrap();
+        sleep(Duration::from_secs(5));
+        sender.send(EventRequest::Prev).unwrap();
+        sleep(Duration::from_secs(5));
+        sender.send(EventRequest::Stop).unwrap();
+    })?
+    .join()
+    .unwrap();
 
     Ok(())
 }
