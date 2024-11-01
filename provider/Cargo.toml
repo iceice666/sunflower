@@ -7,7 +7,9 @@ edition = "2021"
 thiserror = "1.0.65"
 tracing = "0.1"
 rodio = "0.19"
-sunflower-player = { path = "../player" }
+sunflower-player = { path = "../player", no-default-features = true, features = [
+    "low-level",
+] }
 
 regex = { version = "1.5.5", optional = true }
 lofty = { version = "0.21", optional = true }

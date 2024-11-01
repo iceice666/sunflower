@@ -3,18 +3,39 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+pub use crate::error::PlayerError as PlayerImplError;
+use crate::{_impl::Player as PlayerImpl, track::TrackObject};
 use tracing::debug;
 
-use crate::{_impl::Player as PlayerImpl, track::TrackObject};
-
 pub use crate::_impl::{EventRequest, EventResponse, RepeatState};
+
+#[derive(Debug, thiserror::Error)]
+pub enum PlayerError {
+    #[error("Failed to send request: {0}")]
+    SendRequestError(#[from] std::sync::mpsc::SendError<EventRequest>),
+
+    #[error("Failed to receive response: {0}")]
+    RecvResponseError(#[from] std::sync::mpsc::RecvError),
+
+    #[error("Failed to create player: {0}")]
+    UnableToRecvPlayer(#[from] oneshot::RecvError),
+
+    #[error("Failed to create player: {0}")]
+    UnableToSendPlayer(#[from] oneshot::SendError<Player>),
+
+    #[error("Failed to create player: {0}")]
+    UnableToStartPlayerThread(#[from] std::io::Error),
+
+    #[error("Player error: {0}")]
+    PlayerImplError(#[from] PlayerImplError),
+}
 
 pub struct Player {
     tx: Sender<EventRequest>,
     rx: Receiver<EventResponse>,
 }
 
-type Result<T = ()> = std::result::Result<T, String>;
+type Result<T = ()> = std::result::Result<T, PlayerError>;
 
 impl Player {
     pub fn try_new() -> Result<(Self, JoinHandle<Result>)> {
@@ -23,18 +44,20 @@ impl Player {
 
         let (oneshot_tx, oneshot_rx) = oneshot::channel();
 
-        let handle = thread::spawn(|| -> Result {
-            let (base, tx, rx) = PlayerImpl::try_new().map_err(|e| format!("{e}"))?;
+        let handle = thread::Builder::new()
+            .name("PlayerThread".into())
+            .spawn(|| -> Result {
+                let (base, tx, rx) = PlayerImpl::try_new()?;
 
-            let this = Self { tx, rx };
-            oneshot_tx.send(this).map_err(|e| format!("{e}"))?;
+                let this = Self { tx, rx };
+                oneshot_tx.send(this)?;
 
-            base.mainloop();
+                base.mainloop();
 
-            Ok(())
-        });
+                Ok(())
+            })?;
 
-        let this = oneshot_rx.recv().map_err(|e| format!("{e}"))?;
+        let this = oneshot_rx.recv()?;
 
         Ok((this, handle))
     }
@@ -44,19 +67,9 @@ impl Player {
     fn send_request(&self, event: EventRequest) -> Result<EventResponse> {
         debug!("Sending request: {:?}", event);
 
-        self.tx
-            .send(event)
-            .map_err(|e| format!("Failed to send request: {}", e))?;
+        self.tx.send(event)?;
 
-        let resp = self
-            .rx
-            .recv()
-            .map_err(|e| format!("Failed to receive response: {}", e))?;
-
-        match resp {
-            EventResponse::Error(msg) => Err(msg),
-            _ => Ok(resp),
-        }
+        Ok(self.rx.recv()?)
     }
 
     pub fn play(&self) -> Result {
@@ -128,5 +141,12 @@ impl Player {
 
     pub fn terminate(&self) -> Result {
         self.send_request(EventRequest::Terminate).map(|_| ())
+    }
+}
+
+impl Drop for Player {
+    fn drop(&mut self) {
+        // Attempt to terminate gracefully
+        let _ = self.terminate();
     }
 }

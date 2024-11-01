@@ -1,5 +1,5 @@
 pub(crate) mod _impl;
-pub mod error;
+pub(crate) mod error;
 mod interface;
 
 #[cfg(test)]
@@ -15,7 +15,7 @@ use std::thread;
 pub use interface::*;
 
 #[cfg(feature = "low_level")]
-pub use _impl::*;
+pub use crate::{_impl::*, error::*};
 
 #[cfg(all(feature = "interface", feature = "low_level"))]
 compile_error!("Cannot enable both 'interface' and 'low_level' features at the same time.");
