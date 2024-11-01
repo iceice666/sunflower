@@ -40,6 +40,7 @@ pub enum EventRequest {
 pub enum EventResponse {
     Volume(f32),
     Repeat(RepeatState),
+    Shuffled(bool),
     Ok,
     Error(String),
 }
