@@ -3,6 +3,8 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use tracing::debug;
+
 use crate::{_impl::Player as PlayerImpl, track::TrackObject};
 
 pub use crate::_impl::{EventRequest, EventResponse, RepeatState};
@@ -40,9 +42,12 @@ impl Player {
 
 impl Player {
     fn send_request(&self, event: EventRequest) -> Result<EventResponse> {
+        debug!("Sending request: {:?}", event);
+
         self.tx
             .send(event)
             .map_err(|e| format!("Failed to send request: {}", e))?;
+
         let resp = self
             .rx
             .recv()

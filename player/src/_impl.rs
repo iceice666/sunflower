@@ -156,6 +156,10 @@ impl Player {
         )
     }
 
+    fn send_response(&mut self, response: EventResponse) {
+        self.__event_response_sender.send(response).unwrap();
+    }
+
     fn dispatch_request(&mut self) {
         if let Ok(request) = self.__event_queue_receiver.try_recv() {
             info!("Received request: {:?}", request);
@@ -164,31 +168,43 @@ impl Player {
                 EventRequest::Play => {
                     self.sink.play();
                     self.is_playing = true;
+                    self.send_response(EventResponse::Ok);
                 }
                 EventRequest::Pause => self.sink.pause(),
                 EventRequest::Stop => {
                     self.sink.stop();
                     self.is_playing = false;
+                    self.send_response(EventResponse::Ok);
                 }
-                EventRequest::Next => self.sink.stop(),
+                EventRequest::Next => {
+                    self.sink.stop();
+                    self.send_response(EventResponse::Ok);
+                }
                 EventRequest::Prev => {
                     self.is_playlist_going_backwards = true;
                     self.current_track_index %= self.playlist.len();
                     self.sink.stop();
+                    self.send_response(EventResponse::Ok);
                 }
                 EventRequest::GetVolume => {
                     let volume = self.sink.volume();
-                    self.__event_response_sender
-                        .send(EventResponse::Volume(volume))
-                        .unwrap()
+                    self.send_response(EventResponse::Volume(volume))
                 }
-                EventRequest::SetVolume(volume) => self.sink.set_volume(volume),
-                EventRequest::GetRepeat => self
-                    .__event_response_sender
-                    .send(EventResponse::Repeat(self.repeat))
-                    .unwrap(),
-                EventRequest::SetRepeat(repeat) => self.repeat = repeat,
-                EventRequest::ToggleShuffle => self.is_shuffle = !self.is_shuffle,
+                EventRequest::SetVolume(volume) => {
+                    self.sink.set_volume(volume);
+                    self.send_response(EventResponse::Ok);
+                }
+                EventRequest::GetRepeat => {
+                    self.send_response(EventResponse::Repeat(self.repeat));
+                }
+                EventRequest::SetRepeat(repeat) => {
+                    self.repeat = repeat;
+                    self.send_response(EventResponse::Ok);
+                }
+                EventRequest::ToggleShuffle => {
+                    self.is_shuffle = !self.is_shuffle;
+                    self.send_response(EventResponse::Ok);
+                }
                 EventRequest::NewTrack(track) => {
                     self.playlist.push(track);
 
@@ -199,14 +215,21 @@ impl Player {
                             self.append_source();
                         }
                     }
+
+                    self.send_response(EventResponse::Ok);
                 }
-                EventRequest::ClearPlaylist => self.playlist.clear(),
+                EventRequest::ClearPlaylist => {
+                    self.playlist.clear();
+                    self.send_response(EventResponse::Ok);
+                }
                 EventRequest::RemoveTrack(idx) => {
                     self.playlist.remove(idx);
+                    self.send_response(EventResponse::Ok);
                 }
                 EventRequest::Terminate => {
                     info!("Exiting main loop");
                     self.is_terminated = true;
+                    self.send_response(EventResponse::Ok);
                 }
             }
         }
