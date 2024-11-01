@@ -1,5 +1,6 @@
+use crate::_impl::{EventRequest, EventResponse, RepeatState};
 use crate::error::PlayerResult;
-use crate::{play, EventRequest, EventResponse, RepeatState, Track, TrackInfo, TrackSource};
+use crate::{play, Track, TrackInfo, TrackSource};
 use rodio::source::SineWave;
 use rodio::Source;
 use std::thread::sleep;
