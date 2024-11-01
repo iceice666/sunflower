@@ -11,7 +11,7 @@ use regex::Regex;
 use rodio::Decoder;
 use sunflower_player::{
     error::{PlayerError, PlayerResult},
-    Track, TrackInfo, TrackObject, TrackSource,
+    track::{Track, TrackInfo, TrackObject, TrackSource},
 };
 
 use crate::{

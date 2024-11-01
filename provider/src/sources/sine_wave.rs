@@ -3,7 +3,7 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use rodio::{source::SineWave, Source};
 use sunflower_player::error::PlayerResult;
-use sunflower_player::{Track, TrackInfo, TrackObject, TrackSource};
+use sunflower_player::track::{Track, TrackInfo, TrackObject, TrackSource};
 
 use crate::error::ProviderError;
 use crate::{Provider, ProviderResult};

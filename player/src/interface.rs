@@ -3,11 +3,11 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::{TrackObject, _impl::Player as PlayerImpl};
+use crate::{_impl::Player as PlayerImpl, track::TrackObject};
 
 pub use crate::_impl::{EventRequest, EventResponse, RepeatState};
 
-struct Player {
+pub struct Player {
     tx: Sender<EventRequest>,
     rx: Receiver<EventResponse>,
 }

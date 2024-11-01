@@ -8,7 +8,7 @@ pub mod sources;
 #[cfg(test)]
 mod tests;
 
-use sunflower_player::TrackObject;
+use sunflower_player::track::TrackObject;
 
 /// A trait for providing music tracks.
 pub trait Provider {

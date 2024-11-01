@@ -2,10 +2,14 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use crate::{sources::LocalFileProvider, Provider};
 use sunflower_player::{play, EventRequest};
+use tracing::level_filters::LevelFilter;
 
 #[test]
 fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
     const SEARCH_REGEX: &str = r".*\.mp3$";
+    tracing_subscriber::fmt()
+        .with_max_level(LevelFilter::DEBUG)
+        .init();
 
     play(|sender, _| {
         let list: Vec<String>;

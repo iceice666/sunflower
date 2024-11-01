@@ -6,7 +6,10 @@ use std::{
 };
 use tracing::{debug, info, trace, warn};
 
-use crate::{error::PlayerResult, TrackObject, TrackSource};
+use crate::{
+    error::PlayerResult,
+    track::{TrackObject, TrackSource},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RepeatState {
@@ -155,7 +158,7 @@ impl Player {
 
     fn dispatch_request(&mut self) {
         if let Ok(request) = self.__event_queue_receiver.try_recv() {
-            debug!("Received request: {:?}", request);
+            info!("Received request: {:?}", request);
 
             match request {
                 EventRequest::Play => {
