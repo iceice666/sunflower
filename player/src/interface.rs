@@ -1,24 +1,45 @@
-use std::sync::mpsc::{Receiver, Sender};
+use std::{
+    sync::mpsc::{Receiver, Sender},
+    thread::{self, JoinHandle},
+};
 
-use crate::{_impl::Player as PlayerImpl, error::PlayerResult, TrackObject};
+use crate::{TrackObject, _impl::Player as PlayerImpl};
 
 pub use crate::_impl::{EventRequest, EventResponse, RepeatState};
 
-type SendResult<T = ()> = Result<T, String>;
-
-pub struct Player {
-    base: PlayerImpl,
+struct Player {
     tx: Sender<EventRequest>,
     rx: Receiver<EventResponse>,
 }
 
-impl Player {
-    pub fn try_new() -> PlayerResult<Self> {
-        let (base, tx, rx) = PlayerImpl::try_new()?;
-        Ok(Self { base, tx, rx })
-    }
+type Result<T = ()> = std::result::Result<T, String>;
 
-    fn send_request(&self, event: EventRequest) -> SendResult<EventResponse> {
+impl Player {
+    pub fn try_new() -> Result<(Self, JoinHandle<Result>)> {
+        // Since the rodio sink doesn't allow send, so we start a new thread
+        // then send the tx and rx to main thread
+
+        let (oneshot_tx, oneshot_rx) = oneshot::channel();
+
+        let handle = thread::spawn(|| -> Result {
+            let (base, tx, rx) = PlayerImpl::try_new().map_err(|e| format!("{e}"))?;
+
+            let this = Self { tx, rx };
+            oneshot_tx.send(this).map_err(|e| format!("{e}"))?;
+
+            base.mainloop();
+
+            Ok(())
+        });
+
+        let this = oneshot_rx.recv().map_err(|e| format!("{e}"))?;
+
+        Ok((this, handle))
+    }
+}
+
+impl Player {
+    fn send_request(&self, event: EventRequest) -> Result<EventResponse> {
         self.tx
             .send(event)
             .map_err(|e| format!("Failed to send request: {}", e))?;
@@ -32,35 +53,33 @@ impl Player {
             _ => Ok(resp),
         }
     }
-}
 
-impl Player {
-    pub fn play(&self) -> SendResult {
+    pub fn play(&self) -> Result {
         self.send_request(EventRequest::Play).map(|_| ())
     }
 
-    pub fn pause(&self) -> SendResult {
+    pub fn pause(&self) -> Result {
         self.send_request(EventRequest::Pause).map(|_| ())
     }
 
-    pub fn stop(&self) -> SendResult {
+    pub fn stop(&self) -> Result {
         self.send_request(EventRequest::Stop).map(|_| ())
     }
 
-    pub fn next(&self) -> SendResult {
+    pub fn next(&self) -> Result {
         self.send_request(EventRequest::Next).map(|_| ())
     }
 
-    pub fn prev(&self) -> SendResult {
+    pub fn prev(&self) -> Result {
         self.send_request(EventRequest::Prev).map(|_| ())
     }
 
-    pub fn set_volume(&self, volume: f32) -> SendResult {
+    pub fn set_volume(&self, volume: f32) -> Result {
         self.send_request(EventRequest::SetVolume(volume))
             .map(|_| ())
     }
 
-    pub fn get_volume(&self) -> SendResult<f32> {
+    pub fn get_volume(&self) -> Result<f32> {
         self.send_request(EventRequest::GetVolume)
             .map(|res| match res {
                 EventResponse::Volume(volume) => volume,
@@ -68,12 +87,12 @@ impl Player {
             })
     }
 
-    pub fn set_repeat(&self, state: RepeatState) -> SendResult {
+    pub fn set_repeat(&self, state: RepeatState) -> Result {
         self.send_request(EventRequest::SetRepeat(state))
             .map(|_| ())
     }
 
-    pub fn get_repeat(&self) -> SendResult<RepeatState> {
+    pub fn get_repeat(&self) -> Result<RepeatState> {
         self.send_request(EventRequest::GetRepeat)
             .map(|res| match res {
                 EventResponse::Repeat(repeat) => repeat,
@@ -81,7 +100,7 @@ impl Player {
             })
     }
 
-    pub fn toggle_shuffle(&self) -> SendResult<bool> {
+    pub fn toggle_shuffle(&self) -> Result<bool> {
         self.send_request(EventRequest::ToggleShuffle)
             .map(|res| match res {
                 EventResponse::Shuffled(enabled) => enabled,
@@ -89,20 +108,20 @@ impl Player {
             })
     }
 
-    pub fn new_track(&self, track: TrackObject) -> SendResult {
+    pub fn new_track(&self, track: TrackObject) -> Result {
         self.send_request(EventRequest::NewTrack(track)).map(|_| ())
     }
 
-    pub fn clear_playlist(&self) -> SendResult {
+    pub fn clear_playlist(&self) -> Result {
         self.send_request(EventRequest::ClearPlaylist).map(|_| ())
     }
 
-    pub fn remove_track(&self, index: usize) -> SendResult {
+    pub fn remove_track(&self, index: usize) -> Result {
         self.send_request(EventRequest::RemoveTrack(index))
             .map(|_| ())
     }
 
-    pub fn terminate(&self) -> SendResult {
+    pub fn terminate(&self) -> Result {
         self.send_request(EventRequest::Terminate).map(|_| ())
     }
 }

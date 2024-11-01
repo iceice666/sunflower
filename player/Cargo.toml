@@ -10,12 +10,14 @@ symphonia = "0.5.4"
 thiserror = "1.0.65"
 tracing = "0.1"
 
+oneshot = { version = "0.1", optional = true }
+
 [dev-dependencies]
 tracing-subscriber = "0.3"
 anyhow = "1.0.58"
 
 
 [features]
-interface = []
+interface = ["dep:oneshot"]
 low_level = []
 default = ["interface"]
