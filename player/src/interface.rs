@@ -18,8 +18,8 @@ type Result<T = ()> = std::result::Result<T, String>;
 
 impl Player {
     pub fn try_new() -> Result<(Self, JoinHandle<Result>)> {
-        // Since the rodio sink doesn't allow send, so we start a new thread
-        // then send the tx and rx to main thread
+        // Since the rodio sink doesn't allow sending, so we start a new thread
+        // then send the tx and rx to the main thread
 
         let (oneshot_tx, oneshot_rx) = oneshot::channel();
 

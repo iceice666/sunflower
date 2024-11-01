@@ -17,7 +17,7 @@ pub enum PlayerError {
     #[error("Cannot build source: {0}")]
     UnableToBuildSource(String),
 
-    #[error("Cannot fetch source infomation: {0}")]
+    #[error("Cannot fetch source information: {0}")]
     UnableToFetchSourceInfo(String),
 
     #[error("Empty track")]
