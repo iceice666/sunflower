@@ -14,10 +14,10 @@ use std::thread;
 #[cfg(feature = "interface")]
 pub use interface::*;
 
-#[cfg(feature = "low_level")]
+#[cfg(feature = "low-level")]
 pub use crate::{_impl::*, error::*};
 
-#[cfg(all(feature = "interface", feature = "low_level"))]
+#[cfg(all(feature = "interface", feature = "low-level"))]
 compile_error!("Cannot enable both 'interface' and 'low_level' features at the same time.");
 
 #[cfg(debug_assertions)]

@@ -19,5 +19,5 @@ anyhow = "1.0.58"
 
 [features]
 interface = ["dep:oneshot"]
-low_level = []
+low-level = []
 default = ["interface"]
