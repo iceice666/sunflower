@@ -49,7 +49,7 @@ pub enum EventResponse {
     Error(String),
 }
 
-pub(crate) struct Player {
+pub struct Player {
     playlist: Vec<TrackObject>,
     current_track_index: usize,
     is_playing: bool,

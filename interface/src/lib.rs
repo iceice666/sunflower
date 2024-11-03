@@ -1,13 +1,12 @@
-use crate::error::PlayerInterfaceError;
 use std::{
     sync::mpsc::{Receiver, Sender},
     thread::{self, JoinHandle},
 };
-
-use crate::{_impl::Player, track::TrackObject};
+use sunflower_player::error::PlayerError;
+use sunflower_player::{track::TrackObject, Player};
 use tracing::debug;
 
-pub use crate::_impl::{EventRequest, EventResponse, RepeatState};
+pub use sunflower_player::{EventRequest, EventResponse, RepeatState};
 
 pub struct PlayerInterface {
     tx: Sender<EventRequest>,
@@ -128,4 +127,25 @@ impl Drop for PlayerInterface {
         // Attempt to terminate gracefully
         let _ = self.terminate();
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PlayerInterfaceError {
+    #[error("Failed to send request: {0}")]
+    SendRequestError(#[from] std::sync::mpsc::SendError<EventRequest>),
+
+    #[error("Failed to receive response: {0}")]
+    RecvResponseError(#[from] std::sync::mpsc::RecvError),
+
+    #[error("Failed to create player: {0}")]
+    UnableToRecvPlayer(#[from] oneshot::RecvError),
+
+    #[error("Failed to create player: {0}")]
+    UnableToSendPlayer(#[from] oneshot::SendError<PlayerInterface>),
+
+    #[error("Failed to create player: {0}")]
+    UnableToStartPlayerThread(#[from] std::io::Error),
+
+    #[error("Player error: {0}")]
+    PlayerImplError(#[from] PlayerError),
 }

@@ -10,10 +10,6 @@ use error::PlayerResult;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
-#[cfg(feature = "interface")]
-mod interface;
-
-#[cfg(not(feature = "interface"))]
 pub use crate::_impl::*;
 
 #[cfg(debug_assertions)]

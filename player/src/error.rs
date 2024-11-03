@@ -1,7 +1,5 @@
 use std::io;
 
-use crate::_impl::EventRequest;
-
 #[derive(Debug, thiserror::Error)]
 pub enum PlayerError {
     #[error("IO Error: {0}")]
@@ -27,28 +25,3 @@ pub enum PlayerError {
 }
 
 pub type PlayerResult<T = ()> = Result<T, PlayerError>;
-
-#[cfg(feature = "interface")]
-use crate::interface::PlayerInterface;
-
-#[cfg(feature = "interface")]
-#[derive(Debug, thiserror::Error)]
-pub enum PlayerInterfaceError {
-    #[error("Failed to send request: {0}")]
-    SendRequestError(#[from] std::sync::mpsc::SendError<EventRequest>),
-
-    #[error("Failed to receive response: {0}")]
-    RecvResponseError(#[from] std::sync::mpsc::RecvError),
-
-    #[error("Failed to create player: {0}")]
-    UnableToRecvPlayer(#[from] oneshot::RecvError),
-
-    #[error("Failed to create player: {0}")]
-    UnableToSendPlayer(#[from] oneshot::SendError<PlayerInterface>),
-
-    #[error("Failed to create player: {0}")]
-    UnableToStartPlayerThread(#[from] std::io::Error),
-
-    #[error("Player error: {0}")]
-    PlayerImplError(#[from] PlayerError),
-}
