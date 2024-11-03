@@ -18,7 +18,7 @@ pub use interface::*;
 pub use crate::{_impl::*, error::*};
 
 #[cfg(all(feature = "interface", feature = "low-level"))]
-compile_error!("Cannot enable both 'interface' and 'low_level' features at the same time.");
+compile_error!("Cannot enable both 'interface' and 'low-level' features at the same time.");
 
 #[cfg(debug_assertions)]
 /// A simple function that starts player thread in the background.

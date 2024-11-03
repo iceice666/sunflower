@@ -3,6 +3,7 @@ use rodio::{OutputStream, Sink};
 use std::{
     fmt::Debug,
     sync::mpsc::{channel, Receiver, Sender},
+    time::Duration,
 };
 use tracing::{debug, info, trace, warn};
 
@@ -161,7 +162,11 @@ impl Player {
     }
 
     fn dispatch_request(&mut self) {
-        if let Ok(request) = self.__event_queue_receiver.try_recv() {
+        if let Ok(request) = self
+            .__event_queue_receiver
+            .recv_timeout(Duration::from_millis(100))
+        // Only block current thread for at the most 100ms.
+        {
             info!("Received request: {:?}", request);
 
             match request {
