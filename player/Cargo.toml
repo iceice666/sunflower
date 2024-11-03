@@ -21,4 +21,3 @@ anyhow = "1.0.58"
 default = []
 
 interface = ["dep:oneshot"]
-low-level = []

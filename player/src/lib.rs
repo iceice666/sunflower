@@ -1,6 +1,5 @@
 pub(crate) mod _impl;
-pub(crate) mod error;
-mod interface;
+pub mod error;
 
 #[cfg(test)]
 mod tests;
@@ -12,13 +11,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
 #[cfg(feature = "interface")]
-pub use interface::*;
+mod interface;
 
-#[cfg(feature = "low-level")]
-pub use crate::{_impl::*, error::*};
-
-#[cfg(all(feature = "interface", feature = "low-level"))]
-compile_error!("Cannot enable both 'interface' and 'low-level' features at the same time.");
+#[cfg(not(feature = "interface"))]
+pub use crate::_impl::*;
 
 #[cfg(debug_assertions)]
 /// A simple function that starts player thread in the background.

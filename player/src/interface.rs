@@ -1,43 +1,22 @@
+use crate::error::PlayerInterfaceError;
 use std::{
     sync::mpsc::{Receiver, Sender},
     thread::{self, JoinHandle},
 };
 
-pub use crate::error::PlayerError as PlayerImplError;
-use crate::{_impl::Player as PlayerImpl, track::TrackObject};
+use crate::{_impl::Player, track::TrackObject};
 use tracing::debug;
 
 pub use crate::_impl::{EventRequest, EventResponse, RepeatState};
 
-#[derive(Debug, thiserror::Error)]
-pub enum PlayerError {
-    #[error("Failed to send request: {0}")]
-    SendRequestError(#[from] std::sync::mpsc::SendError<EventRequest>),
-
-    #[error("Failed to receive response: {0}")]
-    RecvResponseError(#[from] std::sync::mpsc::RecvError),
-
-    #[error("Failed to create player: {0}")]
-    UnableToRecvPlayer(#[from] oneshot::RecvError),
-
-    #[error("Failed to create player: {0}")]
-    UnableToSendPlayer(#[from] oneshot::SendError<Player>),
-
-    #[error("Failed to create player: {0}")]
-    UnableToStartPlayerThread(#[from] std::io::Error),
-
-    #[error("Player error: {0}")]
-    PlayerImplError(#[from] PlayerImplError),
-}
-
-pub struct Player {
+pub struct PlayerInterface {
     tx: Sender<EventRequest>,
     rx: Receiver<EventResponse>,
 }
 
-type Result<T = ()> = std::result::Result<T, PlayerError>;
+type Result<T = ()> = std::result::Result<T, PlayerInterfaceError>;
 
-impl Player {
+impl PlayerInterface {
     pub fn try_new() -> Result<(Self, JoinHandle<Result>)> {
         // Since the rodio sink doesn't allow sending, so we start a new thread
         // then send the tx and rx to the main thread
@@ -47,7 +26,7 @@ impl Player {
         let handle = thread::Builder::new()
             .name("PlayerThread".into())
             .spawn(|| -> Result {
-                let (base, tx, rx) = PlayerImpl::try_new()?;
+                let (base, tx, rx) = Player::try_new()?;
 
                 let this = Self { tx, rx };
                 oneshot_tx.send(this)?;
@@ -63,7 +42,7 @@ impl Player {
     }
 }
 
-impl Player {
+impl PlayerInterface {
     fn send_request(&self, event: EventRequest) -> Result<EventResponse> {
         debug!("Sending request: {:?}", event);
 
@@ -144,7 +123,7 @@ impl Player {
     }
 }
 
-impl Drop for Player {
+impl Drop for PlayerInterface {
     fn drop(&mut self) {
         // Attempt to terminate gracefully
         let _ = self.terminate();
