@@ -801,6 +801,7 @@ version = "0.1.0"
 dependencies = [
  "oneshot",
  "sunflower-player",
+ "sunflower-provider",
  "thiserror",
  "tracing",
 ]

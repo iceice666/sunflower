@@ -21,4 +21,5 @@ anyhow = "1.0.58"
 local = ["dep:lofty", "dep:regex"]
 yt-dl = ["local"]
 
-default = ["local", "yt-dl"]
+default = ["local"]
+all = ["local", "yt-dl"]
