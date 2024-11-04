@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::{
     borrow::Borrow,
     collections::HashMap,
@@ -14,18 +15,20 @@ use sunflower_player::{
     track::{Track, TrackInfo, TrackObject, TrackSource},
 };
 
+use crate::SearchResult;
 use crate::{
     error::{ProviderError, ProviderResult},
     Provider,
 };
 
+#[derive(PartialEq, Eq)]
 pub struct LocalFileProvider {
     music_folder: PathBuf,
     __search_cache: HashMap<String, String>,
 }
 
 impl LocalFileProvider {
-    pub fn new(music_folder: impl AsRef<str>) -> Self {
+    pub fn new(music_folder: impl AsRef<Path>) -> Self {
         let music_folder = PathBuf::from(music_folder.as_ref());
         Self {
             music_folder,
@@ -39,10 +42,7 @@ impl Provider for LocalFileProvider {
         "LocalFileProvider".to_string()
     }
 
-    fn search(
-        &mut self,
-        pattern_regex: impl AsRef<str>,
-    ) -> ProviderResult<impl Borrow<HashMap<String, String>> + '_> {
+    fn search(&mut self, pattern_regex: impl AsRef<str>) -> SearchResult {
         // Create a regex pattern, case-insensitive by default
         let regex = Regex::new(&format!("(?i){}", pattern_regex.as_ref()))
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;

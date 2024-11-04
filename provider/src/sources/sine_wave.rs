@@ -1,13 +1,18 @@
+use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::time::Duration;
-use std::{borrow::Borrow, collections::HashMap};
 
 use rodio::{source::SineWave, Source};
 use sunflower_player::error::PlayerResult;
 use sunflower_player::track::{Track, TrackInfo, TrackObject, TrackSource};
 
 use crate::error::ProviderError;
+use crate::SearchResult;
 use crate::{Provider, ProviderResult};
 
+static JUST_A_EMPTY_HASHMAP: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+
+#[derive(PartialEq, Eq)]
 pub struct SineWaveProvider;
 
 impl Provider for SineWaveProvider {
@@ -15,11 +20,8 @@ impl Provider for SineWaveProvider {
         "SineWaveProvider".to_string()
     }
 
-    fn search(
-        &mut self,
-        _: impl AsRef<str>,
-    ) -> ProviderResult<impl Borrow<HashMap<String, String>> + '_> {
-        Ok(HashMap::new())
+    fn search(&mut self, _: impl AsRef<str>) -> SearchResult {
+        Ok(&JUST_A_EMPTY_HASHMAP)
     }
 
     fn get_track(&self, input: impl AsRef<str>) -> ProviderResult<TrackObject> {

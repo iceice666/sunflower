@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::{sources::LocalFileProvider, Provider};
 use sunflower_player::{play, EventRequest};
@@ -17,7 +17,7 @@ fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
 
         {
             let search_result = provider.search(SEARCH_REGEX).unwrap();
-            let search_result: &HashMap<String, String> = search_result.borrow();
+            let search_result: &HashMap<String, String> = search_result;
 
             println!("==== Search Result ====");
             for (key, value) in search_result {
