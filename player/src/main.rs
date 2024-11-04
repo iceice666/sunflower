@@ -1,5 +1,4 @@
-
 /// For profile test
-fn main () {
+fn main() {
     todo!("Making profile test")
 }
