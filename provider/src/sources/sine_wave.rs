@@ -20,14 +20,13 @@ impl Provider for SineWaveProvider {
         "SineWaveProvider".to_string()
     }
 
-    fn search(&mut self, _: impl AsRef<str>) -> SearchResult {
+    fn search(&mut self, _: &str) -> SearchResult {
         Ok(&JUST_A_EMPTY_HASHMAP)
     }
 
-    fn get_track(&self, input: impl AsRef<str>) -> ProviderResult<TrackObject> {
+    fn get_track(&self, input: &str) -> ProviderResult<TrackObject> {
         let (freq, duration) =
             input
-                .as_ref()
                 .split_once('+')
                 .ok_or(ProviderError::TrackNotFound(
                     "SineWaveProvider: input should be in format of 'freq+duration'".into(),

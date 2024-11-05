@@ -18,8 +18,8 @@ pub trait Provider {
     fn get_name(&self) -> String;
 
     /// Search for tracks by keyword. It returns a HashMap of track name and its unique id.
-    fn search(&mut self, keyword: impl AsRef<str>) -> SearchResult;
+    fn search(&mut self, keyword: &str) -> SearchResult;
 
     /// Get a track by its unique id.
-    fn get_track(&self, id: impl AsRef<str>) -> ProviderResult<TrackObject>;
+    fn get_track(&self, id: &str) -> ProviderResult<TrackObject>;
 }

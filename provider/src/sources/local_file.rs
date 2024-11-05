@@ -42,9 +42,9 @@ impl Provider for LocalFileProvider {
         "LocalFileProvider".to_string()
     }
 
-    fn search(&mut self, pattern_regex: impl AsRef<str>) -> SearchResult {
+    fn search(&mut self, pattern_regex: &str) -> SearchResult {
         // Create a regex pattern, case-insensitive by default
-        let regex = Regex::new(&format!("(?i){}", pattern_regex.as_ref()))
+        let regex = Regex::new(&format!("(?i){}", pattern_regex))
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
         let mut result = HashMap::new();
@@ -70,8 +70,7 @@ impl Provider for LocalFileProvider {
         Ok(self.__search_cache.borrow())
     }
 
-    fn get_track(&self, name: impl AsRef<str>) -> ProviderResult<TrackObject> {
-        let name = name.as_ref();
+    fn get_track(&self, name: &str) -> ProviderResult<TrackObject> {
         let target_path = self
             .__search_cache
             .get(name)
