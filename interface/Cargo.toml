@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 oneshot = "0.1"
-sunflower-player = { path = "../player" }
 thiserror = "1.0.65"
 tracing = "0.1"
 
+sunflower-player = { path = "../player" }
 sunflower-provider = { path = "../provider", default-features = false }
 
 [features]

@@ -29,7 +29,7 @@ fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
         }
 
         for file_name in list {
-            let track = provider.get_track(file_name).unwrap();
+            let track = provider.get_track(&file_name).unwrap();
             sender.send(EventRequest::NewTrack(track)).unwrap();
         }
     })?
