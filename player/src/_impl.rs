@@ -33,8 +33,8 @@ pub enum EventRequest {
     SetRepeat(RepeatState),
     ToggleShuffle,
 
-    NewTrack(TrackObject),
-    ClearPlaylist,
+    AddTrack(TrackObject),
+    ClearQueue,
     RemoveTrack(usize),
 
     Terminate,
@@ -50,7 +50,7 @@ pub enum EventResponse {
 }
 
 pub struct Player {
-    playlist: Vec<TrackObject>,
+    queue: Vec<TrackObject>,
     current_track_index: usize,
     is_playing: bool,
     sink: Sink,
@@ -62,14 +62,14 @@ pub struct Player {
     // Flags
     repeat: RepeatState,
     is_shuffle: bool,
-    is_playlist_going_backwards: bool,
+    is_queue_going_backwards: bool,
     is_terminated: bool,
 }
 
 impl Debug for Player {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Player")
-            .field("playlist", &self.playlist)
+            .field("queue", &self.queue)
             .field("current_track", &self.current_track_index)
             .field("repeat", &self.repeat)
             .field("is_shuffle", &self.is_shuffle)
@@ -85,7 +85,7 @@ impl Player {
         let (event_response_tx, event_response_rx) = channel();
 
         let this = Self {
-            playlist: Vec::new(),
+            queue: Vec::new(),
             current_track_index: 0,
             is_playing: false,
             sink,
@@ -96,7 +96,7 @@ impl Player {
 
             repeat: RepeatState::None,
             is_shuffle: false,
-            is_playlist_going_backwards: false,
+            is_queue_going_backwards: false,
             is_terminated: false,
         };
 
@@ -124,33 +124,33 @@ impl Player {
 
     #[inline]
     fn update_current_track(&mut self) {
-        let reverse = self.is_playlist_going_backwards;
-        let playlist_len = self.playlist.len();
+        let reverse = self.is_queue_going_backwards;
+        let queue_len = self.queue.len();
 
         let idx = self.current_track_index;
         self.current_track_index = match (self.is_shuffle, self.repeat) {
-            (true, _) => thread_rng().gen_range(0..playlist_len),
+            (true, _) => thread_rng().gen_range(0..queue_len),
             (_, RepeatState::Track) => self.current_track_index,
             (_, RepeatState::Queue) => {
-                let next_idx = idx + if reverse { playlist_len - 1 } else { 1 };
-                next_idx % playlist_len
+                let next_idx = idx + if reverse { queue_len - 1 } else { 1 };
+                next_idx % queue_len
             }
             (_, RepeatState::None) => {
-                let next_idx = idx + if reverse { playlist_len - 1 } else { 1 };
-                if next_idx >= playlist_len {
+                let next_idx = idx + if reverse { queue_len - 1 } else { 1 };
+                if next_idx >= queue_len {
                     self.is_playing = false;
-                    next_idx % (playlist_len + 1) // remain a new space for the new track
+                    next_idx % (queue_len + 1) // remain a new space for the new track
                 } else {
                     next_idx
                 }
             }
         };
 
-        self.is_playlist_going_backwards = false;
+        self.is_queue_going_backwards = false;
         debug!(
             "Player state: index:{}/{}, is_playing:{}, is_shuffle:{}, repeat:{:?}",
             self.current_track_index,
-            self.playlist.len(),
+            self.queue.len(),
             self.is_playing,
             self.is_shuffle,
             self.repeat
@@ -186,8 +186,8 @@ impl Player {
                     self.send_response(EventResponse::Ok);
                 }
                 EventRequest::Prev => {
-                    self.is_playlist_going_backwards = true;
-                    self.current_track_index %= self.playlist.len();
+                    self.is_queue_going_backwards = true;
+                    self.current_track_index %= self.queue.len();
                     self.sink.stop();
                     self.send_response(EventResponse::Ok);
                 }
@@ -210,25 +210,25 @@ impl Player {
                     self.is_shuffle = !self.is_shuffle;
                     self.send_response(EventResponse::Ok);
                 }
-                EventRequest::NewTrack(track) => {
-                    self.playlist.push(track);
+                EventRequest::AddTrack(track) => {
+                    self.queue.push(track);
 
                     if !self.is_playing {
                         self.is_playing = true;
 
-                        if self.current_track_index == self.playlist.len() - 1 {
+                        if self.current_track_index == self.queue.len() - 1 {
                             self.append_source();
                         }
                     }
 
                     self.send_response(EventResponse::Ok);
                 }
-                EventRequest::ClearPlaylist => {
-                    self.playlist.clear();
+                EventRequest::ClearQueue => {
+                    self.queue.clear();
                     self.send_response(EventResponse::Ok);
                 }
                 EventRequest::RemoveTrack(idx) => {
-                    self.playlist.remove(idx);
+                    self.queue.remove(idx);
                     self.send_response(EventResponse::Ok);
                 }
                 EventRequest::Terminate => {
@@ -254,7 +254,7 @@ impl Player {
 
     #[inline]
     fn append_source(&mut self) {
-        let track = self.playlist.get(self.current_track_index).unwrap();
+        let track = self.queue.get(self.current_track_index).unwrap();
         info!(
             "Next track:[{}] {}",
             self.current_track_index,

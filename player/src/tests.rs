@@ -42,12 +42,12 @@ fn test_request_and_control() -> anyhow::Result<()> {
             freq: 440.0,
             duration: 30.0,
         });
-        sender.send(EventRequest::NewTrack(track)).unwrap();
+        sender.send(EventRequest::AddTrack(track)).unwrap();
         let track = Box::new(SineWaveTestTrack {
             freq: 660.0,
             duration: 30.0,
         });
-        sender.send(EventRequest::NewTrack(track)).unwrap();
+        sender.send(EventRequest::AddTrack(track)).unwrap();
         sleep(Duration::from_secs(2));
 
         sender.send(EventRequest::Pause).unwrap();
@@ -85,7 +85,7 @@ fn test_request_and_control() -> anyhow::Result<()> {
             freq: 880.0,
             duration: 30.0,
         });
-        sender.send(EventRequest::NewTrack(track)).unwrap();
+        sender.send(EventRequest::AddTrack(track)).unwrap();
         sleep(Duration::from_secs(5));
         sender.send(EventRequest::Terminate).unwrap();
     })?

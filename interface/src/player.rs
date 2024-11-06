@@ -104,12 +104,12 @@ impl PlayerInterface {
             })
     }
 
-    pub fn new_track(&self, track: TrackObject) -> Result {
-        self.send_request(EventRequest::NewTrack(track)).map(|_| ())
+    pub fn add_track(&self, track: TrackObject) -> Result {
+        self.send_request(EventRequest::AddTrack(track)).map(|_| ())
     }
 
-    pub fn clear_playlist(&self) -> Result {
-        self.send_request(EventRequest::ClearPlaylist).map(|_| ())
+    pub fn clear_queue(&self) -> Result {
+        self.send_request(EventRequest::ClearQueue).map(|_| ())
     }
 
     pub fn remove_track(&self, index: usize) -> Result {
