@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package protocol;
+
+enum RequestType {
+  CHECK_ALIVE = 0;
+
+  DAEMOM_START = 1;
+  DAEMOM_STOP = 2;
+  DAEMOM_RESTART = 3;
+  DAEMOM_STATUS = 4;
+
+  PLAYER_PLAY = 10;
+  PLAYER_PAUSE = 11;
+  PLAYER_STOP = 12;
+  PLAYER_NEXT = 13;
+  PLAYER_PREV = 14;
+
+  PLAYER_SET_REPEAT = 20;
+  PLAYER_SET_VOLUME = 21;
+  PLAYER_TOGGLE_SHUFFLE = 22;
+
+  PLAYER_GET_REPEAT = 30;
+  PLAYER_GET_VOLUME = 31;
+  PLAYER_GET_STATUS = 39;
+
+  PLAYER_ADD_TRACK = 40;
+  PLAYER_REMOVE_TRACK = 41;
+  PLAYER_CLEAR_QUEUE = 42;
+}
+
+message Request {
+  RequestType type = 1;
+  optional string data = 2;
+}
+
+enum ResponseType {
+  ALIVE = 0;
+
+  DAEMOM_START_OK = 1;
+  DAEMOM_STOP_OK = 2;
+  DAEMOM_RESTART_OK = 3;
+  DAEMOM_STATUS_OK = 4;
+
+  PLAYER_PLAY_OK = 10;
+  PLAYER_PAUSE_OK = 11;
+  PLAYER_STOP_OK = 12;
+  PLAYER_NEXT_OK = 13;
+  PLAYER_PREV_OK = 14;
+
+  PLAYER_SET_REPEAT_OK = 20;
+  PLAYER_SET_VOLUME_OK = 21;
+  PLAYER_TOGGLE_SHUFFLE_OK = 22;
+
+  PLAYER_GET_REPEAT_OK = 30;
+  PLAYER_GET_VOLUME_OK = 31;
+  PLAYER_GET_STATUS_OK = 39;
+
+  PLAYER_ADD_TRACK_OK = 40;
+  PLAYER_REMOVE_TRACK_OK = 41;
+  PLAYER_CLEAR_QUEUE_OK = 42;
+
+  PLAYER_ERROR = 99;
+}
+
+message Response {
+  ResponseType type = 1;
+  optional string data = 2;
+}

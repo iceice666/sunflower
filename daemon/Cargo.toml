@@ -5,8 +5,13 @@ edition = "2021"
 
 [dependencies]
 sunflower-provider = { path = "../provider" }
-sunflower-player = { path = "../player", features = ["interface"]}
+sunflower-player-interface = { path = "../interface" }
 
 tracing-subscriber = "0.3"
 anyhow = "1.0.58"
-clap = { version = "4.5.20", features = ["derive"] }
+
+prost = "0.13"
+prost-types = "0.13"
+
+[build-dependencies]
+prost-build = "0.13.3"
