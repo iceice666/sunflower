@@ -103,8 +103,8 @@ impl Player {
         Ok((this, event_queue_tx, event_response_rx))
     }
 
-    pub fn mainloop(mut self) {
-        info!("Starting mainloop");
+    pub fn main_loop(mut self) {
+        info!("Starting main loop");
         while !self.is_terminated {
             self.dispatch_request();
 
@@ -165,7 +165,7 @@ impl Player {
         if let Ok(request) = self
             .__event_queue_receiver
             .recv_timeout(Duration::from_millis(100))
-        // Only block current thread for at the most 100ms.
+        // Only block current thread for at the most 100 ms.
         {
             info!("Received request: {:?}", request);
 

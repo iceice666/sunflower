@@ -16,14 +16,14 @@ pub use crate::_impl::*;
 /// A simple function that starts player thread in the background.
 /// Only for debug use (like unit test).
 pub fn play(
-    callback: impl Send + 'static + FnOnce(Sender<_impl::EventRequest>, Receiver<_impl::EventResponse>),
+    callback: impl Send + 'static + FnOnce(Sender<EventRequest>, Receiver<EventResponse>),
 ) -> PlayerResult<thread::JoinHandle<()>> {
-    let (player, sender, receiver) = _impl::Player::try_new()?;
+    let (player, sender, receiver) = Player::try_new()?;
 
     let handle = thread::spawn(|| callback(sender, receiver));
 
     // This block current thread
-    player.mainloop();
+    player.main_loop();
 
     Ok(handle)
 }

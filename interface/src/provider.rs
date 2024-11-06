@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::LazyLock;
 use sunflower_provider::error::ProviderResult;
-use sunflower_provider::sources::SineWaveProvider;
+use sunflower_provider::sources::*;
 use sunflower_provider::{Provider, SearchResult};
 use tracing::error;
 
@@ -74,32 +74,30 @@ impl ProviderRegistry {
         keyword: impl AsRef<str>,
         provider_names: Vec<&str>,
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
-        let keyword = keyword.as_ref();
-
-        let result = self
-            .inner
-            .iter_mut()
-            .filter(|(name, _)| provider_names.contains(&name.as_str()))
-            .map(|(name, provider)| match provider.search(keyword) {
-                Ok(search_result) => (name.to_string(), search_result),
-                Err(e) => {
-                    error!("{e}");
-                    (format!("err_{name}"), JUST_A_EMPTY_HASHMAP.deref())
-                }
-            });
-
-        Ok(HashMap::from_iter(result))
+        self.search(keyword, |name| provider_names.contains(name))
     }
 
     pub fn search_all(
         &mut self,
         keyword: impl AsRef<str>,
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
+        self.search(keyword, |_| true)
+    }
+}
+
+impl ProviderRegistry {
+
+    fn search(
+        &mut self,
+        keyword: impl AsRef<str>,
+        filter: impl FnOnce(&String) -> bool,
+    ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
         let keyword = keyword.as_ref();
 
         let result = self
             .inner
             .iter_mut()
+            .filter(|(name, _)| filter(name))
             .map(|(name, provider)| match provider.search(keyword) {
                 Ok(search_result) => (name.to_string(), search_result),
                 Err(e) => {

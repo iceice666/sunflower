@@ -7,7 +7,8 @@ use std::{
     path::PathBuf,
 };
 
-use lofty::{file::TaggedFileExt, read_from_path, tag::Accessor};
+use lofty::{file::TaggedFileExt, read_from_path};
+use lofty::tag::Accessor;
 use regex::Regex;
 use rodio::Decoder;
 use sunflower_player::{
@@ -95,18 +96,6 @@ impl LocalFileSource {
 }
 
 impl Track for LocalFileSource {
-    fn build_source(&self) -> PlayerResult<TrackSource> {
-        let file = BufReader::new(File::open(&self.path)?);
-        let source = Decoder::new(file)?;
-        let result = Box::new(source);
-
-        Ok(TrackSource::I16(result))
-    }
-
-    fn get_unique_id(&self) -> String {
-        self.path.to_string_lossy().to_string()
-    }
-
     fn info(&self) -> PlayerResult<TrackInfo> {
         let mut result = HashMap::new();
 
@@ -128,5 +117,17 @@ impl Track for LocalFileSource {
         result.insert("genre".to_string(), genre);
 
         Ok(result)
+    }
+
+    fn build_source(&self) -> PlayerResult<TrackSource> {
+        let file = BufReader::new(File::open(&self.path)?);
+        let source = Decoder::new(file)?;
+        let result = Box::new(source);
+
+        Ok(TrackSource::I16(result))
+    }
+
+    fn get_unique_id(&self) -> String {
+        self.path.to_string_lossy().to_string()
     }
 }

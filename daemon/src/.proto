@@ -5,10 +5,10 @@ package protocol;
 enum RequestType {
   CHECK_ALIVE = 0;
 
-  DAEMOM_START = 1;
-  DAEMOM_STOP = 2;
-  DAEMOM_RESTART = 3;
-  DAEMOM_STATUS = 4;
+  DAEMON_START = 1;
+  DAEMON_STOP = 2;
+  DAEMON_RESTART = 3;
+  DAEMON_STATUS = 4;
 
   PLAYER_PLAY = 10;
   PLAYER_PAUSE = 11;
@@ -37,10 +37,10 @@ message Request {
 enum ResponseType {
   ALIVE = 0;
 
-  DAEMOM_START_OK = 1;
-  DAEMOM_STOP_OK = 2;
-  DAEMOM_RESTART_OK = 3;
-  DAEMOM_STATUS_OK = 4;
+  DAEMON_START_OK = 1;
+  DAEMON_STOP_OK = 2;
+  DAEMON_RESTART_OK = 3;
+  DAEMON_STATUS_OK = 4;
 
   PLAYER_PLAY_OK = 10;
   PLAYER_PAUSE_OK = 11;

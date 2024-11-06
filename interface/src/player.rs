@@ -30,7 +30,7 @@ impl PlayerInterface {
                 let this = Self { tx, rx };
                 oneshot_tx.send(this)?;
 
-                base.mainloop();
+                base.main_loop();
 
                 Ok(())
             })?;
