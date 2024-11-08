@@ -69,13 +69,7 @@ impl ProviderRegistry {
         self.inner.keys().collect()
     }
 
-    pub fn search(
-        &mut self,
-        keyword: impl AsRef<str>,
-        provider_names: Vec<&str>,
-    ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
-        self.search(keyword, |name| provider_names.contains(name))
-    }
+    
 
     pub fn search_all(
         &mut self,
@@ -87,10 +81,10 @@ impl ProviderRegistry {
 
 impl ProviderRegistry {
 
-    fn search(
+    pub fn search(
         &mut self,
         keyword: impl AsRef<str>,
-        filter: impl FnOnce(&String) -> bool,
+        mut filter: impl FnMut(&String) -> bool,
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
         let keyword = keyword.as_ref();
 
