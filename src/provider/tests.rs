@@ -14,7 +14,7 @@ async fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
         .with_max_level(LevelFilter::DEBUG)
         .init();
 
-    play(|sender, _| {
+    play(async |sender, _| {
         let list: Vec<String>;
         let mut provider = LocalFileProvider::new("../music");
 
@@ -32,10 +32,11 @@ async fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
         }
 
         for file_name in list {
-            let track = provider.get_track(&file_name).unwrap();
+            let track = provider.get_track(&file_name).await.unwrap();
             sender.send(PlayerRequest::AddTrack(track)).unwrap();
         }
-    }).await?
+    })
+    .await?
     .join()
     .unwrap();
 

@@ -89,7 +89,8 @@ async fn test_request_and_control() -> anyhow::Result<()> {
         sender.send(PlayerRequest::AddTrack(track)).unwrap();
         sleep(Duration::from_secs(5));
         sender.send(PlayerRequest::Terminate).unwrap();
-    }).await?
+    })
+    .await?
     .join()
     .unwrap();
 
