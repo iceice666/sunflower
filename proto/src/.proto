@@ -3,12 +3,7 @@ syntax = "proto3";
 package protocol;
 
 enum RequestType {
-  PLACEHOLDER_REQ = 0;
-
-  DAEMON_START = 1;
-  DAEMON_STOP = 2;
-  DAEMON_RESTART = 3;
-  DAEMON_STATUS = 4;
+  CHECK_ALIVE = 0;
 
   PLAYER_PLAY = 10;
   PLAYER_PAUSE = 11;
@@ -37,12 +32,7 @@ message Request {
 }
 
 enum ResponseType {
-  PLACEHOLDER_RESP = 0;
-
-  DAEMON_START_OK = 1;
-  DAEMON_STOP_OK = 2;
-  DAEMON_RESTART_OK = 3;
-  DAEMON_STATUS_OK = 4;
+  IM_ALIVE = 0;
 
   PLAYER_PLAY_OK = 10;
   PLAYER_PAUSE_OK = 11;
