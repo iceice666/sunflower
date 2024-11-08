@@ -1,3 +1,28 @@
-[workspace]
-resolver = "2"
-members = ["provider", "player", "daemon", "interface", "proto"]
+
+[package]
+name = "sunflower-daemon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "2.0"
+tracing = "0.1"
+rand = "0.8.5"
+rodio = { version = "0.20", features = ["symphonia-all"] }
+symphonia = "0.5.4"
+
+regex = { version = "1.5.5", optional = true }
+lofty = { version = "0.21", optional = true }
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
+anyhow = "1.0.93"
+
+
+[features]
+local = ["dep:lofty", "dep:regex"]
+yt-dl = ["local"]
+
+default = ["local"]
+all = ["local", "yt-dl"]
+
