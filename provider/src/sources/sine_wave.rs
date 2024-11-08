@@ -25,12 +25,9 @@ impl Provider for SineWaveProvider {
     }
 
     fn get_track(&self, input: &str) -> ProviderResult<TrackObject> {
-        let (freq, duration) =
-            input
-                .split_once('+')
-                .ok_or(ProviderError::TrackNotFound(
-                    "SineWaveProvider: input should be in format of 'freq+duration'".into(),
-                ))?;
+        let (freq, duration) = input.split_once('+').ok_or(ProviderError::TrackNotFound(
+            "SineWaveProvider: input should be in format of 'freq+duration'".into(),
+        ))?;
         let freq = freq.parse().map_err(|_| {
             ProviderError::TrackNotFound("SineWaveProvider: freq should be a number".into())
         })?;

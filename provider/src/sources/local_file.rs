@@ -7,8 +7,8 @@ use std::{
     path::PathBuf,
 };
 
-use lofty::{file::TaggedFileExt, read_from_path};
 use lofty::tag::Accessor;
+use lofty::{file::TaggedFileExt, read_from_path};
 use regex::Regex;
 use rodio::Decoder;
 use sunflower_player::{

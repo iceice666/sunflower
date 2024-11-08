@@ -69,8 +69,6 @@ impl ProviderRegistry {
         self.inner.keys().collect()
     }
 
-    
-
     pub fn search_all(
         &mut self,
         keyword: impl AsRef<str>,
@@ -80,7 +78,6 @@ impl ProviderRegistry {
 }
 
 impl ProviderRegistry {
-
     pub fn search(
         &mut self,
         keyword: impl AsRef<str>,
@@ -88,17 +85,17 @@ impl ProviderRegistry {
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
         let keyword = keyword.as_ref();
 
-        let result = self
-            .inner
-            .iter_mut()
-            .filter(|(name, _)| filter(name))
-            .map(|(name, provider)| match provider.search(keyword) {
-                Ok(search_result) => (name.to_string(), search_result),
-                Err(e) => {
-                    error!("{e}");
-                    (format!("err_{name}"), JUST_A_EMPTY_HASHMAP.deref())
-                }
-            });
+        let result =
+            self.inner
+                .iter_mut()
+                .filter(|(name, _)| filter(name))
+                .map(|(name, provider)| match provider.search(keyword) {
+                    Ok(search_result) => (name.to_string(), search_result),
+                    Err(e) => {
+                        error!("{e}");
+                        (format!("err_{name}"), JUST_A_EMPTY_HASHMAP.deref())
+                    }
+                });
 
         Ok(HashMap::from_iter(result))
     }
