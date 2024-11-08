@@ -37,6 +37,8 @@ enum ResponseType {
   IM_ALIVE = 0;
 
   OK = 1;
+  TRACK_DATA = 2;
+  PLAYER_STATUS =9;
 
   ERROR = 99;
 
