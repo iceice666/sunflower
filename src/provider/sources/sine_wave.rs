@@ -15,16 +15,17 @@ static JUST_A_EMPTY_HASHMAP: LazyLock<HashMap<String, String>> = LazyLock::new(H
 #[derive(PartialEq, Eq)]
 pub struct SineWaveProvider;
 
+#[async_trait::async_trait]
 impl Provider for SineWaveProvider {
-    fn get_name(&self) -> String {
+    async fn get_name(&self) -> String {
         "SineWaveProvider".to_string()
     }
 
-    fn search(&mut self, _: &str) -> SearchResult {
+    async fn search(&mut self, _: &str) -> SearchResult {
         Ok(&JUST_A_EMPTY_HASHMAP)
     }
 
-    fn get_track(&self, input: &str) -> ProviderResult<TrackObject> {
+    async fn get_track(&self, input: &str) -> ProviderResult<TrackObject> {
         let (freq, duration) = input.split_once('+').ok_or(ProviderError::TrackNotFound(
             "SineWaveProvider: input should be in format of 'freq+duration'".into(),
         ))?;

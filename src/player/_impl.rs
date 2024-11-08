@@ -99,22 +99,20 @@ impl Player {
         Ok((this, event_queue_tx, event_response_rx))
     }
 
-    pub fn main_loop(mut self) {
+    pub async fn main_loop(mut self) {
         info!("Starting main loop");
         while !self.is_terminated {
-            self.handle_request();
+            self.handle_request().await;
 
-            if !self.is_playing || !self.sink.empty() {
-                continue;
+            // Player is in `play` state and there no more data to play.
+            if self.is_playing && self.sink.empty() {
+                self.update_current_track();
+
+                // If after update the next track still in `play` state, append the next track.
+                if self.is_playing {
+                    self.append_source();
+                }
             }
-
-            self.update_current_track();
-
-            if !self.is_playing {
-                continue;
-            }
-
-            self.append_source();
         }
     }
 
@@ -162,7 +160,7 @@ impl Player {
         error!("Failed to send response: {}", e);
     }
 
-    fn handle_request(&mut self) {
+    async fn handle_request(&mut self) {
         if let Ok(request) = self
             .__event_queue_receiver
             .recv_timeout(Duration::from_millis(100))
@@ -185,22 +183,22 @@ impl Player {
 
             let req_data = request.data;
 
-            let response = match self.dispatch_request(req_type, req_data) {
-                Ok(request) => request,
-                Err(e) => {
+            let response = self
+                .dispatch_request(req_type, req_data)
+                .await
+                .unwrap_or_else(|e| {
                     let err_msg = format!("Failed to handle request: {}", e);
                     PlayerResponse {
                         r#type: ResponseType::Error.into(),
                         data: Some(err_msg),
                     }
-                }
-            };
+                });
 
             self.send_response(response);
         }
     }
 
-    fn dispatch_request(
+    async fn dispatch_request(
         &mut self,
         request_type: RequestType,
         request_data: Option<String>,
@@ -235,13 +233,13 @@ impl Player {
                 PlayerResponse::ok(Some(volume.to_string()))
             }
             RequestType::SetVolume => {
-                let volume = parse_request_data::<f32>(request_data)?;
+                let volume = parse_request_data(request_data)?;
                 self.sink.set_volume(volume);
                 PlayerResponse::ok(None)
             }
             RequestType::GetRepeat => PlayerResponse::ok(Some(self.repeat.into())),
             RequestType::SetRepeat => {
-                let repeat = parse_request_data::<RepeatState>(request_data)?;
+                let repeat = parse_request_data(request_data)?;
                 self.repeat = repeat;
                 PlayerResponse::ok(None)
             }
@@ -263,12 +261,21 @@ impl Player {
                 data: Some(String::from("良い世、来いよ")),
             },
             RequestType::GetStatus => PlayerResponse {
-                r#type: ResponseType::Ok.into(),
+                r#type: ResponseType::PlayerStatus.into(),
                 data: Some(format!(
                     "Queue: {:?}, Current: {}, Repeat: {:?}, Shuffle: {}",
                     self.queue, self.current_track_index, self.repeat, self.is_shuffle
                 )),
             },
+            RequestType::ClearQueue => {
+                self.queue.clear();
+                PlayerResponse::ok(None)
+            }
+            RequestType::RemoveTrack => {
+                let index = parse_request_data(request_data)?;
+                self.queue.remove(index);
+                PlayerResponse::ok(None)
+            }
             _ => unreachable!("This request should be handled before here"),
         })
     }
@@ -283,16 +290,6 @@ impl Player {
                 self.append_source();
             }
         }
-    }
-
-    #[inline]
-    pub fn remove_track(&mut self, track_index: usize) {
-        self.queue.remove(track_index);
-    }
-
-    #[inline]
-    pub fn clear_queue(&mut self) {
-        self.queue.clear();
     }
 
     // #[inline]

@@ -31,8 +31,8 @@ impl Track for SineWaveTestTrack {
     }
 }
 
-#[test]
-fn test_request_and_control() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_request_and_control() -> anyhow::Result<()> {
     unimplemented!("This test is not done yet.");
     play(|sender, receiver| {
         tracing_subscriber::fmt()
@@ -89,7 +89,7 @@ fn test_request_and_control() -> anyhow::Result<()> {
         sender.send(PlayerRequest::AddTrack(track)).unwrap();
         sleep(Duration::from_secs(5));
         sender.send(PlayerRequest::Terminate).unwrap();
-    })?
+    }).await?
     .join()
     .unwrap();
 

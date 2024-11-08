@@ -5,8 +5,8 @@ use tracing::level_filters::LevelFilter;
 
 use crate::provider::{sources::local_file::LocalFileProvider, Provider};
 
-#[test]
-fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
     unimplemented!("This test is not done yet.");
 
     const SEARCH_REGEX: &str = r".*\.mp3$";
@@ -35,7 +35,7 @@ fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
             let track = provider.get_track(&file_name).unwrap();
             sender.send(PlayerRequest::AddTrack(track)).unwrap();
         }
-    })?
+    }).await?
     .join()
     .unwrap();
 

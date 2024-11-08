@@ -38,12 +38,13 @@ impl LocalFileProvider {
     }
 }
 
+#[async_trait::async_trait]
 impl Provider for LocalFileProvider {
-    fn get_name(&self) -> String {
+    async fn get_name(&self) -> String {
         "LocalFileProvider".to_string()
     }
 
-    fn search(&mut self, pattern_regex: &str) -> SearchResult {
+    async fn search(&mut self, pattern_regex: &str) -> SearchResult {
         // Create a regex pattern, case-insensitive by default
         let regex = Regex::new(&format!("(?i){}", pattern_regex))
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
@@ -71,7 +72,7 @@ impl Provider for LocalFileProvider {
         Ok(self.__search_cache.borrow())
     }
 
-    fn get_track(&self, name: &str) -> ProviderResult<TrackObject> {
+    async fn get_track(&self, name: &str) -> ProviderResult<TrackObject> {
         let target_path = self
             .__search_cache
             .get(name)

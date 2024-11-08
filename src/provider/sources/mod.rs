@@ -31,24 +31,25 @@ pub enum Providers {
 macro_rules! manipulate {
     ($this:expr ,$func:ident $(, $arg:expr)*) => {
         match $this {
-            Self::SineWave { inner } => inner.$func($($arg),*),
+            Self::SineWave { inner } => inner.$func($($arg),*).await,
 
             #[cfg(feature = "local")]
-            Self::LocalFile { inner } => inner.$func($($arg),*),
+            Self::LocalFile { inner } => inner.$func($($arg),*).await,
         }
     };
 }
 
+#[async_trait::async_trait]
 impl Provider for Providers {
-    fn get_name(&self) -> String {
+    async fn get_name(&self) -> String {
         manipulate!(self, get_name)
     }
 
-    fn search(&mut self, keyword: &str) -> SearchResult {
+    async fn search(&mut self, keyword: &str) -> SearchResult {
         manipulate!(self, search, keyword)
     }
 
-    fn get_track(&self, id: &str) -> ProviderResult<TrackObject> {
+    async fn get_track(&self, id: &str) -> ProviderResult<TrackObject> {
         manipulate!(self, get_track, id)
     }
 }
@@ -63,8 +64,8 @@ impl ProviderRegistry {
         }
     }
 
-    pub fn register(&mut self, reg: Providers) {
-        let key = reg.get_name();
+    pub async fn register(&mut self, reg: Providers) {
+        let key = reg.get_name().await;
         self.inner.insert(key, reg);
     }
 
@@ -77,34 +78,37 @@ impl ProviderRegistry {
         self.inner.keys().collect()
     }
 
-    pub fn search_all(
+    pub async fn search_all(
         &mut self,
         keyword: impl AsRef<str>,
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
-        self.search(keyword, |_| true)
+        self.search(keyword, |_| true).await
     }
 }
 
 impl ProviderRegistry {
-    pub fn search(
+    pub async fn search(
         &mut self,
         keyword: impl AsRef<str>,
         mut filter: impl FnMut(&String) -> bool,
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
         let keyword = keyword.as_ref();
+        let mut result = HashMap::new();
 
-        let result =
-            self.inner
-                .iter_mut()
-                .filter(|(name, _)| filter(name))
-                .map(|(name, provider)| match provider.search(keyword) {
-                    Ok(search_result) => (name.to_string(), search_result),
-                    Err(e) => {
-                        error!("{e}");
-                        (format!("err_{name}"), JUST_A_EMPTY_HASHMAP.deref())
-                    }
-                });
+        for (name, provider) in &mut self.inner {
+            if !filter(name) {
+                continue;
+            }
 
-        Ok(HashMap::from_iter(result))
+            match provider.search(keyword).await {
+                Ok(search_result) => result.insert(name.to_string(), search_result),
+                Err(e) => {
+                    error!("{e}");
+                    result.insert(format!("err_{name}"), JUST_A_EMPTY_HASHMAP.deref())
+                }
+            };
+        }
+
+        Ok(result)
     }
 }
