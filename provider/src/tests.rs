@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{sources::LocalFileProvider, Provider};
 use sunflower_player::{play, EventRequest};
 use tracing::level_filters::LevelFilter;
+
+use crate::{sources::local_file::LocalFileProvider, Provider};
 
 #[test]
 fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
