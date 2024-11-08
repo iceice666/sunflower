@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 
-use sunflower_player::{play, EventRequest};
+use crate::player::{play, PlayerRequest};
 use tracing::level_filters::LevelFilter;
 
-use crate::{sources::local_file::LocalFileProvider, Provider};
+use crate::provider::{sources::local_file::LocalFileProvider, Provider};
 
 #[test]
 fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
+    unimplemented!("This test is not done yet.");
+
     const SEARCH_REGEX: &str = r".*\.mp3$";
     tracing_subscriber::fmt()
         .with_max_level(LevelFilter::DEBUG)
@@ -31,7 +33,7 @@ fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
 
         for file_name in list {
             let track = provider.get_track(&file_name).unwrap();
-            sender.send(EventRequest::AddTrack(track)).unwrap();
+            sender.send(PlayerRequest::AddTrack(track)).unwrap();
         }
     })?
     .join()

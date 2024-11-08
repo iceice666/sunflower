@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use crate::error::PlayerResult;
+use crate::player::error::PlayerResult;
 
 pub type TrackInfo = HashMap<String, String>;
 type TrackSourceType<T> = Box<dyn rodio::Source<Item = T> + Send + Sync>;

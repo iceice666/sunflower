@@ -10,13 +10,13 @@ use error::PlayerResult;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
-pub use crate::_impl::*;
+pub use crate::player::_impl::*;
 
 #[cfg(debug_assertions)]
 /// A simple function that starts player thread in the background.
 /// Only for debug use (like unit test).
 pub fn play(
-    callback: impl Send + 'static + FnOnce(Sender<EventRequest>, Receiver<EventResponse>),
+    callback: impl Send + 'static + FnOnce(Sender<PlayerRequest>, Receiver<PlayerResponse>),
 ) -> PlayerResult<thread::JoinHandle<()>> {
     let (player, sender, receiver) = Player::try_new()?;
 

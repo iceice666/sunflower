@@ -2,13 +2,16 @@ use rand::prelude::*;
 use rodio::{OutputStream, Sink};
 use std::{
     fmt::Debug,
+    str::FromStr,
     sync::mpsc::{channel, Receiver, Sender},
     time::Duration,
 };
-use tracing::{debug, info, trace, warn};
+pub use sunflower_daemon_proto::{Request as PlayerRequest, Response as PlayerResponse};
+use sunflower_daemon_proto::{RequestType, ResponseType};
+use tracing::{debug, error, info, trace, warn};
 
-use crate::{
-    error::PlayerResult,
+use crate::player::{
+    error::{PlayerError, PlayerResult},
     track::{TrackObject, TrackSource},
 };
 
@@ -19,34 +22,27 @@ pub enum RepeatState {
     None,
 }
 
-#[derive(Debug)]
-pub enum EventRequest {
-    Play,
-    Pause,
-    Stop,
-    Next,
-    Prev,
-    // Seek(u64),
-    GetVolume,
-    SetVolume(f32),
-    GetRepeat,
-    SetRepeat(RepeatState),
-    ToggleShuffle,
+impl FromStr for RepeatState {
+    type Err = PlayerError;
 
-    AddTrack(TrackObject),
-    ClearQueue,
-    RemoveTrack(usize),
-
-    Terminate,
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "queue" => Ok(RepeatState::Queue),
+            "track" => Ok(RepeatState::Track),
+            "none" => Ok(RepeatState::None),
+            _ => Err(PlayerError::InvalidData),
+        }
+    }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum EventResponse {
-    Volume(f32),
-    Repeat(RepeatState),
-    Shuffled(bool),
-    Ok,
-    Error(String),
+impl From<RepeatState> for String {
+    fn from(val: RepeatState) -> Self {
+        match val {
+            RepeatState::Queue => "queue".to_string(),
+            RepeatState::Track => "track".to_string(),
+            RepeatState::None => "none".to_string(),
+        }
+    }
 }
 
 pub struct Player {
@@ -56,8 +52,8 @@ pub struct Player {
     sink: Sink,
     __stream: OutputStream,
 
-    __event_queue_receiver: Receiver<EventRequest>,
-    __event_response_sender: Sender<EventResponse>,
+    __event_queue_receiver: Receiver<PlayerRequest>,
+    __event_response_sender: Sender<PlayerResponse>,
 
     // Flags
     repeat: RepeatState,
@@ -78,7 +74,7 @@ impl Debug for Player {
 }
 
 impl Player {
-    pub fn try_new() -> PlayerResult<(Self, Sender<EventRequest>, Receiver<EventResponse>)> {
+    pub fn try_new() -> PlayerResult<(Self, Sender<PlayerRequest>, Receiver<PlayerResponse>)> {
         let (__stream, stream_handle) = OutputStream::try_default()?;
         let sink = Sink::try_new(&stream_handle)?;
         let (event_queue_tx, event_queue_rx) = channel();
@@ -106,7 +102,7 @@ impl Player {
     pub fn main_loop(mut self) {
         info!("Starting main loop");
         while !self.is_terminated {
-            self.dispatch_request();
+            self.handle_request();
 
             if !self.is_playing || !self.sink.empty() {
                 continue;
@@ -157,11 +153,16 @@ impl Player {
         )
     }
 
-    fn send_response(&mut self, response: EventResponse) {
-        self.__event_response_sender.send(response).unwrap();
+    #[inline]
+    fn send_response(&mut self, response: PlayerResponse) {
+        let Err(e) = self.__event_response_sender.send(response) else {
+            return;
+        };
+
+        error!("Failed to send response: {}", e);
     }
 
-    fn dispatch_request(&mut self) {
+    fn handle_request(&mut self) {
         if let Ok(request) = self
             .__event_queue_receiver
             .recv_timeout(Duration::from_millis(100))
@@ -169,75 +170,129 @@ impl Player {
         {
             info!("Received request: {:?}", request);
 
-            match request {
-                EventRequest::Play => {
-                    self.sink.play();
-                    self.is_playing = true;
-                    self.send_response(EventResponse::Ok);
+            let req_type = match RequestType::try_from(request.r#type) {
+                Ok(req_type) => req_type,
+                Err(e) => {
+                    let err_msg = format!("Invalid request type: {}", e);
+                    let resp = PlayerResponse {
+                        r#type: ResponseType::Error.into(),
+                        data: Some(err_msg),
+                    };
+                    self.send_response(resp);
+                    return;
                 }
-                EventRequest::Pause => self.sink.pause(),
-                EventRequest::Stop => {
-                    self.sink.stop();
-                    self.is_playing = false;
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::Next => {
-                    self.sink.stop();
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::Prev => {
-                    self.is_queue_going_backwards = true;
-                    self.current_track_index %= self.queue.len();
-                    self.sink.stop();
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::GetVolume => {
-                    let volume = self.sink.volume();
-                    self.send_response(EventResponse::Volume(volume))
-                }
-                EventRequest::SetVolume(volume) => {
-                    self.sink.set_volume(volume);
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::GetRepeat => {
-                    self.send_response(EventResponse::Repeat(self.repeat));
-                }
-                EventRequest::SetRepeat(repeat) => {
-                    self.repeat = repeat;
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::ToggleShuffle => {
-                    self.is_shuffle = !self.is_shuffle;
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::AddTrack(track) => {
-                    self.queue.push(track);
+            };
 
-                    if !self.is_playing {
-                        self.is_playing = true;
+            let req_data = request.data;
 
-                        if self.current_track_index == self.queue.len() - 1 {
-                            self.append_source();
-                        }
+            let response = match self.dispatch_request(req_type, req_data) {
+                Ok(request) => request,
+                Err(e) => {
+                    let err_msg = format!("Failed to handle request: {}", e);
+                    PlayerResponse {
+                        r#type: ResponseType::Error.into(),
+                        data: Some(err_msg),
                     }
+                }
+            };
 
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::ClearQueue => {
-                    self.queue.clear();
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::RemoveTrack(idx) => {
-                    self.queue.remove(idx);
-                    self.send_response(EventResponse::Ok);
-                }
-                EventRequest::Terminate => {
-                    info!("Exiting main loop");
-                    self.is_terminated = true;
-                    self.send_response(EventResponse::Ok);
-                }
+            self.send_response(response);
+        }
+    }
+
+    fn dispatch_request(
+        &mut self,
+        request_type: RequestType,
+        request_data: Option<String>,
+    ) -> PlayerResult<PlayerResponse> {
+        Ok(match request_type {
+            RequestType::Play => {
+                self.sink.play();
+                self.is_playing = true;
+                PlayerResponse::ok(None)
+            }
+            RequestType::Pause => {
+                self.sink.pause();
+                PlayerResponse::ok(None)
+            }
+            RequestType::Stop => {
+                self.sink.stop();
+                self.is_playing = false;
+                PlayerResponse::ok(None)
+            }
+            RequestType::Next => {
+                self.sink.stop();
+                PlayerResponse::ok(None)
+            }
+            RequestType::Prev => {
+                self.is_queue_going_backwards = true;
+                self.current_track_index %= self.queue.len();
+                self.sink.stop();
+                PlayerResponse::ok(None)
+            }
+            RequestType::GetVolume => {
+                let volume = self.sink.volume();
+                PlayerResponse::ok(Some(volume.to_string()))
+            }
+            RequestType::SetVolume => {
+                let volume = parse_request_data::<f32>(request_data)?;
+                self.sink.set_volume(volume);
+                PlayerResponse::ok(None)
+            }
+            RequestType::GetRepeat => PlayerResponse::ok(Some(self.repeat.into())),
+            RequestType::SetRepeat => {
+                let repeat = parse_request_data::<RepeatState>(request_data)?;
+                self.repeat = repeat;
+                PlayerResponse::ok(None)
+            }
+            RequestType::ToggleShuffle => {
+                self.is_shuffle = !self.is_shuffle;
+                PlayerResponse::ok(None)
+            }
+            RequestType::Terminate => {
+                info!("Exiting main loop");
+                self.is_terminated = true;
+                PlayerResponse::ok(None)
+            }
+            RequestType::CheckAlive => PlayerResponse {
+                r#type: ResponseType::ImAlive.into(),
+                data: None,
+            },
+            RequestType::SecretCode => PlayerResponse {
+                r#type: ResponseType::HiImYajyuSenpai.into(),
+                data: Some(String::from("良い世、来いよ")),
+            },
+            RequestType::GetStatus => PlayerResponse {
+                r#type: ResponseType::Ok.into(),
+                data: Some(format!(
+                    "Queue: {:?}, Current: {}, Repeat: {:?}, Shuffle: {}",
+                    self.queue, self.current_track_index, self.repeat, self.is_shuffle
+                )),
+            },
+            _ => unreachable!("This request should be handled before here"),
+        })
+    }
+
+    pub fn add_track(&mut self, track: TrackObject) {
+        self.queue.push(track);
+
+        if !self.is_playing {
+            self.is_playing = true;
+
+            if self.current_track_index == self.queue.len() - 1 {
+                self.append_source();
             }
         }
+    }
+
+    #[inline]
+    pub fn remove_track(&mut self, track_index: usize) {
+        self.queue.remove(track_index);
+    }
+
+    #[inline]
+    pub fn clear_queue(&mut self) {
+        self.queue.clear();
     }
 
     // #[inline]
@@ -272,7 +327,7 @@ impl Player {
                 );
                 warn!("{}", err_msg);
                 self.__event_response_sender
-                    .send(EventResponse::Error(err_msg))
+                    .send(PlayerResponse::err(err_msg))
                     .unwrap();
                 return;
             }
@@ -285,4 +340,10 @@ impl Player {
             TrackSource::U16(source) => self.sink.append(source),
         }
     }
+}
+
+fn parse_request_data<T: FromStr>(data: Option<String>) -> PlayerResult<T> {
+    data.ok_or(PlayerError::EmptyData)?
+        .parse()
+        .map_err(|_| PlayerError::InvalidData)
 }

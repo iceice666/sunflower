@@ -1,6 +1,23 @@
-include!(concat!(env!("OUT_DIR"), "/protocol.rs"));
 pub use prost::DecodeError;
 use prost::Message;
+
+include!(concat!(env!("OUT_DIR"), "/protocol.rs"));
+
+impl Response {
+    pub fn ok(data: Option<String>) -> Self {
+        Self {
+            r#type: ResponseType::Ok.into(),
+            data: data,
+        }
+    }
+
+    pub fn err(error: String) -> Self {
+        Self {
+            r#type: ResponseType::Error.into(),
+            data: Some(error),
+        }
+    }
+}
 
 pub fn serilize_response(response: Response) -> Vec<u8> {
     let mut buf = Vec::with_capacity(response.encoded_len());

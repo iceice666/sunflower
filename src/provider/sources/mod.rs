@@ -1,16 +1,17 @@
-pub (crate) mod sine_wave;
-pub (crate) mod local_file;
+pub(crate) mod local_file;
+pub(crate) mod sine_wave;
 
 use sine_wave::SineWaveProvider;
 
 #[cfg(feature = "local")]
 use local_file::LocalFileProvider;
 
+use crate::player::track::TrackObject;
+use crate::provider::error::ProviderResult;
+use crate::provider::{Provider, SearchResult};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::LazyLock;
-use crate::error::ProviderResult;
-use crate::{Provider, SearchResult};
 use tracing::error;
 
 static JUST_A_EMPTY_HASHMAP: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
@@ -47,7 +48,7 @@ impl Provider for Providers {
         manipulate!(self, search, keyword)
     }
 
-    fn get_track(&self, id: &str) -> ProviderResult<sunflower_player::track::TrackObject> {
+    fn get_track(&self, id: &str) -> ProviderResult<TrackObject> {
         manipulate!(self, get_track, id)
     }
 }

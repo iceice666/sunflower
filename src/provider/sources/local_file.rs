@@ -7,17 +7,17 @@ use std::{
     path::PathBuf,
 };
 
+use crate::player::{
+    error::{PlayerError, PlayerResult},
+    track::{Track, TrackInfo, TrackObject, TrackSource},
+};
 use lofty::tag::Accessor;
 use lofty::{file::TaggedFileExt, read_from_path};
 use regex::Regex;
 use rodio::Decoder;
-use sunflower_player::{
-    error::{PlayerError, PlayerResult},
-    track::{Track, TrackInfo, TrackObject, TrackSource},
-};
 
-use crate::SearchResult;
-use crate::{
+use crate::provider::SearchResult;
+use crate::provider::{
     error::{ProviderError, ProviderResult},
     Provider,
 };

@@ -8,7 +8,7 @@ pub mod sources;
 #[cfg(test)]
 mod tests;
 
-use sunflower_player::track::TrackObject;
+use crate::player::track::TrackObject;
 
 pub type SearchResult<'a> = ProviderResult<&'a HashMap<String, String>>;
 

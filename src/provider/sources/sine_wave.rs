@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use crate::player::error::PlayerResult;
+use crate::player::track::{Track, TrackInfo, TrackObject, TrackSource};
 use rodio::{source::SineWave, Source};
-use sunflower_player::error::PlayerResult;
-use sunflower_player::track::{Track, TrackInfo, TrackObject, TrackSource};
 
-use crate::error::ProviderError;
-use crate::SearchResult;
-use crate::{Provider, ProviderResult};
+use crate::provider::error::ProviderError;
+use crate::provider::SearchResult;
+use crate::provider::{Provider, ProviderResult};
 
 static JUST_A_EMPTY_HASHMAP: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 

@@ -22,6 +22,12 @@ pub enum PlayerError {
 
     #[error("Empty track")]
     EmptyTrack,
+
+    #[error{"Expected data, but got None"}]
+    EmptyData,
+
+    #[error("Invalid data")]
+    InvalidData,
 }
 
 pub type PlayerResult<T = ()> = Result<T, PlayerError>;

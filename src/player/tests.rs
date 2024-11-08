@@ -1,7 +1,7 @@
-use crate::_impl::{EventRequest, EventResponse, RepeatState};
-use crate::error::PlayerResult;
-use crate::play;
-use crate::track::{Track, TrackInfo, TrackSource};
+use crate::player::_impl::{PlayerRequest, PlayerResponse, RepeatState};
+use crate::player::error::PlayerResult;
+use crate::player::play;
+use crate::player::track::{Track, TrackInfo, TrackSource};
 use rodio::source::SineWave;
 use rodio::Source;
 use std::thread::sleep;
@@ -33,6 +33,7 @@ impl Track for SineWaveTestTrack {
 
 #[test]
 fn test_request_and_control() -> anyhow::Result<()> {
+    unimplemented!("This test is not done yet.");
     play(|sender, receiver| {
         tracing_subscriber::fmt()
             .with_max_level(LevelFilter::TRACE)
@@ -42,52 +43,52 @@ fn test_request_and_control() -> anyhow::Result<()> {
             freq: 440.0,
             duration: 30.0,
         });
-        sender.send(EventRequest::AddTrack(track)).unwrap();
+        sender.send(PlayerRequest::AddTrack(track)).unwrap();
         let track = Box::new(SineWaveTestTrack {
             freq: 660.0,
             duration: 30.0,
         });
-        sender.send(EventRequest::AddTrack(track)).unwrap();
+        sender.send(PlayerRequest::AddTrack(track)).unwrap();
         sleep(Duration::from_secs(2));
 
-        sender.send(EventRequest::Pause).unwrap();
+        sender.send(PlayerRequest::Pause).unwrap();
         sleep(Duration::from_secs(2));
 
-        sender.send(EventRequest::Play).unwrap();
+        sender.send(PlayerRequest::Play).unwrap();
         sleep(Duration::from_secs(2));
 
-        sender.send(EventRequest::SetVolume(0.3)).unwrap();
+        sender.send(PlayerRequest::SetVolume(0.3)).unwrap();
         sleep(Duration::from_secs(2));
 
-        sender.send(EventRequest::GetVolume).unwrap();
+        sender.send(PlayerRequest::GetVolume).unwrap();
         let vol = receiver.recv().unwrap();
-        assert_eq!(vol, EventResponse::Volume(0.3));
+        assert_eq!(vol, PlayerResponse::Volume(0.3));
 
         sender
-            .send(EventRequest::SetRepeat(RepeatState::Track))
+            .send(PlayerRequest::SetRepeat(RepeatState::Track))
             .unwrap();
-        sender.send(EventRequest::Next).unwrap();
+        sender.send(PlayerRequest::Next).unwrap();
         sleep(Duration::from_secs(5));
 
         sender
-            .send(EventRequest::SetRepeat(RepeatState::None))
+            .send(PlayerRequest::SetRepeat(RepeatState::None))
             .unwrap();
 
-        sender.send(EventRequest::Next).unwrap();
+        sender.send(PlayerRequest::Next).unwrap();
         sleep(Duration::from_secs(5));
 
-        sender.send(EventRequest::Prev).unwrap();
+        sender.send(PlayerRequest::Prev).unwrap();
         sleep(Duration::from_secs(5));
 
-        sender.send(EventRequest::Stop).unwrap();
+        sender.send(PlayerRequest::Stop).unwrap();
 
         let track = Box::new(SineWaveTestTrack {
             freq: 880.0,
             duration: 30.0,
         });
-        sender.send(EventRequest::AddTrack(track)).unwrap();
+        sender.send(PlayerRequest::AddTrack(track)).unwrap();
         sleep(Duration::from_secs(5));
-        sender.send(EventRequest::Terminate).unwrap();
+        sender.send(PlayerRequest::Terminate).unwrap();
     })?
     .join()
     .unwrap();
