@@ -6,12 +6,8 @@ edition = "2021"
 [dependencies]
 sunflower-provider = { path = "../provider" }
 sunflower-player-interface = { path = "../interface" }
+sunflower-daemon-proto = { path = "../proto" }
 
 tracing-subscriber = "0.3"
 anyhow = "1.0.58"
 
-prost = "0.13"
-prost-types = "0.13"
-
-[build-dependencies]
-prost-build = "0.13.3"

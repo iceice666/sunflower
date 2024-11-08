@@ -3,7 +3,7 @@ syntax = "proto3";
 package protocol;
 
 enum RequestType {
-  CHECK_ALIVE = 0;
+  PLACEHOLDER_REQ = 0;
 
   DAEMON_START = 1;
   DAEMON_STOP = 2;
@@ -27,6 +27,8 @@ enum RequestType {
   PLAYER_ADD_TRACK = 40;
   PLAYER_REMOVE_TRACK = 41;
   PLAYER_CLEAR_QUEUE = 42;
+
+  SECRET_CODE = 114514;
 }
 
 message Request {
@@ -35,7 +37,7 @@ message Request {
 }
 
 enum ResponseType {
-  ALIVE = 0;
+  PLACEHOLDER_RESP = 0;
 
   DAEMON_START_OK = 1;
   DAEMON_STOP_OK = 2;
@@ -61,6 +63,8 @@ enum ResponseType {
   PLAYER_CLEAR_QUEUE_OK = 42;
 
   PLAYER_ERROR = 99;
+
+  HI_IM_YAJYU_SENPAI = 114514;
 }
 
 message Response {
