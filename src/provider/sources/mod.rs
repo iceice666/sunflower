@@ -22,8 +22,10 @@ pub trait Track: Send + Sync {
 
     fn get_unique_id(&self) -> String;
 
-        Ok(result)
-    }
+    fn try_from_config(config : HashMap<String, String>) -> ProviderResult<Self>
+    where
+        Self: Sized;
+}
 
 pub type TrackObject = Box<dyn Track>;
 

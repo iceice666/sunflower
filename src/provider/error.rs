@@ -9,8 +9,8 @@ pub enum ProviderError {
     #[error("No such provider: {0}")]
     ProviderNotFound(String),
 
-    #[error("Missing field `{0}` to build provider {1}")]
-    MissingFieldToBuildProvider(String, String),
+    #[error("Missing field `{0}`")]
+    MissingField(String),
     
     #[error("This track source ({0}) does not support build from track config")]
     UnsupportedTrackSource(String),

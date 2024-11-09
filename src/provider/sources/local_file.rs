@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use crate::provider::error::ProviderResult;
+use crate::provider::error::{ProviderError, ProviderResult};
 use crate::provider::sources::{Track, TrackInfo, TrackSource};
 
 pub(crate) struct LocalFileTrack {
@@ -56,5 +56,14 @@ impl Track for LocalFileTrack {
 
     fn get_unique_id(&self) -> String {
         self.path.to_string_lossy().to_string()
+    }
+
+    fn try_from_config(config: HashMap<String, String>) -> ProviderResult<Self>
+    where
+        Self: Sized,
+    {
+        let path = config.get("path").ok_or(ProviderError::MissingField("path".to_string()))?;
+        let path = PathBuf::from(path);
+        Ok(Self { path })
     }
 }

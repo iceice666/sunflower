@@ -38,9 +38,8 @@ impl TryFrom<HashMap<String, String>> for LocalFileProvider {
         let music_folder =
             value
                 .get("music_folder")
-                .ok_or(ProviderError::MissingFieldToBuildProvider(
-                    "music_folder".to_string(),
-                    "LocalFileProvider".to_string(),
+                .ok_or(ProviderError::MissingField(
+                    "music_folder".to_string()
                 ))?;
 
         Ok(Self::new(music_folder))

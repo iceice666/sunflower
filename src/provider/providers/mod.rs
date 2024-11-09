@@ -47,9 +47,8 @@ impl TryFrom<HashMap<String, String>> for Providers {
         let provider =
             value
                 .remove("provider_name")
-                .ok_or(ProviderError::MissingFieldToBuildProvider(
-                    "provider_name".to_string(),
-                    "".to_string(),
+                .ok_or(ProviderError::MissingField(
+                    "provider_name".to_string()
                 ))?;
 
         match provider.as_str() {

@@ -27,4 +27,21 @@ impl Track for SineWaveTrack {
     fn get_unique_id(&self) -> String {
         format!("SineWave {} hz {} secs", self.freq, self.duration)
     }
+
+    fn try_from_config(config: HashMap<String, String>) -> ProviderResult<Self>
+    where
+        Self: Sized,
+    {
+        let freq = config.get("freq").ok_or(ProviderError::MissingField("freq".to_string()))?;
+        let duration = config.get("duration").ok_or(ProviderError::MissingField("duration".to_string()))?;
+        
+        let freq = freq.parse().map_err(|_| {
+            ProviderError::TrackNotFound("SineWaveProvider: freq should be a f32".into())
+        })?;
+        let duration = duration.parse().map_err(|_| {
+            ProviderError::TrackNotFound("SineWaveProvider: duration should be a f32".into())
+        })?;
+        
+        Ok(SineWaveTrack { freq, duration })
+    }
 }
