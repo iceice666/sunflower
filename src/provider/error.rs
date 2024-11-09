@@ -11,6 +11,15 @@ pub enum ProviderError {
 
     #[error("Missing field `{0}` to build provider {1}")]
     MissingFieldToBuildProvider(String, String),
+    
+    #[error("This track source ({0}) does not support build from track config")]
+    UnsupportedTrackSource(String),
+
+    #[error{"Expected data, but got None"}]
+    EmptyData,
+
+    #[error("Invalid data")]
+    InvalidData,
 }
 
 pub type ProviderResult<T = ()> = Result<T, ProviderError>;

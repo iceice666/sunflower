@@ -3,12 +3,13 @@ use std::{collections::HashMap, hash::Hash};
 use error::ProviderResult;
 
 pub mod error;
-pub mod sources;
+pub mod providers;
 
+pub(crate) mod sources;
 #[cfg(test)]
 mod tests;
 
-use crate::player::track::TrackObject;
+use sources::TrackObject;
 
 pub type SearchResult<'a> = ProviderResult<&'a HashMap<String, String>>;
 

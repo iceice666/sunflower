@@ -1,153 +1,34 @@
+use std::collections::HashMap;
+use std::fmt::Debug;
+use crate::player::error::PlayerResult;
+use crate::provider::error::ProviderResult;
+
 pub(crate) mod local_file;
 pub(crate) mod sine_wave;
 
-use sine_wave::SineWaveProvider;
+pub type TrackInfo = HashMap<String, String>;
+type TrackSourceType<T> = Box<dyn rodio::Source<Item = T> + Send + Sync>;
 
-#[cfg(feature = "local_file")]
-use local_file::LocalFileProvider;
-
-use crate::player::track::TrackObject;
-use crate::provider::error::{ProviderError, ProviderResult};
-use crate::provider::{Provider, SearchResult};
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::sync::LazyLock;
-use tracing::error;
-
-static JUST_A_EMPTY_HASHMAP: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
-
-#[derive(Eq, PartialEq)]
-pub enum Providers {
-    SineWave {
-        inner: SineWaveProvider,
-    },
-
-    #[cfg(feature = "local_file")]
-    LocalFile {
-        inner: LocalFileProvider,
-    },
+pub enum TrackSource {
+    F32(TrackSourceType<f32>),
+    I16(TrackSourceType<i16>),
+    U16(TrackSourceType<u16>),
 }
 
-macro_rules! manipulate {
-    ($this:expr ,$func:ident $(, $arg:expr)*) => {
-        match $this {
-            Self::SineWave { inner } => inner.$func($($arg),*).await,
+pub trait Track: Send + Sync {
+    fn info(&self) -> PlayerResult<TrackInfo>;
 
-            #[cfg(feature = "local_file")]
-            Self::LocalFile { inner } => inner.$func($($arg),*).await,
-        }
-    };
-}
+    fn build_source(&self) -> PlayerResult<TrackSource>;
 
-impl TryFrom<HashMap<String, String>> for Providers {
-    type Error = ProviderError;
-
-    fn try_from(mut value: HashMap<String, String>) -> Result<Self, Self::Error> {
-        let provider =
-            value
-                .remove("provider_name")
-                .ok_or(ProviderError::MissingFieldToBuildProvider(
-                    "provider_name".to_string(),
-                    "".to_string(),
-                ))?;
-
-        match provider.as_str() {
-            "sine_wave" => Ok(Self::SineWave {
-                inner: SineWaveProvider,
-            }),
-
-            #[cfg(feature = "local_file")]
-            "local_file" => Ok(Self::LocalFile {
-                inner: LocalFileProvider::try_from(value)?,
-            }),
-
-            _ => Err(ProviderError::ProviderNotFound(provider)),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl Provider for Providers {
-    async fn get_name(&self) -> String {
-        manipulate!(self, get_name)
-    }
-
-    async fn search(&mut self, keyword: &str) -> SearchResult {
-        manipulate!(self, search, keyword)
-    }
-
-    async fn get_track(&self, id: &str) -> ProviderResult<TrackObject> {
-        manipulate!(self, get_track, id)
-    }
-}
-pub struct ProviderRegistry {
-    inner: HashMap<String, Providers>,
-}
-
-impl ProviderRegistry {
-    pub fn new() -> Self {
-        Self {
-            inner: HashMap::new(),
-        }
-    }
-
-    pub async fn register(&mut self, reg: Providers) {
-        let key = reg.get_name().await;
-        self.inner.insert(key, reg);
-    }
-
-    pub fn unregister(&mut self, reg_name: impl AsRef<str>) {
-        let reg_name = reg_name.as_ref();
-        self.inner.remove(reg_name);
-    }
-
-    pub fn providers(&self) -> Vec<&String> {
-        self.inner.keys().collect()
-    }
-
-    pub async fn search_all(
-        &mut self,
-        keyword: impl AsRef<str>,
-    ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
-        self.search(keyword, |_| true).await
-    }
-
-    pub async fn search(
-        &mut self,
-        keyword: impl AsRef<str>,
-        mut filter: impl FnMut(&String) -> bool,
-    ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
-        let keyword = keyword.as_ref();
-        let mut result = HashMap::new();
-
-        for (name, provider) in &mut self.inner {
-            if !filter(name) {
-                continue;
-            }
-
-            match provider.search(keyword).await {
-                Ok(search_result) => result.insert(name.to_string(), search_result),
-                Err(e) => {
-                    error!("{e}");
-                    result.insert(format!("err_{name}"), JUST_A_EMPTY_HASHMAP.deref())
-                }
-            };
-        }
+    fn get_unique_id(&self) -> String;
 
         Ok(result)
     }
 
-    pub async fn get_track(
-        &self,
-        provider: impl AsRef<str>,
-        id: impl AsRef<str>,
-    ) -> ProviderResult<TrackObject> {
-        let provider = provider.as_ref();
-        let id = id.as_ref();
+pub type TrackObject = Box<dyn Track>;
 
-        match self.inner.get(provider) {
-            Some(provider) => provider.get_track(id).await,
-            None => Err(ProviderError::ProviderNotFound(provider.to_string())),
-        }
+impl Debug for TrackObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TrackObject({})", self.get_unique_id())
     }
 }

@@ -9,18 +9,18 @@ use std::{
 pub use sunflower_daemon_proto::{Request as PlayerRequest, Response as PlayerResponse};
 
 use sunflower_daemon_proto::{
-    request::Payload as RequestPayload, response::Payload as ResponsePayload, RequestType,
-    ResponseType, SearchResults,
+    request::Payload as RequestPayload,
+    response::Payload as ResponsePayload,
+    RequestType,
+    ResponseType,
 };
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
-    player::{
-        error::{PlayerError, PlayerResult},
-        track::{TrackObject, TrackSource},
-    },
-    provider::sources::{ProviderRegistry, Providers},
+    player::error::{PlayerError, PlayerResult},
+    provider::providers::{ProviderRegistry, Providers},
 };
+use crate::provider::sources::{TrackObject, TrackSource};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RepeatState {
