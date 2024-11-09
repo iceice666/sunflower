@@ -17,7 +17,7 @@ async fn test_request_and_control() -> anyhow::Result<()> {
     fn callback(sender: Sender<PlayerRequest>, receiver: Receiver<PlayerResponse>) {
         let send = |request: PlayerRequest| {
             sender.send(request).unwrap();
-             receiver.recv().unwrap()
+            receiver.recv().unwrap()
         };
 
         let track_440 = RequestPayload::TrackConfig(TrackConfig {

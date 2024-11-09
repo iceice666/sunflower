@@ -120,7 +120,7 @@ impl Player {
                 }
             }
         }
-        
+
         info!("Main loop stopped");
     }
 
@@ -330,7 +330,18 @@ impl Player {
                 let RequestPayload::TrackSearch(query) = request_payload.ok_or(PlayerError::EmptyData)? else {
                     return Err(PlayerError::InvalidData);
                 };
-                let result = self.provider_registry.search(query.query, |provider_name| query.providers.contains(&provider_name)).await?;
+                let result = self.provider_registry.search(query.query, |provider_name| query.providers.contains(provider_name)).await?;
+
+                PlayerResponse {
+                    r#type: ResponseType::SearchResult.into(),
+                    payload: Some(ResponsePayload::SearchResults(result.into())),
+                }
+            },
+            RequestType::ProviderSearchAll =>{
+                let RequestPayload::TrackSearch(query) = request_payload.ok_or(PlayerError::EmptyData)? else {
+                    return Err(PlayerError::InvalidData);
+                };
+                let result = self.provider_registry.search_all(query.query).await?;
 
                 PlayerResponse {
                     r#type: ResponseType::SearchResult.into(),
