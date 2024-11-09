@@ -6,14 +6,8 @@ use std::{
     sync::mpsc::{channel, Receiver, Sender},
     time::Duration,
 };
-pub use sunflower_daemon_proto::{Request as PlayerRequest, Response as PlayerResponse};
+use sunflower_daemon_proto::*;
 
-use sunflower_daemon_proto::{
-    request::Payload as RequestPayload,
-    response::Payload as ResponsePayload,
-    RequestType,
-    ResponseType,
-};
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{

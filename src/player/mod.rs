@@ -6,6 +6,7 @@ mod tests;
 pub mod track;
 
 use error::PlayerResult;
+use sunflower_daemon_proto::{PlayerRequest, PlayerResponse};
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;

@@ -39,7 +39,7 @@ enum RequestType {
   SECRET_CODE = 114;
 }
 
-message Track {
+message TrackData {
   string provider = 1;
   string id = 2;
 }
@@ -87,8 +87,8 @@ message Request {
   RequestType type = 1;
   oneof payload {
     string data = 2;
-    Track track = 3;
-    ProviderConfig provider_config = 4;
+    ProviderConfig provider_config = 3;
+    TrackData track = 4;
     TrackSearch track_search = 5;
   }
 }
