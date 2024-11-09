@@ -1,7 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/protocol.rs"));
 
 use std::collections::HashMap;
-use std::fmt::Display;
 
 impl Response {
     pub fn ok(data: Option<String>) -> Self {

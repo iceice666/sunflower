@@ -4,7 +4,6 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use sunflower_daemon_proto::*;
-use tracing::info;
 use tracing_subscriber::filter::LevelFilter;
 
 use crate::player::_impl::Player;
