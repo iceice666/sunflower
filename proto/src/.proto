@@ -28,6 +28,8 @@ enum RequestType {
   REMOVE_TRACK = 31;
   CLEAR_QUEUE = 32;
 
+  ADD_TRACK_FROM_CONFIG = 34;
+
   // Provider management (40-49)
   NEW_PROVIDER = 40;
   REMOVE_PROVIDER = 41;
@@ -42,6 +44,11 @@ enum RequestType {
 message TrackData {
   string provider = 1;
   string id = 2;
+}
+
+message TrackConfig {
+  string provider = 1;
+  map<string, string> config = 2;
 }
 
 message ProviderConfig {
@@ -90,6 +97,7 @@ message Request {
     ProviderConfig provider_config = 3;
     TrackData track = 4;
     TrackSearch track_search = 5;
+    TrackConfig track_config = 6;
   }
 }
 

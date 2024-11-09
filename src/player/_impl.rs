@@ -10,11 +10,11 @@ use sunflower_daemon_proto::*;
 
 use tracing::{debug, error, info, trace, warn};
 
+use crate::provider::sources::{try_from_config, TrackObject, TrackSource};
 use crate::{
     player::error::{PlayerError, PlayerResult},
     provider::providers::{ProviderRegistry, Providers},
 };
-use crate::provider::sources::{TrackObject, TrackSource};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RepeatState {
@@ -208,6 +208,18 @@ impl Player {
         request_payload: Option<RequestPayload>,
     ) -> PlayerResult<PlayerResponse> {
         Ok(match request_type {
+            // System operations
+            RequestType::CheckAlive => PlayerResponse {
+                r#type: ResponseType::ImAlive.into(),
+                payload: None,
+            },
+            RequestType::Terminate => {
+                info!("Exiting main loop");
+                self.is_terminated = true;
+                PlayerResponse::ok(None)
+            }
+
+            // Playback controls
             RequestType::Play => {
                 self.sink.play();
                 self.is_playing = true;
@@ -232,6 +244,8 @@ impl Player {
                 self.sink.stop();
                 PlayerResponse::ok(None)
             }
+            
+            // Player settings
             RequestType::GetVolume => {
                 let volume = self.sink.volume();
                 PlayerResponse::ok(Some(volume.to_string()))
@@ -251,19 +265,6 @@ impl Player {
                 self.is_shuffle = !self.is_shuffle;
                 PlayerResponse::ok(None)
             }
-            RequestType::Terminate => {
-                info!("Exiting main loop");
-                self.is_terminated = true;
-                PlayerResponse::ok(None)
-            }
-            RequestType::CheckAlive => PlayerResponse {
-                r#type: ResponseType::ImAlive.into(),
-                payload: None,
-            },
-            RequestType::SecretCode => PlayerResponse {
-                r#type: ResponseType::HiImYajyuSenpai.into(),
-                payload: Some(ResponsePayload::Data(String::from("232 137 175 227 129 132 228 184 150 227 128 129 230 157 165 227 129 132 227 130 136"))),
-            },
             RequestType::GetStatus => PlayerResponse {
                 r#type: ResponseType::PlayerStatus.into(),
                 payload: Some(ResponsePayload::Data(format!(
@@ -271,6 +272,9 @@ impl Player {
                     self.queue, self.current_track_index, self.repeat, self.is_shuffle
                 ))),
             },
+            
+            
+            // Queue management
             RequestType::ClearQueue => {
                 self.queue.clear();
                 PlayerResponse::ok(None)
@@ -290,6 +294,20 @@ impl Player {
 
                 PlayerResponse::ok(None)
             }
+            RequestType::AddTrackFromConfig => {
+                let RequestPayload::TrackConfig(config) = request_payload.ok_or
+                (PlayerError::EmptyData)
+                    ? else {
+                    return Err(PlayerError::InvalidData);
+                };
+
+                let track = try_from_config(config)?;
+                self.add_track(track);
+                
+                PlayerResponse::ok(None)
+            }
+
+            // Provider management
             RequestType::NewProvider => {
                 let RequestPayload::ProviderConfig(provider_config) = request_payload.ok_or(PlayerError::EmptyData)? else {
                     return Err(PlayerError::InvalidData);
@@ -322,6 +340,13 @@ impl Player {
                     r#type: ResponseType::SearchResult.into(),
                     payload: Some(ResponsePayload::SearchResults(result.into())),
                 }
+            },
+
+
+            // :thinking:
+            RequestType::SecretCode => PlayerResponse {
+                r#type: ResponseType::HiImYajyuSenpai.into(),
+                payload: Some(ResponsePayload::Data(String::from("232 137 175 227 129 132 228 184 150 227 128 129 230 157 165 227 129 132 227 130 136"))),
             },
             
         })

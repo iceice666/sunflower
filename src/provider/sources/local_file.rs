@@ -1,4 +1,6 @@
 use crate::player::error::{PlayerError, PlayerResult};
+use crate::provider::error::{ProviderError, ProviderResult};
+use crate::provider::sources::{Track, TrackInfo, TrackSource};
 use lofty::file::TaggedFileExt;
 use lofty::prelude::Accessor;
 use lofty::read_from_path;
@@ -7,8 +9,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use crate::provider::error::{ProviderError, ProviderResult};
-use crate::provider::sources::{Track, TrackInfo, TrackSource};
 
 pub(crate) struct LocalFileTrack {
     path: PathBuf,
@@ -62,7 +62,9 @@ impl Track for LocalFileTrack {
     where
         Self: Sized,
     {
-        let path = config.get("path").ok_or(ProviderError::MissingField("path".to_string()))?;
+        let path = config
+            .get("path")
+            .ok_or(ProviderError::MissingField("path".to_string()))?;
         let path = PathBuf::from(path);
         Ok(Self { path })
     }

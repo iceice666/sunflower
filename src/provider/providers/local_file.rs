@@ -6,8 +6,8 @@ use std::{
     path::PathBuf,
 };
 
-use crate::provider::sources::TrackObject;
 use crate::provider::sources::local_file::LocalFileTrack;
+use crate::provider::sources::TrackObject;
 use crate::provider::SearchResult;
 use crate::provider::{
     error::{ProviderError, ProviderResult},
@@ -35,12 +35,9 @@ impl TryFrom<HashMap<String, String>> for LocalFileProvider {
     type Error = ProviderError;
 
     fn try_from(value: HashMap<String, String>) -> Result<Self, Self::Error> {
-        let music_folder =
-            value
-                .get("music_folder")
-                .ok_or(ProviderError::MissingField(
-                    "music_folder".to_string()
-                ))?;
+        let music_folder = value
+            .get("music_folder")
+            .ok_or(ProviderError::MissingField("music_folder".to_string()))?;
 
         Ok(Self::new(music_folder))
     }

@@ -1,13 +1,17 @@
-pub(crate) mod local_file;
+// HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
 pub(crate) mod sine_wave;
-
 use sine_wave::SineWaveProvider;
+
+#[cfg(feature = "local_file")]
+pub(crate) mod local_file;
 
 #[cfg(feature = "local_file")]
 use local_file::LocalFileProvider;
 
-use crate::provider::sources::TrackObject;
+////////////////////////////////////////////////////////////////////////
+
 use crate::provider::error::{ProviderError, ProviderResult};
+use crate::provider::sources::TrackObject;
 use crate::provider::{Provider, SearchResult};
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -19,6 +23,7 @@ pub(crate) static JUST_A_EMPTY_HASHMAP: LazyLock<HashMap<String, String>> =
 
 #[derive(Eq, PartialEq)]
 pub enum Providers {
+    // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
     SineWave {
         inner: SineWaveProvider,
     },
@@ -29,6 +34,7 @@ pub enum Providers {
     },
 }
 
+// HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
 macro_rules! manipulate {
     ($this:expr ,$func:ident $(, $arg:expr)*) => {
         match $this {
@@ -44,13 +50,11 @@ impl TryFrom<HashMap<String, String>> for Providers {
     type Error = ProviderError;
 
     fn try_from(mut value: HashMap<String, String>) -> Result<Self, Self::Error> {
-        let provider =
-            value
-                .remove("provider_name")
-                .ok_or(ProviderError::MissingField(
-                    "provider_name".to_string()
-                ))?;
+        let provider = value
+            .remove("provider_name")
+            .ok_or(ProviderError::MissingField("provider_name".to_string()))?;
 
+        // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
         match provider.as_str() {
             "sine_wave" => Ok(Self::SineWave {
                 inner: SineWaveProvider,

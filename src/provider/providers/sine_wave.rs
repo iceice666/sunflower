@@ -1,11 +1,10 @@
-use crate::provider::sources::TrackObject;
 use crate::provider::error::ProviderError;
 use crate::provider::providers::JUST_A_EMPTY_HASHMAP;
 use crate::provider::sources::sine_wave::SineWaveTrack;
+use crate::provider::sources::TrackObject;
 use crate::provider::SearchResult;
 use crate::provider::{Provider, ProviderResult};
 use std::collections::HashMap;
-use std::sync::LazyLock;
 
 #[derive(PartialEq, Eq, Default)]
 pub struct SineWaveProvider;
@@ -18,7 +17,7 @@ impl From<HashMap<String, String>> for SineWaveProvider {
 
 #[async_trait::async_trait]
 impl Provider for SineWaveProvider {
-    async fn get_name(&self) -> String { 
+    async fn get_name(&self) -> String {
         "SineWaveProvider".to_string()
     }
 

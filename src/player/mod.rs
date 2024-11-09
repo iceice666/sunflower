@@ -3,7 +3,6 @@ pub mod error;
 
 #[cfg(test)]
 mod tests;
-pub mod track;
 
 use error::PlayerResult;
 use sunflower_daemon_proto::{PlayerRequest, PlayerResponse};

@@ -1,10 +1,18 @@
+// HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
+pub(crate) mod sine_wave;
+
+#[cfg(feature = "local_file")]
+pub(crate) mod local_file;
+
+////////////////////////////////////////////////////////////////////////
+
+use crate::player::error::PlayerResult;
+use crate::provider::error::{ProviderError, ProviderResult};
+use crate::provider::sources::local_file::LocalFileTrack;
+use crate::provider::sources::sine_wave::SineWaveTrack;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use crate::player::error::PlayerResult;
-use crate::provider::error::ProviderResult;
-
-pub(crate) mod local_file;
-pub(crate) mod sine_wave;
+use sunflower_daemon_proto::TrackConfig;
 
 pub type TrackInfo = HashMap<String, String>;
 type TrackSourceType<T> = Box<dyn rodio::Source<Item = T> + Send + Sync>;
@@ -22,7 +30,7 @@ pub trait Track: Send + Sync {
 
     fn get_unique_id(&self) -> String;
 
-    fn try_from_config(config : HashMap<String, String>) -> ProviderResult<Self>
+    fn try_from_config(config: HashMap<String, String>) -> ProviderResult<Self>
     where
         Self: Sized;
 }
@@ -33,4 +41,21 @@ impl Debug for TrackObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TrackObject({})", self.get_unique_id())
     }
+}
+
+pub fn try_from_config(config: TrackConfig) -> ProviderResult<TrackObject> {
+    let provider = config.provider;
+    let config = config.config;
+
+    let obj: TrackObject = match provider.as_str() {
+        // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
+        "sine_wave" => Box::new(SineWaveTrack::try_from_config(config)?),
+
+        #[cfg(feature = "local_file")]
+        "local_file" => Box::new(LocalFileTrack::try_from_config(config)?),
+
+        _ => return Err(ProviderError::ProviderNotFound(provider)),
+    };
+
+    Ok(obj)
 }

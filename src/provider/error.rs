@@ -11,7 +11,7 @@ pub enum ProviderError {
 
     #[error("Missing field `{0}`")]
     MissingField(String),
-    
+
     #[error("This track source ({0}) does not support build from track config")]
     UnsupportedTrackSource(String),
 
