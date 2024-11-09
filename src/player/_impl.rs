@@ -120,6 +120,8 @@ impl Player {
                 }
             }
         }
+        
+        info!("Main loop stopped");
     }
 
     #[inline]
