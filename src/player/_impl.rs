@@ -218,7 +218,6 @@ impl Player {
                 self.is_terminated = true;
                 PlayerResponse::ok(None)
             }
-
             // Playback controls
             RequestType::Play => {
                 self.sink.play();
@@ -244,7 +243,6 @@ impl Player {
                 self.sink.stop();
                 PlayerResponse::ok(None)
             }
-            
             // Player settings
             RequestType::GetVolume => {
                 let volume = self.sink.volume();
@@ -272,8 +270,6 @@ impl Player {
                     self.queue, self.current_track_index, self.repeat, self.is_shuffle
                 ))),
             },
-            
-            
             // Queue management
             RequestType::ClearQueue => {
                 self.queue.clear();
@@ -303,10 +299,8 @@ impl Player {
 
                 let track = try_from_config(config)?;
                 self.add_track(track);
-                
                 PlayerResponse::ok(None)
             }
-
             // Provider management
             RequestType::NewProvider => {
                 let RequestPayload::ProviderConfig(provider_config) = request_payload.ok_or(PlayerError::EmptyData)? else {
@@ -341,14 +335,11 @@ impl Player {
                     payload: Some(ResponsePayload::SearchResults(result.into())),
                 }
             },
-
-
             // :thinking:
             RequestType::SecretCode => PlayerResponse {
                 r#type: ResponseType::HiImYajyuSenpai.into(),
                 payload: Some(ResponsePayload::Data(String::from("232 137 175 227 129 132 228 184 150 227 128 129 230 157 165 227 129 132 227 130 136"))),
             },
-            
         })
     }
 
