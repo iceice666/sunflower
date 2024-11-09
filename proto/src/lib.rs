@@ -40,22 +40,22 @@ impl From<HashMap<String, &HashMap<String, String>>> for SearchResults {
     }
 }
 
-pub fn serilize_response(response: Response) -> Vec<u8> {
+pub fn serialize_response(response: Response) -> Vec<u8> {
     let mut buf = Vec::with_capacity(response.encoded_len());
     response.encode(&mut buf).unwrap();
     buf
 }
 
-pub fn deserilize_response(buf: &[u8]) -> Result<Response, prost::DecodeError> {
+pub fn deserialize_response(buf: &[u8]) -> Result<Response, DecodeError> {
     Response::decode(buf)
 }
 
-pub fn serilize_request(request: Request) -> Vec<u8> {
+pub fn serialize_request(request: Request) -> Vec<u8> {
     let mut buf = Vec::with_capacity(request.encoded_len());
     request.encode(&mut buf).unwrap();
     buf
 }
 
-pub fn deserilize_request(buf: &[u8]) -> Result<Request, prost::DecodeError> {
+pub fn deserialize_request(buf: &[u8]) -> Result<Request, DecodeError> {
     Request::decode(buf)
 }

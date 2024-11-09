@@ -18,7 +18,7 @@ pub trait Provider: TryFrom<HashMap<String, String>> {
     /// Get the name of the provider.
     ///
     /// This is used to identify the provider.
-    /// Should be unique and does not contain any whitespaces.
+    /// It Should be unique and does not contain any whitespaces.
     async fn get_name(&self) -> String;
 
     /// Search for tracks by keyword. It returns a HashMap of track name and its unique id.

@@ -9,7 +9,7 @@ pub enum ProviderError {
     #[error("No such provider: {0}")]
     ProviderNotFound(String),
 
-    #[error("Missing field `{0}` to build proivder {1}")]
+    #[error("Missing field `{0}` to build provider {1}")]
     MissingFieldToBuildProvider(String, String),
 }
 
