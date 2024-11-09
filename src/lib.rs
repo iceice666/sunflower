@@ -1,4 +1,4 @@
 #![feature(async_closure)]
 
 mod player;
-mod provider;
+pub(crate) mod provider;

@@ -18,14 +18,16 @@ sunflower-daemon-proto = { path = "./proto" }
 async-trait = "0.1.83"
 tokio = { version = "1.41.1", features = ["macros", "rt"] }
 
+
+
 [dev-dependencies]
 tracing-subscriber = "0.3"
 anyhow = "1.0.93"
 
 
 [features]
-local = ["dep:lofty", "dep:regex"]
-yt-dl = ["local"]
+local_file = ["dep:lofty", "dep:regex"]
+yt-dl = ["local_file"]
 
-default = ["local"]
-all = ["local", "yt-dl"]
+default = ["local_file"]
+all = ["local_file", "yt-dl"]

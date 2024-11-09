@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use error::ProviderResult;
 
@@ -14,8 +14,11 @@ pub type SearchResult<'a> = ProviderResult<&'a HashMap<String, String>>;
 
 #[async_trait::async_trait]
 /// A trait for providing music tracks.
-pub trait Provider {
+pub trait Provider: TryFrom<HashMap<String, String>> {
     /// Get the name of the provider.
+    ///
+    /// This is used to identify the provider.
+    /// Should be unique and does not contain any whitespaces.
     async fn get_name(&self) -> String;
 
     /// Search for tracks by keyword. It returns a HashMap of track name and its unique id.

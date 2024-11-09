@@ -7,12 +7,19 @@ use std::{
     time::Duration,
 };
 pub use sunflower_daemon_proto::{Request as PlayerRequest, Response as PlayerResponse};
-use sunflower_daemon_proto::{RequestType, ResponseType};
+
+use sunflower_daemon_proto::{
+    request::Payload as RequestPayload, response::Payload as ResponsePayload, RequestType,
+    ResponseType, SearchResults,
+};
 use tracing::{debug, error, info, trace, warn};
 
-use crate::player::{
-    error::{PlayerError, PlayerResult},
-    track::{TrackObject, TrackSource},
+use crate::{
+    player::{
+        error::{PlayerError, PlayerResult},
+        track::{TrackObject, TrackSource},
+    },
+    provider::sources::{ProviderRegistry, Providers},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -48,7 +55,9 @@ impl From<RepeatState> for String {
 pub struct Player {
     queue: Vec<TrackObject>,
     current_track_index: usize,
-    is_playing: bool,
+
+    provider_registry: ProviderRegistry,
+
     sink: Sink,
     __stream: OutputStream,
 
@@ -56,10 +65,11 @@ pub struct Player {
     __event_response_sender: Sender<PlayerResponse>,
 
     // Flags
-    repeat: RepeatState,
+    is_playing: bool,
     is_shuffle: bool,
     is_queue_going_backwards: bool,
     is_terminated: bool,
+    repeat: RepeatState,
 }
 
 impl Debug for Player {
@@ -83,7 +93,8 @@ impl Player {
         let this = Self {
             queue: Vec::new(),
             current_track_index: 0,
-            is_playing: false,
+            provider_registry: ProviderRegistry::new(),
+
             sink,
             __stream,
 
@@ -91,6 +102,7 @@ impl Player {
             __event_response_sender: event_response_tx,
 
             repeat: RepeatState::None,
+            is_playing: false,
             is_shuffle: false,
             is_queue_going_backwards: false,
             is_terminated: false,
@@ -174,23 +186,21 @@ impl Player {
                     let err_msg = format!("Invalid request type: {}", e);
                     let resp = PlayerResponse {
                         r#type: ResponseType::Error.into(),
-                        data: Some(err_msg),
+                        payload: Some(ResponsePayload::Error(err_msg)),
                     };
                     self.send_response(resp);
                     return;
                 }
             };
 
-            let req_data = request.data;
-
             let response = self
-                .dispatch_request(req_type, req_data)
+                .dispatch_request(req_type, request.payload)
                 .await
                 .unwrap_or_else(|e| {
                     let err_msg = format!("Failed to handle request: {}", e);
                     PlayerResponse {
                         r#type: ResponseType::Error.into(),
-                        data: Some(err_msg),
+                        payload: Some(ResponsePayload::Error(err_msg)),
                     }
                 });
 
@@ -201,7 +211,7 @@ impl Player {
     async fn dispatch_request(
         &mut self,
         request_type: RequestType,
-        request_data: Option<String>,
+        request_payload: Option<RequestPayload>,
     ) -> PlayerResult<PlayerResponse> {
         Ok(match request_type {
             RequestType::Play => {
@@ -233,13 +243,13 @@ impl Player {
                 PlayerResponse::ok(Some(volume.to_string()))
             }
             RequestType::SetVolume => {
-                let volume = parse_request_data(request_data)?;
+                let volume = parse_request_data(request_payload)?;
                 self.sink.set_volume(volume);
                 PlayerResponse::ok(None)
             }
             RequestType::GetRepeat => PlayerResponse::ok(Some(self.repeat.into())),
             RequestType::SetRepeat => {
-                let repeat = parse_request_data(request_data)?;
+                let repeat = parse_request_data(request_payload)?;
                 self.repeat = repeat;
                 PlayerResponse::ok(None)
             }
@@ -254,29 +264,72 @@ impl Player {
             }
             RequestType::CheckAlive => PlayerResponse {
                 r#type: ResponseType::ImAlive.into(),
-                data: None,
+                payload: None,
             },
             RequestType::SecretCode => PlayerResponse {
                 r#type: ResponseType::HiImYajyuSenpai.into(),
-                data: Some(String::from("良い世、来いよ")),
+                payload: Some(ResponsePayload::Data(String::from("232 137 175 227 129 132 228 184 150 227 128 129 230 157 165 227 129 132 227 130 136"))),
             },
             RequestType::GetStatus => PlayerResponse {
                 r#type: ResponseType::PlayerStatus.into(),
-                data: Some(format!(
+                payload: Some(ResponsePayload::Data(format!(
                     "Queue: {:?}, Current: {}, Repeat: {:?}, Shuffle: {}",
                     self.queue, self.current_track_index, self.repeat, self.is_shuffle
-                )),
+                ))),
             },
             RequestType::ClearQueue => {
                 self.queue.clear();
                 PlayerResponse::ok(None)
             }
             RequestType::RemoveTrack => {
-                let index = parse_request_data(request_data)?;
+                let index = parse_request_data(request_payload)?;
                 self.queue.remove(index);
                 PlayerResponse::ok(None)
             }
-            _ => unreachable!("This request should be handled before here"),
+            RequestType::AddTrack => {
+                let RequestPayload::Track(track) = request_payload.ok_or(PlayerError::EmptyData)? else {
+                    return Err(PlayerError::InvalidData);
+                };
+
+                let track = self.provider_registry.get_track(track.provider, track.id).await?;
+                self.add_track(track);
+
+                PlayerResponse::ok(None)
+            }
+            RequestType::NewProvider => {
+                let RequestPayload::ProviderConfig(provider_config) = request_payload.ok_or(PlayerError::EmptyData)? else {
+                    return Err(PlayerError::InvalidData);
+                };
+
+                let provider = Providers::try_from(provider_config.config)?;
+                self.provider_registry.register(provider).await;
+
+                PlayerResponse::ok(None)
+            },
+            RequestType::RemoveProvider => {
+                let RequestPayload::Track(track) = request_payload.ok_or(PlayerError::EmptyData)? else {
+                    return Err(PlayerError::InvalidData);
+                };
+                let provider_name = track.provider;
+                self.provider_registry.unregister(provider_name);
+                PlayerResponse::ok(None)
+            },
+            RequestType::ProviderList => {
+                let providers = self.provider_registry.providers();
+                PlayerResponse::ok(Some(providers.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(" ")))
+            },
+            RequestType::ProviderSearch => {
+                let RequestPayload::TrackSearch(query) = request_payload.ok_or(PlayerError::EmptyData)? else {
+                    return Err(PlayerError::InvalidData);
+                };
+                let result = self.provider_registry.search(query.query, |provider_name| query.providers.contains(&provider_name)).await?;
+
+                PlayerResponse {
+                    r#type: ResponseType::SearchResult.into(),
+                    payload: Some(ResponsePayload::SearchResults(result.into())),
+                }
+            },
+            
         })
     }
 
@@ -339,8 +392,10 @@ impl Player {
     }
 }
 
-fn parse_request_data<T: FromStr>(data: Option<String>) -> PlayerResult<T> {
-    data.ok_or(PlayerError::EmptyData)?
-        .parse()
-        .map_err(|_| PlayerError::InvalidData)
+fn parse_request_data<T: FromStr>(data: Option<RequestPayload>) -> PlayerResult<T> {
+    let RequestPayload::Data(data) = data.ok_or(PlayerError::EmptyData)? else {
+        return Err(PlayerError::InvalidData);
+    };
+
+    data.parse().map_err(|_| PlayerError::InvalidData)
 }

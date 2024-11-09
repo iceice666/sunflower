@@ -12,8 +12,14 @@ use crate::provider::{Provider, ProviderResult};
 
 static JUST_A_EMPTY_HASHMAP: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Default)]
 pub struct SineWaveProvider;
+
+impl From<HashMap<String, String>> for SineWaveProvider {
+    fn from(_: HashMap<String, String>) -> Self {
+        SineWaveProvider
+    }
+}
 
 #[async_trait::async_trait]
 impl Provider for SineWaveProvider {

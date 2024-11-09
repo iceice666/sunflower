@@ -2,50 +2,103 @@ syntax = "proto3";
 
 package protocol;
 
+
 enum RequestType {
+  // System operations (0-9)
   CHECK_ALIVE = 0;
+  TERMINATE = 9;
 
-  PLAY = 1;
-  PAUSE = 2;
-  STOP = 3;
-  NEXT = 4;
-  PREV = 5;
+  // Playback controls (10-19)
+  PLAY = 10;
+  PAUSE = 11;
+  STOP = 12;
+  NEXT = 13;
+  PREV = 14;
 
-  SET_REPEAT = 10;
-  SET_VOLUME = 11;
-  TOGGLE_SHUFFLE = 12;
+  // Player settings (20-29)
+  SET_REPEAT = 20;
+  GET_REPEAT = 21;
+  SET_VOLUME = 22;
+  GET_VOLUME = 23;
+  TOGGLE_SHUFFLE = 24;
+  GET_STATUS = 25;
 
-  GET_REPEAT = 20;
-  GET_VOLUME = 21;
-  GET_STATUS = 29;
-
+  // Queue management (30-39)
   ADD_TRACK = 30;
   REMOVE_TRACK = 31;
   CLEAR_QUEUE = 32;
 
-  TERMINATE = 99;
+  // Provider management (40-49)
+  NEW_PROVIDER = 40;
+  REMOVE_PROVIDER = 41;
+  PROVIDER_LIST = 42;
+  PROVIDER_SEARCH = 43;
 
-  SECRET_CODE = 114514;
+  reserved 50 to 113;
+  reserved 115 to max;
+  SECRET_CODE = 114;
+}
+
+message Track {
+  string provider = 1;
+  string id = 2;
+}
+
+message ProviderConfig {
+  map<string, string> config = 1;
+}
+
+message TrackSearch {
+  repeated string providers = 1;
+  string query = 2;
+}
+
+message ProviderSearchResult {
+  map<string, string> values = 1;
+}
+
+message SearchResults {
+  map<string, ProviderSearchResult> results = 1;
+}
+
+
+enum ResponseType {
+  // System responses (0-9)
+  IM_ALIVE = 0;
+  OK = 1;
+  ERROR = 2;
+
+  // Data responses (10-19)
+  TRACK_DATA = 10;
+  SEARCH_RESULT = 11;
+  PROVIDERS = 12;
+  PLAYER_STATUS = 13;
+
+  reserved 14 to 113;
+  reserved 115 to max;
+  HI_IM_YAJYU_SENPAI = 114;
+}
+
+message ProviderList {
+  repeated string providers = 1;
 }
 
 message Request {
   RequestType type = 1;
-  optional string data = 2;
-}
-
-enum ResponseType {
-  IM_ALIVE = 0;
-
-  OK = 1;
-  TRACK_DATA = 2;
-  PLAYER_STATUS =9;
-
-  ERROR = 99;
-
-  HI_IM_YAJYU_SENPAI = 114514;
+  oneof payload {
+    string data = 2;
+    Track track = 3;
+    ProviderConfig provider_config = 4;
+    TrackSearch track_search = 5;
+  }
 }
 
 message Response {
   ResponseType type = 1;
-  optional string data = 2;
+  oneof payload {
+    string data = 2;
+    string error = 3;
+    SearchResults search_results = 4;
+    ProviderList provider_list = 5;
+  }
 }

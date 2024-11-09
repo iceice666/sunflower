@@ -38,6 +38,22 @@ impl LocalFileProvider {
     }
 }
 
+impl TryFrom<HashMap<String, String>> for LocalFileProvider {
+    type Error = ProviderError;
+
+    fn try_from(value: HashMap<String, String>) -> Result<Self, Self::Error> {
+        let music_folder =
+            value
+                .get("music_folder")
+                .ok_or(ProviderError::MissingFieldToBuildProvider(
+                    "music_folder".to_string(),
+                    "LocalFileProvider".to_string(),
+                ))?;
+
+        Ok(Self::new(music_folder))
+    }
+}
+
 #[async_trait::async_trait]
 impl Provider for LocalFileProvider {
     async fn get_name(&self) -> String {

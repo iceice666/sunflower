@@ -3,11 +3,11 @@ pub(crate) mod sine_wave;
 
 use sine_wave::SineWaveProvider;
 
-#[cfg(feature = "local")]
+#[cfg(feature = "local_file")]
 use local_file::LocalFileProvider;
 
 use crate::player::track::TrackObject;
-use crate::provider::error::ProviderResult;
+use crate::provider::error::{ProviderError, ProviderResult};
 use crate::provider::{Provider, SearchResult};
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -22,7 +22,7 @@ pub enum Providers {
         inner: SineWaveProvider,
     },
 
-    #[cfg(feature = "local")]
+    #[cfg(feature = "local_file")]
     LocalFile {
         inner: LocalFileProvider,
     },
@@ -33,10 +33,37 @@ macro_rules! manipulate {
         match $this {
             Self::SineWave { inner } => inner.$func($($arg),*).await,
 
-            #[cfg(feature = "local")]
+            #[cfg(feature = "local_file")]
             Self::LocalFile { inner } => inner.$func($($arg),*).await,
         }
     };
+}
+
+impl TryFrom<HashMap<String, String>> for Providers {
+    type Error = ProviderError;
+
+    fn try_from(mut value: HashMap<String, String>) -> Result<Self, Self::Error> {
+        let provider =
+            value
+                .remove("provider_name")
+                .ok_or(ProviderError::MissingFieldToBuildProvider(
+                    "provider_name".to_string(),
+                    "".to_string(),
+                ))?;
+
+        match provider.as_str() {
+            "sine_wave" => Ok(Self::SineWave {
+                inner: SineWaveProvider,
+            }),
+
+            #[cfg(feature = "local_file")]
+            "local_file" => Ok(Self::LocalFile {
+                inner: LocalFileProvider::try_from(value)?,
+            }),
+
+            _ => Err(ProviderError::ProviderNotFound(provider)),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -53,7 +80,7 @@ impl Provider for Providers {
         manipulate!(self, get_track, id)
     }
 }
-struct ProviderRegistry {
+pub struct ProviderRegistry {
     inner: HashMap<String, Providers>,
 }
 
@@ -84,9 +111,7 @@ impl ProviderRegistry {
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
         self.search(keyword, |_| true).await
     }
-}
 
-impl ProviderRegistry {
     pub async fn search(
         &mut self,
         keyword: impl AsRef<str>,
@@ -110,5 +135,19 @@ impl ProviderRegistry {
         }
 
         Ok(result)
+    }
+
+    pub async fn get_track(
+        &self,
+        provider: impl AsRef<str>,
+        id: impl AsRef<str>,
+    ) -> ProviderResult<TrackObject> {
+        let provider = provider.as_ref();
+        let id = id.as_ref();
+
+        match self.inner.get(provider) {
+            Some(provider) => provider.get_track(id).await,
+            None => Err(ProviderError::ProviderNotFound(provider.to_string())),
+        }
     }
 }

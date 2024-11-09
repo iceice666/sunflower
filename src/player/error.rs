@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::provider::error::ProviderError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PlayerError {
     #[error("IO Error: {0}")]
@@ -28,6 +30,9 @@ pub enum PlayerError {
 
     #[error("Invalid data")]
     InvalidData,
+
+    #[error("Provider Error: {0}")]
+    ProviderError(#[from] ProviderError),
 }
 
 pub type PlayerResult<T = ()> = Result<T, PlayerError>;
