@@ -10,24 +10,23 @@ tracing = "0.1"
 rand = "0.8.5"
 rodio = { version = "0.20", features = ["symphonia-all"] }
 symphonia = "0.5.4"
+async-trait = "0.1.83"
+tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "net"] }
+mio = "1" # I don't know why this is needed, but it if it's not there, tokio's net feature won't compile
+
+sunflower-daemon-proto = { path = "./proto" }
+
+tracing-subscriber = "0.3"
+anyhow = "1.0.93"
 
 regex = { version = "1.5.5", optional = true }
 lofty = { version = "0.21", optional = true }
 
-sunflower-daemon-proto = { path = "./proto" }
-async-trait = "0.1.83"
-tokio = { version = "1.41.1", features = ["macros", "rt"] }
-
-
-
-[dev-dependencies]
-tracing-subscriber = "0.3"
-anyhow = "1.0.93"
-
-
 [features]
-local_file = ["dep:lofty", "dep:regex"]
-yt-dl = ["local_file"]
+provider-local_file = ["dep:lofty", "dep:regex"]
+provider-yt-dl = ["provider-local_file"]
 
-default = ["local_file"]
-all = ["local_file", "yt-dl"]
+default = ["provider-local_file"]
+all = ["provider-local_file", "provider-yt-dl"]
+
+daemon-tcp = []

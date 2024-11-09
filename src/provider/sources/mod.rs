@@ -1,7 +1,7 @@
 // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
 pub(crate) mod sine_wave;
 
-#[cfg(feature = "local_file")]
+#[cfg(feature = "provider-local_file")]
 pub(crate) mod local_file;
 
 ////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,7 @@ pub fn try_from_config(config: TrackConfig) -> ProviderResult<TrackObject> {
         // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
         "sine_wave" => Box::new(SineWaveTrack::try_from_config(config)?),
 
-        #[cfg(feature = "local_file")]
+        #[cfg(feature = "provider-local_file")]
         "local_file" => Box::new(LocalFileTrack::try_from_config(config)?),
 
         _ => return Err(ProviderError::ProviderNotFound(provider)),

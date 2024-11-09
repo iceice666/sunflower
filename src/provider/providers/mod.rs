@@ -2,10 +2,10 @@
 pub(crate) mod sine_wave;
 use sine_wave::SineWaveProvider;
 
-#[cfg(feature = "local_file")]
+#[cfg(feature = "provider-local_file")]
 pub(crate) mod local_file;
 
-#[cfg(feature = "local_file")]
+#[cfg(feature = "provider-local_file")]
 use local_file::LocalFileProvider;
 
 ////////////////////////////////////////////////////////////////////////
@@ -28,7 +28,7 @@ pub enum Providers {
         inner: SineWaveProvider,
     },
 
-    #[cfg(feature = "local_file")]
+    #[cfg(feature = "provider-local_file")]
     LocalFile {
         inner: LocalFileProvider,
     },
@@ -40,7 +40,7 @@ macro_rules! manipulate {
         match $this {
             Self::SineWave { inner } => inner.$func($($arg),*).await,
 
-            #[cfg(feature = "local_file")]
+            #[cfg(feature = "provider-local_file")]
             Self::LocalFile { inner } => inner.$func($($arg),*).await,
         }
     };
@@ -60,7 +60,7 @@ impl TryFrom<HashMap<String, String>> for Providers {
                 inner: SineWaveProvider,
             }),
 
-            #[cfg(feature = "local_file")]
+            #[cfg(feature = "provider-local_file")]
             "local_file" => Ok(Self::LocalFile {
                 inner: LocalFileProvider::try_from(value)?,
             }),
