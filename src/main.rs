@@ -1,17 +1,19 @@
 use std::io;
-use tokio::net::windows::named_pipe::ServerOptions;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use sunflower_daemon::Player;
 use sunflower_daemon_proto::{DecodeError, PlayerRequest, PlayerResponse};
 use thiserror::Error;
 
 #[cfg(all(windows, not(feature = "daemon-tcp")))]
-use tokio::net::windows::named_pipe::NamedPipeServer;
+use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+
 #[cfg(feature = "daemon-tcp")]
 use tokio::net::TcpListener;
 
+#[cfg(all(unix, not(feature = "daemon-tcp")))]
+use tokio::net::{UnixListener, UnixStream};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -33,7 +35,6 @@ async fn main() -> anyhow::Result<()> {
         .await
 }
 
-
 #[derive(Debug, Error)]
 enum LoopCtrl {
     #[error("")]
@@ -49,8 +50,6 @@ enum LoopCtrl {
 
     #[error("")]
     SendError(#[from] tokio::sync::mpsc::error::SendError<PlayerRequest>),
-
-    
 }
 
 async fn exchange(
@@ -59,6 +58,7 @@ async fn exchange(
 
     #[cfg(feature = "daemon-tcp")] socket: TcpStream,
     #[cfg(all(windows, not(feature = "daemon-tcp")))] socket: NamedPipeServer,
+    #[cfg(all(unix, not(feature = "daemon-tcp")))] socket: UnixStream,
 ) -> Result<(), LoopCtrl> {
     let mut buf = [0; 1024];
 
@@ -89,26 +89,28 @@ async fn exchange(
     Ok(())
 }
 
-
-
+#[allow(dead_code)]
 async fn message_transfer(
     sender: UnboundedSender<PlayerRequest>,
     mut receiver: UnboundedReceiver<PlayerResponse>,
 ) -> anyhow::Result<()> {
     const LISTENING_URL: &str = "localhost:8888";
     const PIPE_NAME: &str = r"\\.\pipe\sunflower-daemon";
+    const UNIX_SOCKET_PATH: &str = "/tmp/sunflower-daemon.sock";
 
     #[cfg(feature = "daemon-tcp")]
     let listener = TcpListener::bind(LISTENING_URL).await?;
 
     #[cfg(all(windows, not(feature = "daemon-tcp")))]
     let mut server = ServerOptions::new().create(PIPE_NAME)?;
-    
+
+    #[cfg(all(unix, not(feature = "daemon-tcp")))]
+    let listener = UnixListener::bind(UNIX_SOCKET_PATH)?;
+
     loop {
-        
-        #[cfg(feature = "daemon-tcp")]
+        #[cfg(any(feature = "daemon-tcp", unix))]
         let socket = {
-            let (socket, addr) = listener.accept().await?;
+            let (socket, _) = listener.accept().await?;
             socket
         };
 
@@ -132,15 +134,4 @@ async fn message_transfer(
         }
     }
     Ok(())
-}
-
-
-#[cfg(all(unix, not(feature = "daemon-tcp")))]
-async fn message_transfer(
-    sender: UnboundedSender<PlayerRequest>,
-    receiver: UnboundedReceiver<PlayerResponse>,
-) -> anyhow::Result<()> {
-    use tokio::net::UnixListener;
-
-    todo!()
 }

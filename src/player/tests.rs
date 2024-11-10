@@ -1,5 +1,5 @@
-use tokio::{task::JoinError, time::sleep};
 use std::time::Duration;
+use tokio::{task::JoinError, time::sleep};
 
 use sunflower_daemon_proto::*;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -13,14 +13,15 @@ async fn test_request_and_control() -> anyhow::Result<()> {
         .with_max_level(LevelFilter::TRACE)
         .init();
 
-    async fn callback(sender: UnboundedSender<PlayerRequest>,mut receiver: UnboundedReceiver<PlayerResponse>) {
-        
+    async fn callback(
+        sender: UnboundedSender<PlayerRequest>,
+        mut receiver: UnboundedReceiver<PlayerResponse>,
+    ) {
         macro_rules! send {
             ($request:expr) => {{
                 sender.send($request).unwrap();
                 receiver.recv().await.unwrap()
             }};
-            
         }
 
         let track_440 = RequestPayload::TrackConfig(TrackConfig {
@@ -55,7 +56,7 @@ async fn test_request_and_control() -> anyhow::Result<()> {
             r#type: RequestType::SetRepeat.into(),
             payload: Some(RequestPayload::Data("track".to_string())),
         });
-        
+
         send!(PlayerRequest {
             r#type: RequestType::AddTrackFromConfig.into(),
             payload: Some(track_440),
@@ -92,7 +93,6 @@ async fn test_request_and_control() -> anyhow::Result<()> {
 
         let payload = resp.payload.unwrap();
         assert_eq!(payload, ResponsePayload::Data("0.3".to_string()));
-        
 
         send!(PlayerRequest {
             r#type: RequestType::Next.into(),
@@ -137,7 +137,6 @@ async fn test_request_and_control() -> anyhow::Result<()> {
 
     let local = tokio::task::LocalSet::new();
 
-    
     local
         .run_until(async move {
             let player_handle = tokio::task::spawn_local(player.main_loop());
@@ -146,7 +145,7 @@ async fn test_request_and_control() -> anyhow::Result<()> {
             let (_, handle) = tokio::join!(player_handle, message_handle);
             handle?;
 
-            Ok::<(),JoinError>(())
+            Ok::<(), JoinError>(())
         })
         .await?;
 

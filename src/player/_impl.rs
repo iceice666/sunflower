@@ -1,13 +1,9 @@
 use rand::prelude::*;
 use rodio::{OutputStream, Sink};
-use std::{
-    fmt::Debug,
-    str::FromStr,
-    
-};
 use std::time::Duration;
+use std::{fmt::Debug, str::FromStr};
 use sunflower_daemon_proto::*;
-use tokio::sync::mpsc::{  unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::time::timeout;
 use tracing::{debug, error, info, trace, warn};
 
@@ -79,7 +75,11 @@ impl Debug for Player {
 }
 
 impl Player {
-    pub fn try_new() -> PlayerResult<(Self, UnboundedSender<PlayerRequest>, UnboundedReceiver<PlayerResponse>)> {
+    pub fn try_new() -> PlayerResult<(
+        Self,
+        UnboundedSender<PlayerRequest>,
+        UnboundedReceiver<PlayerResponse>,
+    )> {
         let (__stream, stream_handle) = OutputStream::try_default()?;
         let sink = Sink::try_new(&stream_handle)?;
         let (event_queue_tx, event_queue_rx) = unbounded_channel();
@@ -118,7 +118,7 @@ impl Player {
                     self.append_source();
                 }
             }
-            
+
             self.handle_request().await;
         }
 
@@ -172,8 +172,9 @@ impl Player {
     async fn handle_request(&mut self) {
         if let Ok(Some(request)) = timeout(
             Duration::from_millis(100),
-            self.__event_queue_receiver.recv()
-        ).await
+            self.__event_queue_receiver.recv(),
+        )
+        .await
         // Only block current thread for at the most 100 ms.
         {
             info!("Received request: {:?}", request);

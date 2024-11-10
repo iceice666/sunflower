@@ -15,7 +15,10 @@ async fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
         .with_max_level(LevelFilter::DEBUG)
         .init();
 
-    async fn callback(sender: UnboundedSender<PlayerRequest>, _: UnboundedReceiver<PlayerResponse>) {
+    async fn callback(
+        sender: UnboundedSender<PlayerRequest>,
+        _: UnboundedReceiver<PlayerResponse>,
+    ) {
         let list: Vec<String>;
         let mut provider = LocalFileProvider::new("../music");
 
