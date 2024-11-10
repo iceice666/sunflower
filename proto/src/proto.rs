@@ -26,7 +26,11 @@ impl From<HashMap<String, &HashMap<String, String>>> for SearchResults {
                 (
                     k,
                     ProviderSearchResult {
-                        values: v.clone().into_iter().map(|(k, v)| (k, v.to_string())).collect(),
+                        values: v
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k, v.to_string()))
+                            .collect(),
                     },
                 )
             })
@@ -35,4 +39,3 @@ impl From<HashMap<String, &HashMap<String, String>>> for SearchResults {
         Self { results }
     }
 }
-

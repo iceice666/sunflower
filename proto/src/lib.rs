@@ -3,22 +3,11 @@ mod proto;
 pub use prost::DecodeError;
 use prost::Message;
 
-
-pub use proto ::{
-
-request::Payload as RequestPayload,
-response::Payload as ResponsePayload,
-
-Request as  PlayerRequest ,
-Response as  PlayerResponse  ,
-
-RequestType,
-ResponseType,
-
-TrackConfig, TrackData, TrackSearch,
+pub use proto::{
+    request::Payload as RequestPayload, response::Payload as ResponsePayload,
+    Request as PlayerRequest, RequestType, Response as PlayerResponse, ResponseType, TrackConfig,
+    TrackData, TrackSearch,
 };
-
-
 
 pub fn serialize_response(response: PlayerResponse) -> Vec<u8> {
     let mut buf = Vec::with_capacity(response.encoded_len());
