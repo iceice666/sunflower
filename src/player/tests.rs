@@ -1,5 +1,4 @@
-use std::thread;
-use tokio::time::sleep;
+use tokio::{task::JoinError, time::sleep};
 use std::time::Duration;
 
 use sunflower_daemon_proto::*;
@@ -53,6 +52,11 @@ async fn test_request_and_control() -> anyhow::Result<()> {
         });
 
         send!(PlayerRequest {
+            r#type: RequestType::SetRepeat.into(),
+            payload: Some(RequestPayload::Data("track".to_string())),
+        });
+        
+        send!(PlayerRequest {
             r#type: RequestType::AddTrackFromConfig.into(),
             payload: Some(track_440),
         });
@@ -88,11 +92,7 @@ async fn test_request_and_control() -> anyhow::Result<()> {
 
         let payload = resp.payload.unwrap();
         assert_eq!(payload, ResponsePayload::Data("0.3".to_string()));
-
-        send!(PlayerRequest {
-            r#type: RequestType::SetRepeat.into(),
-            payload: Some(RequestPayload::Data("track".to_string())),
-        });
+        
 
         send!(PlayerRequest {
             r#type: RequestType::Next.into(),
@@ -135,11 +135,20 @@ async fn test_request_and_control() -> anyhow::Result<()> {
 
     let (player, sender, receiver) = Player::try_new()?;
 
-    let handle = thread::spawn(|| callback(sender, receiver));
+    let local = tokio::task::LocalSet::new();
 
-    player.main_loop().await;
+    
+    local
+        .run_until(async move {
+            let player_handle = tokio::task::spawn_local(player.main_loop());
+            let message_handle = tokio::spawn(callback(sender, receiver));
 
-    handle.join().unwrap().await;
+            let (_, handle) = tokio::join!(player_handle, message_handle);
+            handle?;
+
+            Ok::<(),JoinError>(())
+        })
+        .await?;
 
     Ok(())
 }

@@ -5,9 +5,10 @@ use std::{
     str::FromStr,
     
 };
+use std::time::Duration;
 use sunflower_daemon_proto::*;
 use tokio::sync::mpsc::{  unbounded_channel, UnboundedReceiver, UnboundedSender};
-
+use tokio::time::timeout;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::provider::sources::{try_from_config, TrackObject, TrackSource};
@@ -108,8 +109,6 @@ impl Player {
     pub async fn main_loop(mut self) {
         info!("Starting main loop");
         while !self.is_terminated {
-            self.handle_request().await;
-
             // Player is in `play` state and there no more data to play.
             if self.is_playing && self.sink.empty() {
                 self.update_current_track();
@@ -119,6 +118,8 @@ impl Player {
                     self.append_source();
                 }
             }
+            
+            self.handle_request().await;
         }
 
         info!("Main loop stopped");
@@ -169,9 +170,10 @@ impl Player {
     }
 
     async fn handle_request(&mut self) {
-        if let Some(request) = self
-            .__event_queue_receiver
-            .recv().await
+        if let Ok(Some(request)) = timeout(
+            Duration::from_millis(100),
+            self.__event_queue_receiver.recv()
+        ).await
         // Only block current thread for at the most 100 ms.
         {
             info!("Received request: {:?}", request);
