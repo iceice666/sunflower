@@ -5,6 +5,9 @@ use sine_wave::SineWaveProvider;
 #[cfg(feature = "provider-local_file")]
 pub(crate) mod local_file;
 
+#[cfg(feature = "yt-dlp")]
+pub(crate) mod yt_dlp;
+
 #[cfg(feature = "provider-local_file")]
 use local_file::LocalFileProvider;
 

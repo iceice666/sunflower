@@ -983,6 +983,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "lofty",
+ "log",
  "mio",
  "rand",
  "regex",

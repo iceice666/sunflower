@@ -20,6 +20,9 @@ pub enum ProviderError {
 
     #[error("Invalid data")]
     InvalidData,
+
+    #[error("{0}")]
+    Other(String),
 }
 
 pub type ProviderResult<T = ()> = Result<T, ProviderError>;

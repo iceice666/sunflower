@@ -21,12 +21,18 @@ anyhow = "1.0.93"
 
 regex = { version = "1.5.5", optional = true }
 lofty = { version = "0.21", optional = true }
+log = "0.4.22"
 
 [features]
+
 provider-local_file = ["dep:lofty", "dep:regex"]
-provider-yt-dl = ["provider-local_file"]
+provider-youtube_download = ["yt-dlp", "provider-local_file"]
+provider-youtube_stream = ["yt-dlp"]
+
+
 
 default = ["provider-local_file"]
-all = ["provider-local_file", "provider-yt-dl"]
+all = ["provider-local_file", "provider-youtube_download", "provider-youtube_stream"]
 
 daemon-tcp = []
+yt-dlp = []
