@@ -2,12 +2,11 @@ use std::collections::HashMap;
 use sunflower_daemon_proto::{
     PlayerRequest, PlayerResponse, RequestPayload, RequestType, TrackData,
 };
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::level_filters::LevelFilter;
 
 use crate::provider::Provider;
 use crate::{player::_impl::Player, provider::providers::local_file::LocalFileProvider};
-
-use std::sync::mpsc::{Receiver, Sender};
 
 #[tokio::test]
 async fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
@@ -16,7 +15,7 @@ async fn test_search_and_play_with_local_file_provider() -> anyhow::Result<()> {
         .with_max_level(LevelFilter::DEBUG)
         .init();
 
-    async fn callback(sender: Sender<PlayerRequest>, _: Receiver<PlayerResponse>) {
+    async fn callback(sender: UnboundedSender<PlayerRequest>, _: UnboundedReceiver<PlayerResponse>) {
         let list: Vec<String>;
         let mut provider = LocalFileProvider::new("../music");
 

@@ -1,9 +1,9 @@
-use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
-use std::thread::sleep;
+use tokio::time::sleep;
 use std::time::Duration;
 
 use sunflower_daemon_proto::*;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing_subscriber::filter::LevelFilter;
 
 use crate::player::_impl::Player;
@@ -14,11 +14,15 @@ async fn test_request_and_control() -> anyhow::Result<()> {
         .with_max_level(LevelFilter::TRACE)
         .init();
 
-    fn callback(sender: Sender<PlayerRequest>, receiver: Receiver<PlayerResponse>) {
-        let send = |request: PlayerRequest| {
-            sender.send(request).unwrap();
-            receiver.recv().unwrap()
-        };
+    async fn callback(sender: UnboundedSender<PlayerRequest>,mut receiver: UnboundedReceiver<PlayerResponse>) {
+        
+        macro_rules! send {
+            ($request:expr) => {{
+                sender.send($request).unwrap();
+                receiver.recv().await.unwrap()
+            }};
+            
+        }
 
         let track_440 = RequestPayload::TrackConfig(TrackConfig {
             provider: "sine_wave".to_string(),
@@ -48,36 +52,36 @@ async fn test_request_and_control() -> anyhow::Result<()> {
             .collect(),
         });
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::AddTrackFromConfig.into(),
             payload: Some(track_440),
         });
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::AddTrackFromConfig.into(),
             payload: Some(track_660),
         });
-        sleep(Duration::from_secs(2));
+        sleep(Duration::from_secs(2)).await;
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::Pause.into(),
             payload: None,
         });
-        sleep(Duration::from_secs(2));
+        sleep(Duration::from_secs(2)).await;
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::Play.into(),
             payload: None,
         });
-        sleep(Duration::from_secs(2));
+        sleep(Duration::from_secs(2)).await;
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::SetVolume.into(),
             payload: Some(RequestPayload::Data("0.3".to_string())),
         });
-        sleep(Duration::from_secs(2));
+        sleep(Duration::from_secs(2)).await;
 
-        let resp = send(PlayerRequest {
+        let resp = send!(PlayerRequest {
             r#type: RequestType::GetVolume.into(),
             payload: None,
         });
@@ -85,45 +89,45 @@ async fn test_request_and_control() -> anyhow::Result<()> {
         let payload = resp.payload.unwrap();
         assert_eq!(payload, ResponsePayload::Data("0.3".to_string()));
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::SetRepeat.into(),
             payload: Some(RequestPayload::Data("track".to_string())),
         });
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::Next.into(),
             payload: None,
         });
-        sleep(Duration::from_secs(5));
+        sleep(Duration::from_secs(5)).await;
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::SetRepeat.into(),
             payload: Some(RequestPayload::Data("none".to_string())),
         });
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::Next.into(),
             payload: None,
         });
-        sleep(Duration::from_secs(5));
+        sleep(Duration::from_secs(5)).await;
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::Prev.into(),
             payload: None,
         });
-        sleep(Duration::from_secs(5));
+        sleep(Duration::from_secs(5)).await;
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::Stop.into(),
             payload: None,
         });
 
-        send(PlayerRequest {
+        send!(PlayerRequest {
             r#type: RequestType::AddTrackFromConfig.into(),
             payload: Some(track_880),
         });
-        sleep(Duration::from_secs(5));
-        send(PlayerRequest {
+        sleep(Duration::from_secs(5)).await;
+        send!(PlayerRequest {
             r#type: RequestType::Terminate.into(),
             payload: None,
         });
@@ -135,7 +139,7 @@ async fn test_request_and_control() -> anyhow::Result<()> {
 
     player.main_loop().await;
 
-    handle.join().unwrap();
+    handle.join().unwrap().await;
 
     Ok(())
 }
