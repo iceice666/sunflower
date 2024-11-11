@@ -114,6 +114,25 @@ impl TryFrom<HashMap<String, String>> for Providers {
     }
 }
 
+impl Providers {
+   pub fn available_providers() -> Vec<String> {
+        let mut providers = vec!["sine_wave".to_string()];
+
+        // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
+        #[cfg(feature = "provider-local_file")]
+        providers.push("local_file".to_string());
+
+        #[cfg(feature = "provider-yt-dlp")]
+        providers.push("youtube_download".to_string());
+        #[cfg(feature = "provider-yt-dlp")]
+        providers.push("bilibili_download".to_string());
+        #[cfg(feature = "provider-yt-dlp")]
+        providers.push("soundcloud_download".to_string());
+
+        providers
+    }
+}
+
 #[async_trait::async_trait]
 impl Provider for Providers {
     async fn get_name(&self) -> String {

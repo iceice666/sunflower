@@ -302,12 +302,19 @@ impl Player {
                 self.provider_registry.unregister(provider_name);
                 PlayerResponse::ok(None)
             },
-            RequestType::ProviderList => {
+            RequestType::AvailableProviders => {
+                let providers = Providers::available_providers();
+                PlayerResponse {
+                    r#type: ResponseType::Providers.into(),
+                    payload: Some(ResponsePayload::ProviderList(ProviderList { providers })),
+                }
+            },
+            RequestType::RegisteredProviders => {
                 let providers = self.provider_registry.providers().iter().map(|s| s.to_string()).collect();
-PlayerResponse {
-    r#type: ResponseType::Providers.into(),
-    payload: Some(ResponsePayload::ProviderList(ProviderList { providers }))
-}
+                PlayerResponse {
+                    r#type: ResponseType::Providers.into(),
+                    payload: Some(ResponsePayload::ProviderList(ProviderList { providers }))
+                }
             },
             RequestType::ProviderSearch => {
                 let RequestPayload::TrackSearch(query) = request_payload.ok_or(PlayerError::EmptyData)? else {

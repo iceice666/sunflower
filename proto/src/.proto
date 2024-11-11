@@ -33,9 +33,10 @@ enum RequestType {
   // Provider management (40-49)
   NEW_PROVIDER = 40; // require `ProviderConfig` field
   REMOVE_PROVIDER = 41; // require `data` field
-  PROVIDER_LIST = 42; // return `PROVIDERS` with `ProviderList` field
-  PROVIDER_SEARCH = 43; // require `TrackSearch` field, return `SearchResults` field
-  PROVIDER_SEARCH_ALL = 44; // require `TrackSearch` field, return `SearchResults` field
+  AVAILABLE_PROVIDERS = 42; // return `PROVIDERS` with `ProviderList` field
+  REGISTERED_PROVIDERS = 43; // return `PROVIDERS` with `ProviderList` field
+  PROVIDER_SEARCH = 44; // require `TrackSearch` field, return `SearchResults` field
+  PROVIDER_SEARCH_ALL = 45; // require `TrackSearch` field, return `SearchResults` field
 
   reserved 50 to 113;
   reserved 115 to max;
