@@ -21,8 +21,11 @@ pub enum ProviderError {
     #[error("Invalid data")]
     InvalidData,
 
-    #[error("{0}")]
-    Other(String),
+    #[error("UTF-8 error: {0}")]
+    Utf8(#[from] std::string::FromUtf8Error),
+
+    #[error("Command execution failed: {0}")]
+    Command(String),
 }
 
 pub type ProviderResult<T = ()> = Result<T, ProviderError>;

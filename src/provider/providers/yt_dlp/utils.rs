@@ -10,11 +10,11 @@ pub fn run_cmd(cmd_args: &[&str]) -> ProviderResult<String> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else if !output.stderr.is_empty() {
-        Err(ProviderError::Other(
+        Err(ProviderError::Command(
             String::from_utf8_lossy(&output.stderr).to_string(),
         ))
     } else {
-        Err(ProviderError::Other(format!(
+        Err(ProviderError::Command(format!(
             "Process failed with exit code: {}",
             output.status.code().unwrap_or(-1)
         )))
