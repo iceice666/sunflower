@@ -13,36 +13,6 @@ use crate::{
     provider::providers::{ProviderRegistry, Providers},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum RepeatState {
-    Queue,
-    Track,
-    None,
-}
-
-impl FromStr for RepeatState {
-    type Err = PlayerError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "queue" => Ok(RepeatState::Queue),
-            "track" => Ok(RepeatState::Track),
-            "none" => Ok(RepeatState::None),
-            _ => Err(PlayerError::InvalidData),
-        }
-    }
-}
-
-impl From<RepeatState> for String {
-    fn from(val: RepeatState) -> Self {
-        match val {
-            RepeatState::Queue => "queue".to_string(),
-            RepeatState::Track => "track".to_string(),
-            RepeatState::None => "none".to_string(),
-        }
-    }
-}
-
 pub struct Player {
     queue: Vec<TrackObject>,
     current_track_index: usize,
@@ -258,10 +228,17 @@ impl Player {
                 self.sink.set_volume(volume);
                 PlayerResponse::ok(None)
             }
-            RequestType::GetRepeat => PlayerResponse::ok(Some(self.repeat.into())),
+            RequestType::GetRepeat => {
+                PlayerResponse{
+                    r#type: ResponseType::Ok.into(),
+                    payload: Some(ResponsePayload::RepeatState(self.repeat.into())),
+                }
+            },
             RequestType::SetRepeat => {
-                let repeat = parse_request_data(request_payload)?;
-                self.repeat = repeat;
+                let RequestPayload::RepeatState(repeat) = request_payload.ok_or(PlayerError::EmptyData)? else {
+                    return Err(PlayerError::InvalidData);
+                };
+                self.repeat = RepeatState::try_from(repeat).unwrap();
                 PlayerResponse::ok(None)
             }
             RequestType::ToggleShuffle => {
@@ -326,8 +303,11 @@ impl Player {
                 PlayerResponse::ok(None)
             },
             RequestType::ProviderList => {
-                let providers = self.provider_registry.providers();
-                PlayerResponse::ok(Some(providers.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(" ")))
+                let providers = self.provider_registry.providers().iter().map(|s| s.to_string()).collect();
+PlayerResponse {
+    r#type: ResponseType::Providers.into(),
+    payload: Some(ResponsePayload::ProviderList(ProviderList { providers }))
+}
             },
             RequestType::ProviderSearch => {
                 let RequestPayload::TrackSearch(query) = request_payload.ok_or(PlayerError::EmptyData)? else {

@@ -1,6 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/protocol.rs"));
 
 use std::collections::HashMap;
+use std::fmt::Display;
 
 impl Response {
     pub fn ok(data: Option<String>) -> Self {
@@ -37,5 +38,15 @@ impl From<HashMap<String, &HashMap<String, String>>> for SearchResults {
             .collect();
 
         Self { results }
+    }
+}
+
+impl Display for RepeatState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RepeatState::None => write!(f, "None"),
+            RepeatState::Queue => write!(f, "Queue"),
+            RepeatState::Track => write!(f, "Track"),
+        }
     }
 }

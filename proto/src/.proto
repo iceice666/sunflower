@@ -16,26 +16,26 @@ enum RequestType {
   PREV = 14;
 
   // Player settings (20-29)
-  SET_REPEAT = 20;
-  GET_REPEAT = 21;
-  SET_VOLUME = 22;
-  GET_VOLUME = 23;
+  SET_REPEAT = 20; // require `RepeatState` field
+  GET_REPEAT = 21; // return `OK` with `RepeatState` field
+  SET_VOLUME = 22; // require `data` field, 0 <= value <= 1
+  GET_VOLUME = 23; // return `OK` with `data` field
   TOGGLE_SHUFFLE = 24;
-  GET_STATUS = 25;
+  GET_STATUS = 25; // return `PLAYER_STATUS` with `data` field
 
   // Queue management (30-39)
-  ADD_TRACK = 30;
-  REMOVE_TRACK = 31;
+  ADD_TRACK = 30; // require `TrackData` field
+  REMOVE_TRACK = 31; // require `data` field
   CLEAR_QUEUE = 32;
 
-  ADD_TRACK_FROM_CONFIG = 34;
+  ADD_TRACK_FROM_CONFIG = 34; // require `TrackConfig` field
 
   // Provider management (40-49)
-  NEW_PROVIDER = 40;
-  REMOVE_PROVIDER = 41;
-  PROVIDER_LIST = 42;
-  PROVIDER_SEARCH = 43;
-  PROVIDER_SEARCH_ALL = 44;
+  NEW_PROVIDER = 40; // require `ProviderConfig` field
+  REMOVE_PROVIDER = 41; // require `data` field
+  PROVIDER_LIST = 42; // return `PROVIDERS` with `ProviderList` field
+  PROVIDER_SEARCH = 43; // require `TrackSearch` field, return `SearchResults` field
+  PROVIDER_SEARCH_ALL = 44; // require `TrackSearch` field, return `SearchResults` field
 
   reserved 50 to 113;
   reserved 115 to max;
@@ -50,6 +50,12 @@ message TrackData {
 message TrackConfig {
   string provider = 1;
   map<string, string> config = 2;
+}
+
+enum RepeatState {
+    Queue = 0;
+    Track = 1;
+    None = 2;
 }
 
 message ProviderConfig {
@@ -99,6 +105,7 @@ message Request {
     TrackData track = 4;
     TrackSearch track_search = 5;
     TrackConfig track_config = 6;
+    RepeatState repeat_state = 7;
   }
 }
 
@@ -109,5 +116,6 @@ message Response {
     string error = 3;
     SearchResults search_results = 4;
     ProviderList provider_list = 5;
+    RepeatState repeat_state = 6;
   }
 }
