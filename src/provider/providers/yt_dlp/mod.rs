@@ -1,4 +1,6 @@
 mod helper;
 mod providers;
 
-pub use providers::YoutubeDownloadProvider;
+pub use providers::{
+    BiliBiliDownloadProvider, SoundCloudDownloadProvider, YoutubeDownloadProvider,
+};

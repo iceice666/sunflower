@@ -41,6 +41,16 @@ pub enum Providers {
     YoutubeDownload {
         inner: YoutubeDownloadProvider,
     },
+
+    #[cfg(feature = "provider-yt-dlp")]
+    BiliBiliDownload {
+        inner: BiliBiliDownloadProvider,
+    },
+
+    #[cfg(feature = "provider-yt-dlp")]
+    SoundCloudDownload {
+        inner: SoundCloudDownloadProvider,
+    },
 }
 
 // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
@@ -54,6 +64,12 @@ macro_rules! manipulate {
 
             #[cfg(feature = "provider-yt-dlp")]
             Self::YoutubeDownload { inner } => inner.$func($($arg),*).await,
+
+            #[cfg(feature = "provider-yt-dlp")]
+            Self::BiliBiliDownload { inner } => inner.$func($($arg),*).await,
+
+            #[cfg(feature = "provider-yt-dlp")]
+            Self::SoundCloudDownload { inner } => inner.$func($($arg),*).await,
         }
     };
 }
@@ -81,6 +97,16 @@ impl TryFrom<HashMap<String, String>> for Providers {
             #[cfg(feature = "provider-yt-dlp")]
             "youtube_download" => Ok(Self::YoutubeDownload {
                 inner: YoutubeDownloadProvider::try_from(value)?,
+            }),
+
+            #[cfg(feature = "provider-yt-dlp")]
+            "bilibili_download" => Ok(Self::BiliBiliDownload {
+                inner: BiliBiliDownloadProvider::try_from(value)?,
+            }),
+
+            #[cfg(feature = "provider-yt-dlp")]
+            "soundcloud_download" => Ok(Self::SoundCloudDownload {
+                inner: SoundCloudDownloadProvider::try_from(value)?,
             }),
 
             _ => Err(ProviderError::ProviderNotFound(provider)),
