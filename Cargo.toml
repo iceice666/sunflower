@@ -26,13 +26,11 @@ log = "0.4.22"
 [features]
 
 provider-local_file = ["dep:lofty", "dep:regex"]
-provider-youtube_download = ["yt-dlp", "provider-local_file"]
-provider-youtube_stream = ["yt-dlp"]
+provider-yt-dlp = []
 
 
 
 default = ["provider-local_file"]
-all = ["provider-local_file", "provider-youtube_download", "provider-youtube_stream"]
+all = ["provider-local_file", "provider-yt-dlp"]
 
 daemon-tcp = []
-yt-dlp = []

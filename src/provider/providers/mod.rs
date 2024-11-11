@@ -4,12 +4,13 @@ use sine_wave::SineWaveProvider;
 
 #[cfg(feature = "provider-local_file")]
 pub(crate) mod local_file;
-
-#[cfg(feature = "yt-dlp")]
-pub(crate) mod yt_dlp;
-
 #[cfg(feature = "provider-local_file")]
-use local_file::LocalFileProvider;
+use local_file::*;
+
+#[cfg(feature = "provider-yt-dlp")]
+pub(crate) mod yt_dlp;
+#[cfg(feature = "provider-yt-dlp")]
+use yt_dlp::*;
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -35,6 +36,11 @@ pub enum Providers {
     LocalFile {
         inner: LocalFileProvider,
     },
+
+    #[cfg(feature = "provider-yt-dlp")]
+    YoutubeDownload {
+        inner: YoutubeDownloadProvider,
+    },
 }
 
 // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
@@ -45,6 +51,9 @@ macro_rules! manipulate {
 
             #[cfg(feature = "provider-local_file")]
             Self::LocalFile { inner } => inner.$func($($arg),*).await,
+
+            #[cfg(feature = "provider-yt-dlp")]
+            Self::YoutubeDownload { inner } => inner.$func($($arg),*).await,
         }
     };
 }
@@ -58,6 +67,7 @@ impl TryFrom<HashMap<String, String>> for Providers {
             .ok_or(ProviderError::MissingField("provider_name".to_string()))?;
 
         // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
+        // Use lowercase and underscore for provider name
         match provider.as_str() {
             "sine_wave" => Ok(Self::SineWave {
                 inner: SineWaveProvider,
@@ -66,6 +76,11 @@ impl TryFrom<HashMap<String, String>> for Providers {
             #[cfg(feature = "provider-local_file")]
             "local_file" => Ok(Self::LocalFile {
                 inner: LocalFileProvider::try_from(value)?,
+            }),
+
+            #[cfg(feature = "provider-yt-dlp")]
+            "youtube_download" => Ok(Self::YoutubeDownload {
+                inner: YoutubeDownloadProvider::try_from(value)?,
             }),
 
             _ => Err(ProviderError::ProviderNotFound(provider)),
