@@ -115,7 +115,7 @@ impl TryFrom<HashMap<String, String>> for Providers {
 }
 
 impl Providers {
-   pub fn available_providers() -> Vec<String> {
+    pub fn available_providers() -> Vec<String> {
         let mut providers = vec!["sine_wave".to_string()];
 
         // HINT: $PROVIDER_IMPL$: Remember adding others provider/track implementations here
