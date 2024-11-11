@@ -96,7 +96,7 @@ impl Display for DownloadOption {
     }
 }
 
-#[derive(Debug,PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct YtDlp;
 
 const INDEX_CSV: &str = "audio/yt-dlp/index.csv";

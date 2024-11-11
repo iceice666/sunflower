@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use super::helper::DownloadOption;
 
-#[derive(Debug,PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct YoutubeDownloadProvider {
     yt_dlp: YtDlp,
     __cache: HashMap<String, String>,
