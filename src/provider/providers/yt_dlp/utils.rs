@@ -18,9 +18,7 @@ pub fn run_cmd(cmd_args: &[&str]) -> ProviderResult<String> {
     if output.status.success() {
         Ok(decode_utf8(&output.stdout))
     } else if !output.stderr.is_empty() {
-        Err(ProviderError::Command(
-            decode_utf8(&output.stderr),
-        ))
+        Err(ProviderError::Command(decode_utf8(&output.stderr)))
     } else {
         Err(ProviderError::Command(format!(
             "Process failed with exit code: {}",
