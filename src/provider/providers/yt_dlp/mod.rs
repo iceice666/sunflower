@@ -140,7 +140,7 @@ impl YtDlp {
 
         // Update index if needed
         if need_update_index {
-            self.update_index(&query, &output)?;
+            self.update_index(&output)?;
         }
 
         Ok(Box::new(LocalFileTrack::new(output)))
@@ -199,6 +199,10 @@ impl YtDlp {
             "--audio-quality",
             "0",
             "--print",
+            "id",
+            "--print",
+            "extractor_key",
+            "--print",
             "after_move:filepath",
             "--output",
             OUTPUT_TEMPLATE,
@@ -206,12 +210,27 @@ impl YtDlp {
         ])
     }
 
-    fn update_index(&self, query: &DownloadOption, output: &str) -> ProviderResult<()> {
-        let mut file = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(INDEX_CSV)?;
-        writeln!(file, "{},{},{}\n", query.video_id, query.platform, output)?;
+    fn update_index(&self, output: &str) -> ProviderResult<()> {
+        let mut file = match OpenOptions::new().append(true).open(INDEX_CSV) {
+            Ok(f) => f,
+            Err(_) => {
+                let mut file = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(INDEX_CSV)?;
+
+                writeln!(file, "vid,platform,path")?;
+
+                file
+            }
+        };
+
+        let mut output = output.trim().lines();
+        let vid = output.next().unwrap();
+        let platform = output.next().unwrap();
+        let path = output.next().unwrap();
+
+        writeln!(file, "{},{},{}", vid, platform, path)?;
         Ok(())
     }
 }
