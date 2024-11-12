@@ -10,7 +10,7 @@ use thiserror::Error;
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
 #[cfg(feature = "daemon-tcp")]
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 
 #[cfg(all(unix, not(feature = "daemon-tcp")))]
 use tokio::net::{UnixListener, UnixStream};

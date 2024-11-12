@@ -14,7 +14,7 @@ use std::{format, fs, matches, println, write, writeln};
 fn decode_utf8(buf: &[u8]) -> String {
     match String::from_utf8(buf.to_vec()) {
         Ok(s) => s,
-        Err(_) => String::from_utf8_lossy(&buf).to_string(),
+        Err(_) => String::from_utf8_lossy(buf).to_string(),
     }
 }
 
@@ -42,7 +42,7 @@ pub enum SearchPlatform {
     SoundCloud,
     BiliBili,
 
-    UrlSpecified(String),
+    UrlSpecified,
 }
 
 impl Display for SearchPlatform {
@@ -51,7 +51,7 @@ impl Display for SearchPlatform {
             Self::Youtube => "ytsearch",
             Self::SoundCloud => "scsearch",
             Self::BiliBili => "bilisearch",
-            Self::UrlSpecified(_) => "url",
+            Self::UrlSpecified => "url",
         };
 
         write!(f, "{}", str)
@@ -89,8 +89,8 @@ impl Display for DownloadOption {
             SearchPlatform::BiliBili => {
                 write!(f, "https://www.bilibili.com/video/{}", self.video_id)
             }
-            SearchPlatform::UrlSpecified(url) => {
-                write!(f, "{}", url)
+            SearchPlatform::UrlSpecified => {
+                write!(f, "{}", self.video_id)
             }
         }
     }
@@ -147,7 +147,7 @@ impl YtDlp {
         // Try parse to platform-specific source
         let query = self.parse_download_query(query);
 
-        let need_update_index = !matches!(query.platform, SearchPlatform::UrlSpecified(_));
+        let need_update_index = !matches!(query.platform, SearchPlatform::UrlSpecified);
 
         // Try to find existing download first
         match self.find_existing_track(&query) {
@@ -168,9 +168,10 @@ impl YtDlp {
     }
 
     fn parse_download_query(&self, query: DownloadOption) -> DownloadOption {
-        let SearchPlatform::UrlSpecified(ref url) = query.platform else {
+        if matches!(query.platform, SearchPlatform::UrlSpecified) {
             return query;
-        };
+        }
+        let url = &query.video_id;
 
         if let Some(cap) = YOUTUBE_REGEX.captures(url) {
             let video_id = cap.get(1).unwrap().as_str().to_string();
@@ -330,10 +331,8 @@ mod tests {
         let dlp = YtDlp::try_new()?;
 
         let query = DownloadOption {
-            platform: SearchPlatform::UrlSpecified(String::from(
-                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            )),
-            video_id: String::new(),
+            platform: SearchPlatform::UrlSpecified,
+            video_id: String::from("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
         };
         dlp.download(query).await?;
         Ok(())

@@ -34,10 +34,13 @@ macro_rules! add_provider {
                 stringify!($name).to_string()
             }
 
-            async fn search(&mut self, keyword: &str) -> SearchResult {
+            async fn search(&mut self, query: &str) -> SearchResult {
+                // pattern: search amonut + keyword
+                let (keyword, len) = query.split_once('+').ok_or(ProviderError::InvalidData)?;
+
                 let query = SearchOption {
                     platform: SearchPlatform::$platform,
-                    len: 0,
+                    len: len.parse().map_err(|_| ProviderError::InvalidData)?,
                     keyword: keyword.to_string(),
                 };
 
@@ -62,3 +65,4 @@ macro_rules! add_provider {
 add_provider!(YoutubeDownloadProvider, Youtube);
 add_provider!(BiliBiliDownloadProvider, BiliBili);
 add_provider!(SoundCloudDownloadProvider, SoundCloud);
+add_provider!(UrlDownloadProvider, UrlSpecified);
