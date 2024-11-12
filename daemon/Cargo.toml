@@ -14,7 +14,7 @@ async-trait = "0.1.83"
 tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
 mio = "1" # I don't know why this is needed, but it if it's not there, tokio's net feature won't compile
 
-sunflower-daemon-proto = { path = "./proto" }
+sunflower-daemon-proto = { path = "../proto" }
 
 tracing-subscriber = "0.3"
 anyhow = "1.0.93"
