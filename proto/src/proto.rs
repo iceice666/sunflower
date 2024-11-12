@@ -7,7 +7,7 @@ impl Response {
     pub fn ok(data: Option<String>) -> Self {
         Self {
             r#type: ResponseType::Ok.into(),
-            payload: data.map(|v| response::Payload::Data(v)),
+            payload: data.map(response::Payload::Data),
         }
     }
 
