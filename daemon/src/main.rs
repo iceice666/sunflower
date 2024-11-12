@@ -14,9 +14,14 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[cfg(all(unix, not(feature = "daemon-tcp")))]
 use tokio::net::{UnixListener, UnixStream};
+use tracing::{info, level_filters::LevelFilter};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(LevelFilter::DEBUG)
+        .init();
+
     let (player, sender, receiver) = Player::try_new()?;
 
     // Create a local task set that can handle non-Send futures
@@ -107,6 +112,23 @@ async fn message_transfer(
     #[cfg(all(unix, not(feature = "daemon-tcp")))]
     let listener = UnixListener::bind(UNIX_SOCKET_PATH)?;
 
+    #[cfg(feature = "daemon-tcp")]
+    info!(
+        "Starting accepting connections with TCP at {}...",
+        LISTENING_URL
+    );
+
+    #[cfg(all(windows, not(feature = "daemon-tcp")))]
+    info!(
+        "Starting accepting connections with Windows named pipe at {}...",
+        PIPE_NAME
+    );
+
+    #[cfg(all(unix, not(feature = "daemon-tcp")))]
+    info!(
+        "Starting accepting connections with unix socket at {}...",
+        UNIX_SOCKET_PATH
+    );
     loop {
         #[cfg(any(feature = "daemon-tcp", unix))]
         let socket = {
