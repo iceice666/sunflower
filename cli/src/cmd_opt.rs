@@ -184,8 +184,8 @@ pub struct CmdOptions {
     #[command(subcommand)]
     subcmd: Subcommands,
 
-    #[arg(value_enum)]
-    pub method: SendMethod,
+    #[arg(long, short, value_enum)]
+    pub method: Option< SendMethod >,
 }
 
 impl CmdOptions {

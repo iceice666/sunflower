@@ -13,6 +13,11 @@ async fn main() -> anyhow::Result<()> {
     let opt = CmdOptions::parse();
     let method = opt.method.clone();
 
+    #[cfg(unix)]
+    let method = method.unwrap_or(SendMethod::UnixSocket);
+    #[cfg(windows)]
+    let method = method.unwrap_or(SendMethod::WindowsNamedPipe);
+
     let request = opt.build_request();
 
     let response = match method {
