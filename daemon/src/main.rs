@@ -1,11 +1,3 @@
-use std::io;
-
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-
-use sunflower_daemon::Player;
-use sunflower_daemon_proto::{DecodeError, PlayerRequest, PlayerResponse};
-use thiserror::Error;
-
 #[cfg(all(windows, not(feature = "daemon-tcp")))]
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
@@ -14,13 +6,36 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[cfg(all(unix, not(feature = "daemon-tcp")))]
 use tokio::net::{UnixListener, UnixStream};
-use tracing::{info, level_filters::LevelFilter};
+
+use std::io;
+
+use anyhow::anyhow;
+use time::UtcOffset;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+
+use sunflower_daemon::Player;
+use sunflower_daemon_proto::{PlayerRequest, PlayerResponse};
+
+use tracing::{debug, error, info, level_filters::LevelFilter};
+use tracing_subscriber::fmt;
+
+fn init_logger() {
+    let timer = time::format_description::parse(
+        "[year]-[month padding:zero]-[day padding:zero] [hour]:[minute]:[second]",
+    )
+    .expect("Cataplum");
+    let time_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
+    let timer = fmt::time::OffsetTime::new(time_offset, timer);
+
+    tracing_subscriber::fmt()
+        .with_max_level(LevelFilter::DEBUG)
+        .with_timer(timer)
+        .init();
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(LevelFilter::DEBUG)
-        .init();
+    init_logger();
 
     let (player, sender, receiver) = Player::try_new()?;
 
@@ -38,60 +53,6 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         })
         .await
-}
-
-#[derive(Debug, Error)]
-enum LoopCtrl {
-    #[error("")]
-    Break,
-    #[error("")]
-    Continue,
-
-    #[error("")]
-    IoError(#[from] io::Error),
-
-    #[error("")]
-    DecodeError(#[from] DecodeError),
-
-    #[error("")]
-    SendError(#[from] tokio::sync::mpsc::error::SendError<PlayerRequest>),
-}
-
-async fn exchange(
-    sender: &UnboundedSender<PlayerRequest>,
-    receiver: &mut UnboundedReceiver<PlayerResponse>,
-
-    #[cfg(feature = "daemon-tcp")] socket: TcpStream,
-    #[cfg(all(windows, not(feature = "daemon-tcp")))] socket: NamedPipeServer,
-    #[cfg(all(unix, not(feature = "daemon-tcp")))] socket: UnixStream,
-) -> Result<(), LoopCtrl> {
-    let mut buf = [0; 1024];
-
-    socket.writable().await?;
-
-    match socket.try_read(&mut buf) {
-        Ok(0) => return Err(LoopCtrl::Break),
-        Ok(n) => {
-            let req = sunflower_daemon_proto::deserialize_request(&buf[..n])?;
-            sender.send(req)?;
-
-            let Some(resp) = receiver.recv().await else {
-                return Err(LoopCtrl::Continue);
-            };
-            let resp_buf = sunflower_daemon_proto::serialize_response(resp);
-
-            socket.writable().await?;
-            socket.try_write(&resp_buf)?;
-        }
-        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-            return Err(LoopCtrl::Continue);
-        }
-        Err(e) => {
-            return Err(LoopCtrl::IoError(e));
-        }
-    };
-
-    Ok(())
 }
 
 #[allow(dead_code)]
@@ -129,6 +90,7 @@ async fn message_transfer(
         "Starting accepting connections with unix socket at {}...",
         UNIX_SOCKET_PATH
     );
+
     loop {
         #[cfg(any(feature = "daemon-tcp", unix))]
         let socket = {
@@ -145,15 +107,52 @@ async fn message_transfer(
             connected_client
         };
 
-        let Err(e) = exchange(&sender, &mut receiver, socket).await else {
-            continue;
-        };
-
-        match e {
-            LoopCtrl::Continue => continue,
-            LoopCtrl::Break => break,
-            _ => return Err(e.into()),
+        match exchange(&sender, &mut receiver, socket).await {
+            Ok(v) => v,
+            Err(e) => error!("Error occurred during message exchange: {}", e),
         }
     }
+}
+
+async fn exchange(
+    sender: &UnboundedSender<PlayerRequest>,
+    receiver: &mut UnboundedReceiver<PlayerResponse>,
+
+    #[cfg(feature = "daemon-tcp")] socket: TcpStream,
+    #[cfg(all(windows, not(feature = "daemon-tcp")))] socket: NamedPipeServer,
+    #[cfg(all(unix, not(feature = "daemon-tcp")))] socket: UnixStream,
+) -> anyhow::Result<()> {
+    let buf = {
+        let mut buf = [0u8; 1024];
+        loop {
+            debug!("Waiting for data from client...");
+            socket.readable().await?;
+            debug!("Data received, reading...");
+            match socket.try_read(&mut buf) {
+                Ok(0) => return Err(anyhow!("Connection closed by peer")),
+                Ok(n) => break Vec::from(&buf[..n]),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+    };
+
+    let req = sunflower_daemon_proto::deserialize_request(&buf)?;
+    sender.send(req)?;
+
+    let Some(resp) = receiver.recv().await else {
+        return Ok(());
+    };
+    let buf = sunflower_daemon_proto::serialize_response(resp);
+
+    loop {
+        socket.writable().await?;
+        match socket.try_write(&buf) {
+            Ok(_) => break,
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+
     Ok(())
 }
