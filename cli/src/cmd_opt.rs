@@ -116,17 +116,17 @@ enum ProviderSubcommands {
     /// Print all available providers
     Available,
     /// Print all registered providers
-    RegisteredProviders,
+    Registered,
     /// Search keyword with given providers
-    ProviderSearch,
+    Search,
     /// Search keyword with all providers
-    ProviderSearchAll,
+    SearchAll,
 }
 
 #[derive(Debug, Subcommand)]
 enum Subcommands {
     /// Check if the daemon is alive.
-    CheckAlive,
+    Check,
     /// Play track
     Play,
     /// Pause track
@@ -165,7 +165,7 @@ enum Subcommands {
         cmd: ProviderSubcommands,
     },
     /// Ciallo～(∠・ω< )⌒★
-    MagicOperation,
+    Magic,
 }
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -191,7 +191,7 @@ pub struct CmdOptions {
 impl CmdOptions {
     pub fn build_request(self) -> PlayerRequest {
         match self.subcmd {
-            Subcommands::CheckAlive => PlayerRequest {
+            Subcommands::Check => PlayerRequest {
                 r#type: RequestType::CheckAlive.into(),
                 payload: None,
             },
@@ -296,20 +296,20 @@ impl CmdOptions {
                     r#type: RequestType::AvailableProviders.into(),
                     payload: None,
                 },
-                ProviderSubcommands::RegisteredProviders => PlayerRequest {
+                ProviderSubcommands::Registered => PlayerRequest {
                     r#type: RequestType::RegisteredProviders.into(),
                     payload: None,
                 },
-                ProviderSubcommands::ProviderSearch => PlayerRequest {
+                ProviderSubcommands::Search => PlayerRequest {
                     r#type: RequestType::ProviderSearch.into(),
                     payload: None,
                 },
-                ProviderSubcommands::ProviderSearchAll => PlayerRequest {
+                ProviderSubcommands::SearchAll => PlayerRequest {
                     r#type: RequestType::ProviderSearchAll.into(),
                     payload: None,
                 },
             },
-            Subcommands::MagicOperation => PlayerRequest {
+            Subcommands::Magic => PlayerRequest {
                 r#type: RequestType::SecretCode.into(),
                 payload: None,
             },
