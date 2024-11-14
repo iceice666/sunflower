@@ -356,6 +356,8 @@ impl Player {
                 r#type: ResponseType::HiImYajyuSenpai.into(),
                 payload: Some(ResponsePayload::Data(String::from("232 137 175 227 129 132 228 184 150 227 128 129 230 157 165 227 129 132 227 130 136"))),
             },
+            _ => PlayerResponse::ok(None)
+            
         })
     }
 

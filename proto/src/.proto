@@ -4,7 +4,8 @@ package protocol;
 
 enum RequestType {
   // System operations (0-9)
-  CHECK_ALIVE = 0;
+  _i = 0;
+  CHECK_ALIVE = 1;
   TERMINATE = 9;
 
   // Playback controls (10-19)
@@ -39,8 +40,6 @@ enum RequestType {
   PROVIDER_SEARCH_ALL =
       45; // require `TrackSearch` field, return `SearchResults` field
 
-  reserved 50 to 113;
-  reserved 115 to max;
   SECRET_CODE = 114;
 }
 
@@ -81,9 +80,10 @@ message PlayerState {
 
 enum ResponseType {
   // System responses (0-9)
-  IM_ALIVE = 0;
-  OK = 1;
-  ERROR = 2;
+  __i = 0;
+  IM_ALIVE = 1;
+  OK = 2;
+  ERROR = 3;
 
   // Data responses (10-19)
   TRACK_DATA = 10;
@@ -91,8 +91,6 @@ enum ResponseType {
   PROVIDERS = 12;
   PLAYER_STATUS = 13;
 
-  reserved 14 to 113;
-  reserved 115 to max;
   HI_IM_YAJYU_SENPAI = 114;
 }
 

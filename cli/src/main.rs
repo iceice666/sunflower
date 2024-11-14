@@ -134,6 +134,7 @@ async fn main() -> anyhow::Result<()> {
 
             println!("{}", output);
         }
+        _ => unreachable!(),
     }
 
     Ok(())
