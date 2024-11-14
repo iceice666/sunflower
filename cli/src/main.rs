@@ -103,7 +103,7 @@ macro_rules! ensure_write {
 
 macro_rules! ensure_read {
     ($client:ident) => {{
-        let mut buf = [0u8; 1024];
+        let mut buf = [0u8; 4096];
         loop {
             $client.readable().await?;
             match $client.try_read(&mut buf) {
