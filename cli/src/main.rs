@@ -1,11 +1,13 @@
 mod cmd_opt;
 
+use anyhow::anyhow;
+use std::io;
 use tokio::net::TcpStream;
 
 use clap::Parser;
 use cmd_opt::{CmdOptions, SendMethod};
 use sunflower_daemon_proto::{
-    deserialize_response, serialize_request, PlayerRequest, PlayerResponse,
+    deserialize_response, serialize_request, PlayerRequest, PlayerResponse, ProviderList, ResponsePayload, ResponseType, SearchResults,
 };
 
 #[tokio::main]
@@ -30,9 +32,75 @@ async fn main() -> anyhow::Result<()> {
         SendMethod::WindowsNamedPipe => windows_send(request).await,
     }?;
 
-    println!("{:?}", response);
+    match ResponseType::try_from(response.r#type).unwrap() {
+        ResponseType::Ok => println!("Success"),
+        ResponseType::Error => {
+            let ResponsePayload::Error(error) = response.payload.unwrap() else {
+                return Err(anyhow!("Error: Invalid response payload"));
+            };
+            eprintln!("Error: {}", error);
+        }
+        ResponseType::ImAlive => println!("Server is alive"),
+        ResponseType::HiImYajyuSenpai | ResponseType::PlayerStatus => {
+            let ResponsePayload::Data(msg) = response.payload.unwrap() else {
+                return Err(anyhow!("Error: Invalid response payload"));
+            };
+            println!("{}", msg);
+        }
+        ResponseType::Providers => {
+            let ResponsePayload::ProviderList(ProviderList { providers }) =
+                response.payload.unwrap()
+            else {
+                return Err(anyhow!("Error: Invalid response payload"));
+            };
+            println!("{}", providers.join("\n"));
+        }
+        ResponseType::TrackData => println!("Track data: {:?}", response.payload.unwrap()),
+        ResponseType::SearchResult => {
+            let ResponsePayload::SearchResults(SearchResults { results }) =
+                response.payload.unwrap()
+            else {
+                return Err(anyhow!("Error: Invalid response payload"));
+            };
+
+            results.iter().for_each(|(provider, map)| {
+                println!("{}:", provider);
+                map.values.iter().for_each(|(id, name)| {
+                    println!("    {}: {}", id, name);
+                });
+            });
+        }
+    }
 
     Ok(())
+}
+
+macro_rules! ensure_write {
+    ($client: ident, $data: ident) => {
+        loop {
+            $client.writable().await?;
+            match $client.try_write(&$data) {
+                Ok(_) => break,
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+    };
+}
+
+macro_rules! ensure_read {
+    ($client:ident) => {{
+        let mut buf = [0u8; 1024];
+        loop {
+            $client.readable().await?;
+            match $client.try_read(&mut buf) {
+                Ok(0) => return Err(anyhow!("Connection closed by peer")),
+                Ok(n) => break Vec::from(&buf[..n]),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+    }};
 }
 
 #[cfg(unix)]
@@ -42,12 +110,9 @@ async fn unix_send(request: PlayerRequest) -> anyhow::Result<PlayerResponse> {
     let client = UnixStream::connect("/tmp/sunflower-daemon.sock").await?;
     let data = serialize_request(request);
 
-    client.writable().await?;
-    client.try_write(&data)?;
+    ensure_write!(client, data);
+    let buf = ensure_read!(client);
 
-    let mut buf = Vec::new();
-    client.readable().await?;
-    client.try_read(&mut buf)?;
     let resp = deserialize_response(&buf)?;
 
     Ok(resp)
@@ -57,12 +122,11 @@ async fn tcp_send(request: PlayerRequest) -> anyhow::Result<PlayerResponse> {
     let client = TcpStream::connect("localhost:8888").await?;
     let data = serialize_request(request);
 
-    client.writable().await?;
-    client.try_write(&data)?;
+    ensure_write!(client, data);
 
-    let mut buf = Vec::new();
-    client.readable().await?;
-    client.try_read(&mut buf)?;
+    println!("Receiving response");
+    let buf = ensure_read!(client);
+
     let resp = deserialize_response(&buf)?;
 
     Ok(resp)
@@ -88,12 +152,9 @@ async fn windows_send(request: PlayerRequest) -> anyhow::Result<PlayerResponse> 
 
     let data = serialize_request(request);
 
-    client.writable().await?;
-    client.try_write(&data)?;
+    ensure_write!(client, data);
+    let buf = ensure_read!(client);
 
-    let mut buf = Vec::new();
-    client.readable().await?;
-    client.try_read(&mut buf)?;
     let resp = deserialize_response(&buf)?;
 
     Ok(resp)

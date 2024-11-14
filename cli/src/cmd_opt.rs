@@ -2,8 +2,8 @@ use std::{collections::HashMap, error::Error, ops::Deref};
 
 use clap::{builder::PossibleValue, Args, Parser, Subcommand, ValueEnum};
 use sunflower_daemon_proto::{
-    PlayerRequest, RepeatState as ProtoRepeatState, RequestPayload, RequestType, TrackConfig,
-    TrackData,
+    PlayerRequest, ProviderConfig, RepeatState as ProtoRepeatState, RequestPayload, RequestType,
+    TrackConfig, TrackData, TrackSearch,
 };
 
 #[derive(Debug, Clone)]
@@ -110,7 +110,10 @@ enum TrackSubcommands {
 #[derive(Debug, Subcommand)]
 enum ProviderSubcommands {
     /// Register a new provider
-    New,
+    New {
+        /// Provider name
+        name: String,
+    },
     /// Unregister a provider
     Remove,
     /// Print all available providers
@@ -118,9 +121,17 @@ enum ProviderSubcommands {
     /// Print all registered providers
     Registered,
     /// Search keyword with given providers
-    Search,
-    /// Search keyword with all providers
-    SearchAll,
+    Search {
+        /// Search keyword with all providers
+        #[arg(short, long)]
+        all: bool,
+
+        /// Keyword
+        keyword: String,
+
+        /// Search result amount
+        amount: Option<u32>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -185,7 +196,7 @@ pub struct CmdOptions {
     subcmd: Subcommands,
 
     #[arg(long, short, value_enum)]
-    pub method: Option< SendMethod >,
+    pub method: Option<SendMethod>,
 }
 
 impl CmdOptions {
@@ -284,9 +295,11 @@ impl CmdOptions {
             },
 
             Subcommands::Provider { cmd } => match cmd {
-                ProviderSubcommands::New => PlayerRequest {
+                ProviderSubcommands::New { name } => PlayerRequest {
                     r#type: RequestType::NewProvider.into(),
-                    payload: None,
+                    payload: Some(RequestPayload::ProviderConfig(ProviderConfig {
+                        config: HashMap::from_iter(vec![("provider_name".to_string(), name)]),
+                    })),
                 },
                 ProviderSubcommands::Remove => PlayerRequest {
                     r#type: RequestType::RemoveProvider.into(),
@@ -300,14 +313,26 @@ impl CmdOptions {
                     r#type: RequestType::RegisteredProviders.into(),
                     payload: None,
                 },
-                ProviderSubcommands::Search => PlayerRequest {
-                    r#type: RequestType::ProviderSearch.into(),
-                    payload: None,
-                },
-                ProviderSubcommands::SearchAll => PlayerRequest {
-                    r#type: RequestType::ProviderSearchAll.into(),
-                    payload: None,
-                },
+                ProviderSubcommands::Search {
+                    all,
+                    keyword,
+                    amount,
+                } => {
+                    let ty = if all {
+                        RequestType::ProviderSearchAll
+                    } else {
+                        RequestType::ProviderSearch
+                    };
+
+                    PlayerRequest {
+                        r#type: ty.into(),
+                        payload: Some(RequestPayload::TrackSearch(TrackSearch {
+                            providers: Vec::new(),
+                            query: keyword,
+                            amount: amount.unwrap_or(1),
+                        })),
+                    }
+                }
             },
             Subcommands::Magic => PlayerRequest {
                 r#type: RequestType::SecretCode.into(),

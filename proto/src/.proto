@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package protocol;
 
-
 enum RequestType {
   // System operations (0-9)
   CHECK_ALIVE = 0;
@@ -24,19 +23,21 @@ enum RequestType {
   GET_STATUS = 25; // return `PLAYER_STATUS` with `data` field
 
   // Queue management (30-39)
-  ADD_TRACK = 30; // require `TrackData` field
+  ADD_TRACK = 30;    // require `TrackData` field
   REMOVE_TRACK = 31; // require `data` field
   CLEAR_QUEUE = 32;
 
   ADD_TRACK_FROM_CONFIG = 34; // require `TrackConfig` field
 
   // Provider management (40-49)
-  NEW_PROVIDER = 40; // require `ProviderConfig` field
-  REMOVE_PROVIDER = 41; // require `data` field
-  AVAILABLE_PROVIDERS = 42; // return `PROVIDERS` with `ProviderList` field
+  NEW_PROVIDER = 40;         // require `ProviderConfig` field
+  REMOVE_PROVIDER = 41;      // require `data` field
+  AVAILABLE_PROVIDERS = 42;  // return `PROVIDERS` with `ProviderList` field
   REGISTERED_PROVIDERS = 43; // return `PROVIDERS` with `ProviderList` field
-  PROVIDER_SEARCH = 44; // require `TrackSearch` field, return `SearchResults` field
-  PROVIDER_SEARCH_ALL = 45; // require `TrackSearch` field, return `SearchResults` field
+  PROVIDER_SEARCH =
+      44; // require `TrackSearch` field, return `SearchResults` field
+  PROVIDER_SEARCH_ALL =
+      45; // require `TrackSearch` field, return `SearchResults` field
 
   reserved 50 to 113;
   reserved 115 to max;
@@ -54,28 +55,22 @@ message TrackConfig {
 }
 
 enum RepeatState {
-    Queue = 0;
-    Track = 1;
-    None = 2;
+  Queue = 0;
+  Track = 1;
+  None = 2;
 }
 
-message ProviderConfig {
-  map<string, string> config = 1;
-}
+message ProviderConfig { map<string, string> config = 1; }
 
 message TrackSearch {
   repeated string providers = 1;
   string query = 2;
+  uint32 amount = 3;
 }
 
-message ProviderSearchResult {
-  map<string, string> values = 1;
-}
+message ProviderSearchResult { map<string, string> values = 1; }
 
-message SearchResults {
-  map<string, ProviderSearchResult> results = 1;
-}
-
+message SearchResults { map<string, ProviderSearchResult> results = 1; }
 
 enum ResponseType {
   // System responses (0-9)
@@ -94,9 +89,7 @@ enum ResponseType {
   HI_IM_YAJYU_SENPAI = 114;
 }
 
-message ProviderList {
-  repeated string providers = 1;
-}
+message ProviderList { repeated string providers = 1; }
 
 message Request {
   RequestType type = 1;
