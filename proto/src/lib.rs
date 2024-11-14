@@ -6,7 +6,7 @@ use prost::Message;
 pub use proto::{
     request::Payload as RequestPayload, response::Payload as ResponsePayload, ProviderList,
     RepeatState, Request as PlayerRequest, RequestType, Response as PlayerResponse, ResponseType,
-    TrackConfig, TrackData, TrackSearch,
+    TrackConfig, TrackData, TrackSearch, ProviderConfig, SearchResults
 };
 
 pub fn serialize_response(response: PlayerResponse) -> Vec<u8> {
