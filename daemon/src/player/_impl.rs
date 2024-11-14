@@ -166,6 +166,7 @@ impl Player {
                 .dispatch_request(req_type, request.payload)
                 .await
                 .unwrap_or_else(|e| {
+                    error!("Failed to handle request: {:?}", e);
                     let err_msg = format!("Failed to handle request: {}", e);
                     PlayerResponse {
                         r#type: ResponseType::Error.into(),
@@ -173,6 +174,7 @@ impl Player {
                     }
                 });
 
+            debug!("Response to request: {:?}", response);
             self.send_response(response);
         }
     }
