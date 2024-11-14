@@ -332,7 +332,8 @@ impl Player {
                 let RequestPayload::TrackSearch(query) = request_payload.ok_or(PlayerError::EmptyData)? else {
                     return Err(PlayerError::InvalidData);
                 };
-                let result = self.provider_registry.search_all(query.query).await?;
+                let query = format!("{}+{}", query.amount, query.query);
+                let result = self.provider_registry.search_all(query).await?;
 
                 PlayerResponse {
                     r#type: ResponseType::SearchResult.into(),

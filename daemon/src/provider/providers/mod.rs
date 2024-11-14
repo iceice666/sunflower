@@ -184,7 +184,7 @@ impl ProviderRegistry {
         keyword: impl AsRef<str>,
         mut filter: impl FnMut(&String) -> bool,
     ) -> ProviderResult<HashMap<String, &HashMap<String, String>>> {
-        let keyword = keyword.as_ref();
+        let keyword = keyword.as_ref().trim();
         let mut result = HashMap::new();
 
         for (name, provider) in &mut self.inner {

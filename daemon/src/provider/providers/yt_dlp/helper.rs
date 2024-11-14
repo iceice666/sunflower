@@ -157,14 +157,14 @@ impl YtDlp {
         };
 
         // Download new track
-        let output = self.download_track(&query.to_string())?;
+        let (id, extractor_key, path) = self.download_track(&query.to_string())?;
 
         // Update index if needed
         if need_update_index {
-            self.update_index(&output)?;
+            self.update_index(&id, &extractor_key, &path)?;
         }
 
-        Ok(Box::new(LocalFileTrack::new(output)))
+        Ok(Box::new(LocalFileTrack::new(path)))
     }
 
     fn parse_download_query(&self, query: DownloadOption) -> DownloadOption {
@@ -211,8 +211,8 @@ impl YtDlp {
             .transpose()
     }
 
-    fn download_track(&self, url: &str) -> ProviderResult<String> {
-        run_cmd(&[
+    fn download_track(&self, url: &str) -> ProviderResult<(String, String, String)> {
+        let res = run_cmd(&[
             "yt-dlp",
             "--no-keep-video",
             "--extract-audio",
@@ -229,10 +229,18 @@ impl YtDlp {
             "--output",
             OUTPUT_TEMPLATE,
             url,
-        ])
+        ])?;
+
+        let mut iter = res.trim().lines();
+
+        let id = iter.next().unwrap().to_string();
+        let extractor_key = iter.next().unwrap().to_string();
+        let path = iter.next().unwrap().to_string();
+
+        Ok((id, extractor_key, path))
     }
 
-    fn update_index(&self, output: &str) -> ProviderResult<()> {
+    fn update_index(&self, id: &str, extractor_key: &str, path: &str) -> ProviderResult<()> {
         let mut file = match OpenOptions::new().append(true).open(INDEX_CSV) {
             Ok(f) => f,
             Err(_) => {
@@ -247,12 +255,7 @@ impl YtDlp {
             }
         };
 
-        let mut output = output.trim().lines();
-        let vid = output.next().unwrap();
-        let platform = output.next().unwrap();
-        let path = output.next().unwrap();
-
-        writeln!(file, "{},{},{}", vid, platform, path)?;
+        writeln!(file, "{},{},{}", id, extractor_key, path)?;
         Ok(())
     }
 }

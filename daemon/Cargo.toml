@@ -37,6 +37,6 @@ provider-yt-dlp = []
 
 
 default = ["provider-local_file"]
-all = ["provider-local_file", "provider-yt-dlp"]
+provider-all = ["provider-local_file", "provider-yt-dlp"]
 
 daemon-tcp = []
