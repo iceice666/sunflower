@@ -211,19 +211,26 @@ impl Player {
                 PlayerResponse::ok(None)
             }
             RequestType::Next => {
+                if !self.queue.is_empty()               {
+                    self.current_track_index %= self.queue.len();
+                }
+                self.is_playing=true;
                 self.sink.stop();
                 PlayerResponse::ok(None)
             }
             RequestType::Prev => {
                 self.is_queue_going_backwards = true;
-                self.current_track_index %= self.queue.len();
+                if !self.queue.is_empty()               {
+                    self.current_track_index %= self.queue.len();
+                }
+                self.is_playing=true;
                 self.sink.stop();
                 PlayerResponse::ok(None)
             }
             // Player settings
             RequestType::GetVolume => {
-                let volume = self.sink.volume();
-                PlayerResponse::ok(Some(volume.to_string()))
+                let volume = self.sink.volume() * 100.0;
+                PlayerResponse::ok(Some(format!("{:.0}%", volume)))
             }
             RequestType::SetVolume => {
                 let volume = parse_request_data(request_payload)?;
@@ -233,7 +240,7 @@ impl Player {
             RequestType::GetRepeat => {
                 PlayerResponse{
                     r#type: ResponseType::Ok.into(),
-                    payload: Some(ResponsePayload::RepeatState(self.repeat.into())),
+                    payload: Some(ResponsePayload::Data(self.repeat.to_string())),
                 }
             },
             RequestType::SetRepeat => {
@@ -249,10 +256,12 @@ impl Player {
             }
             RequestType::GetStatus => PlayerResponse {
                 r#type: ResponseType::PlayerStatus.into(),
-                payload: Some(ResponsePayload::Data(format!(
-                    "Queue: {:?}, Current: {}, Repeat: {:?}, Shuffle: {}",
-                    self.queue, self.current_track_index, self.repeat, self.is_shuffle
-                ))),
+                payload: Some(ResponsePayload::PlayerStatus(PlayerState {
+                    current: ( self.current_track_index+1 ) as u32,
+                    shuffled: self.is_shuffle,
+                    repeat: self.repeat.into(),
+                    queue: self.queue.iter().map(|t| t.display_title()).collect(),
+                })),
             },
             // Queue management
             RequestType::ClearQueue => {

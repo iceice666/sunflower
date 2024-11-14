@@ -71,6 +71,10 @@ impl Track for LocalFileTrack {
     }
 
     fn display_title(&self) -> String {
-        self.path.file_name().unwrap_or(&OsString::from("<unknown>")).to_string_lossy().to_string()
+        self.path
+            .file_name()
+            .unwrap_or(&OsString::from("<unknown>"))
+            .to_string_lossy()
+            .to_string()
     }
 }

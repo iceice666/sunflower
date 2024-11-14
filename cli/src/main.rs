@@ -1,15 +1,15 @@
 mod cmd_opt;
 
 use anyhow::anyhow;
-use std::io;
-use tokio::net::TcpStream;
-
 use clap::Parser;
 use cmd_opt::{CmdOptions, SendMethod};
+use std::fmt::Write;
+use std::io;
 use sunflower_daemon_proto::{
     deserialize_response, serialize_request, PlayerRequest, PlayerResponse, ProviderList,
-    RepeatState, ResponsePayload, ResponseType, SearchResults,
+    ResponsePayload, ResponseType, SearchResults,
 };
+use tokio::net::TcpStream;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -38,9 +38,6 @@ async fn main() -> anyhow::Result<()> {
             if let Some(data) = response.payload {
                 match data {
                     ResponsePayload::Data(msg) => println!("{}", msg),
-                    ResponsePayload::RepeatState(state) => {
-                        println!("Repeat state: {}", RepeatState::try_from(state).unwrap())
-                    }
                     _ => unreachable!(),
                 }
             } else {
@@ -54,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("Error: {}", error);
         }
         ResponseType::ImAlive => println!("Server is alive"),
-        ResponseType::HiImYajyuSenpai | ResponseType::PlayerStatus => {
+        ResponseType::HiImYajyuSenpai => {
             let ResponsePayload::Data(msg) = response.payload.unwrap() else {
                 return Err(anyhow!("Error: Invalid response payload"));
             };
@@ -83,6 +80,55 @@ async fn main() -> anyhow::Result<()> {
                 });
             });
         }
+        ResponseType::PlayerStatus => {
+            let ResponsePayload::PlayerStatus(state) = response.payload.unwrap() else {
+                return Err(anyhow!("Error: Invalid response payload"));
+            };
+
+            // Find maximum length
+            let (mut queue, max_length) = state.queue.iter().fold(
+                (Vec::with_capacity(state.queue.len()), 0),
+                |(mut vec, max_len), id| {
+                    vec.push(id.clone());
+                    (vec, max_len.max(id.len()))
+                },
+            );
+            let index = state.current as usize;
+
+            if index >= queue.len() {
+                queue.push(String::from("(end)"));
+            }
+
+            // Calculate dimensions once
+            let max_width = max_length.max(26);
+            let padding = (max_width - 26) / 3;
+
+            // Preallocate the final string with estimated capacity
+            let estimated_capacity = max_width * (queue.len() + 2) + 20;
+            let mut output = String::with_capacity(estimated_capacity);
+
+            // Create header
+            let padding = " ".repeat(padding);
+            writeln!(
+                output,
+                "{}Repeat: {}{}Shuffle: {}{}",
+                padding, state.repeat, padding, state.shuffled, padding,
+            )
+            .unwrap();
+            writeln!(output, "{}", "=".repeat(max_width)).unwrap();
+
+            // Format queue items
+            for (i, track) in queue.iter().enumerate() {
+                let prefix = if i == index {
+                    ">>".to_string()
+                } else {
+                    (i + 1).to_string() + "."
+                };
+                writeln!(output, " {} {}", prefix, track).unwrap();
+            }
+
+            println!("{}", output);
+        }
     }
 
     Ok(())
@@ -103,7 +149,7 @@ macro_rules! ensure_write {
 
 macro_rules! ensure_read {
     ($client:ident) => {{
-        let mut buf = [0u8; 4096];
+        let mut buf = [0u8; 1024];
         loop {
             $client.readable().await?;
             match $client.try_read(&mut buf) {
