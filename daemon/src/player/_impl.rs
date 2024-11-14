@@ -89,7 +89,14 @@ impl Player {
                 }
             }
 
-            self.handle_request().await;
+            if let Ok(Some(request)) = timeout(
+                Duration::from_millis(100),
+                self.__event_queue_receiver.recv(),
+            )
+            .await
+            {
+                self.handle_request(request).await
+            }
         }
 
         info!("Main loop stopped");
@@ -139,44 +146,37 @@ impl Player {
         error!("Failed to send response: {}", e);
     }
 
-    async fn handle_request(&mut self) {
-        if let Ok(Some(request)) = timeout(
-            Duration::from_millis(100),
-            self.__event_queue_receiver.recv(),
-        )
-        .await
+    async fn handle_request(&mut self, request: PlayerRequest) {
         // Only block current thread for at the most 100 ms.
-        {
-            info!("Received request: {:?}", request);
+        info!("Received request: {:?}", request);
 
-            let req_type = match RequestType::try_from(request.r#type) {
-                Ok(req_type) => req_type,
-                Err(e) => {
-                    let err_msg = format!("Invalid request type: {}", e);
-                    let resp = PlayerResponse {
-                        r#type: ResponseType::Error.into(),
-                        payload: Some(ResponsePayload::Error(err_msg)),
-                    };
-                    self.send_response(resp);
-                    return;
+        let req_type = match RequestType::try_from(request.r#type) {
+            Ok(req_type) => req_type,
+            Err(e) => {
+                let err_msg = format!("Invalid request type: {}", e);
+                let resp = PlayerResponse {
+                    r#type: ResponseType::Error.into(),
+                    payload: Some(ResponsePayload::Error(err_msg)),
+                };
+                self.send_response(resp);
+                return;
+            }
+        };
+
+        let response = self
+            .dispatch_request(req_type, request.payload)
+            .await
+            .unwrap_or_else(|e| {
+                error!("Failed to handle request: {:?}", e);
+                let err_msg = format!("Failed to handle request: {}", e);
+                PlayerResponse {
+                    r#type: ResponseType::Error.into(),
+                    payload: Some(ResponsePayload::Error(err_msg)),
                 }
-            };
+            });
 
-            let response = self
-                .dispatch_request(req_type, request.payload)
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Failed to handle request: {:?}", e);
-                    let err_msg = format!("Failed to handle request: {}", e);
-                    PlayerResponse {
-                        r#type: ResponseType::Error.into(),
-                        payload: Some(ResponsePayload::Error(err_msg)),
-                    }
-                });
-
-            debug!("Response to request: {:?}", response);
-            self.send_response(response);
-        }
+        debug!("Response to request: {:?}", response);
+        self.send_response(response);
     }
 
     async fn dispatch_request(
