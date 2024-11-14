@@ -147,8 +147,6 @@ impl YtDlp {
         // Try parse to platform-specific source
         let query = self.parse_download_query(query);
 
-        let need_update_index = !matches!(query.platform, SearchPlatform::UrlSpecified);
-
         // Try to find existing download first
         match self.find_existing_track(&query) {
             Ok(Some(track)) => return Ok(track),
@@ -160,7 +158,7 @@ impl YtDlp {
         let (id, extractor_key, path) = self.download_track(&query.to_string())?;
 
         // Update index if needed
-        if need_update_index {
+        if !matches!(query.platform, SearchPlatform::UrlSpecified) {
             self.update_index(&id, &extractor_key, &path)?;
         }
 
@@ -198,7 +196,13 @@ impl YtDlp {
 
     fn find_existing_track(&self, query: &DownloadOption) -> ProviderResult<Option<TrackObject>> {
         let csv_content = fs::read_to_string(INDEX_CSV)?;
-        let csv_query = format!("{},{}", query.video_id, query.platform);
+        let platform = match query.platform {
+            SearchPlatform::Youtube => "Youtube",
+            SearchPlatform::BiliBili => "BiliBili",
+            SearchPlatform::SoundCloud => "SoundCloud",
+            _ => unreachable!(),
+        };
+        let csv_query = format!("{},{}", query.video_id, platform);
 
         csv_content
             .lines()

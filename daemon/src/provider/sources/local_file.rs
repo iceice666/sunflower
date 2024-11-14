@@ -6,6 +6,7 @@ use lofty::prelude::Accessor;
 use lofty::read_from_path;
 use rodio::Decoder;
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -67,5 +68,9 @@ impl Track for LocalFileTrack {
             .ok_or(ProviderError::MissingField("path".to_string()))?;
         let path = PathBuf::from(path);
         Ok(Self { path })
+    }
+
+    fn display_title(&self) -> String {
+        self.path.file_name().unwrap_or(&OsString::from("<unknown>")).to_string_lossy().to_string()
     }
 }

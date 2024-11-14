@@ -4,7 +4,6 @@ use crate::provider::providers::yt_dlp::helper::{SearchOption, SearchPlatform, Y
 use crate::provider::sources::TrackObject;
 use crate::provider::{Provider, SearchResult};
 use std::collections::HashMap;
-use tracing::debug;
 
 macro_rules! add_provider {
     (
