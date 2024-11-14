@@ -36,9 +36,13 @@ macro_rules! add_provider {
 
             async fn search(&mut self, query: &str) -> SearchResult {
                 // pattern: search amonut + keyword
-                let (len, keyword) = query.split_once('+').ok_or(ProviderError::InvalidData("Invalid query".to_string()))?;
-                let len= len.trim().parse().map_err(|e| ProviderError::InvalidData(format!("{}", e)))?;
-
+                let (len, keyword) = query
+                    .split_once('+')
+                    .ok_or(ProviderError::InvalidData("Invalid query".to_string()))?;
+                let len = len
+                    .trim()
+                    .parse()
+                    .map_err(|e| ProviderError::InvalidData(format!("{}", e)))?;
 
                 let query = SearchOption {
                     platform: SearchPlatform::$platform,
