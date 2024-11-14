@@ -16,11 +16,11 @@ enum RequestType {
 
   // Player settings (20-29)
   SET_REPEAT = 20; // require `RepeatState` field
-  GET_REPEAT = 21; // return `OK` with `RepeatState` field
-  SET_VOLUME = 22; // require `data` field, 0 <= value <= 1
+  GET_REPEAT = 21; // return `OK` with `data` field
+  SET_VOLUME = 22; // require `data` field, value >= 0
   GET_VOLUME = 23; // return `OK` with `data` field
   TOGGLE_SHUFFLE = 24;
-  GET_STATUS = 25; // return `PLAYER_STATUS` with `data` field
+  GET_STATUS = 25; // return `PLAYER_STATUS` with `player_status` field
 
   // Queue management (30-39)
   ADD_TRACK = 30;    // require `TrackData` field
@@ -72,6 +72,13 @@ message ProviderSearchResult { map<string, string> values = 1; }
 
 message SearchResults { map<string, ProviderSearchResult> results = 1; }
 
+message PlayerState {
+  uint32 current = 1;
+  bool shuffled = 2;
+  RepeatState repeat = 3;
+  repeated string queue = 4;
+}
+
 enum ResponseType {
   // System responses (0-9)
   IM_ALIVE = 0;
@@ -110,6 +117,6 @@ message Response {
     string error = 3;
     SearchResults search_results = 4;
     ProviderList provider_list = 5;
-    RepeatState repeat_state = 6;
+    PlayerState player_status = 6;
   }
 }
