@@ -255,6 +255,7 @@ impl Player {
             // Queue management
             RequestType::ClearQueue => {
                 self.queue.clear();
+                self.current_track_index = 0;
                 PlayerResponse::ok(None)
             }
             RequestType::RemoveTrack => {

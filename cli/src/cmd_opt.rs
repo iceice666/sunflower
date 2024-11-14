@@ -148,6 +148,8 @@ enum Subcommands {
     Next,
     /// Previous track
     Prev,
+    /// Clear queue
+    Clear,
     /// Print current repeat mode or set with given mode
     Repeat {
         /// Repeat mode
@@ -224,6 +226,10 @@ impl CmdOptions {
             },
             Subcommands::Prev => PlayerRequest {
                 r#type: RequestType::Prev.into(),
+                payload: None,
+            },
+            Subcommands::Clear => PlayerRequest {
+                r#type: RequestType::ClearQueue.into(),
                 payload: None,
             },
             Subcommands::Repeat { state } => {
