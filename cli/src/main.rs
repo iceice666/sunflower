@@ -7,7 +7,7 @@ use std::fmt::Write;
 use std::io;
 use sunflower_daemon_proto::{
     deserialize_response, serialize_request, PlayerRequest, PlayerResponse, ProviderList,
-    ResponsePayload, ResponseType, SearchResults,
+    RepeatState, ResponsePayload, ResponseType, SearchResults,
 };
 use tokio::net::TcpStream;
 
@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         SendMethod::WindowsNamedPipe => windows_send(request).await,
     }?;
 
-    match ResponseType::try_from(response.r#type).unwrap() {
+    match ResponseType::try_from(response.r#type)? {
         ResponseType::Ok => {
             if let Some(data) = response.payload {
                 match data {
@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
             };
 
             // Find maximum length
-            let (mut queue, max_length) = state.queue.iter().fold(
+            let (queue, max_length) = state.queue.iter().fold(
                 (Vec::with_capacity(state.queue.len()), 0),
                 |(mut vec, max_len), id| {
                     vec.push(id.clone());
@@ -95,12 +95,8 @@ async fn main() -> anyhow::Result<()> {
             );
             let index = state.current as usize;
 
-            if index >= queue.len() {
-                queue.push(String::from("(end)"));
-            }
-
             // Calculate dimensions once
-            let max_width = max_length.max(26);
+            let max_width = max_length.max(30);
             let padding = (max_width - 26) / 3;
 
             // Preallocate the final string with estimated capacity
@@ -111,11 +107,14 @@ async fn main() -> anyhow::Result<()> {
             let padding = " ".repeat(padding);
             writeln!(
                 output,
-                "{}Repeat: {}{}Shuffle: {}{}",
-                padding, state.repeat, padding, state.shuffled, padding,
-            )
-            .unwrap();
-            writeln!(output, "{}", "=".repeat(max_width)).unwrap();
+                "{}Repeat: {}{} Shuffle: {}{}",
+                padding,
+                RepeatState::try_from(state.repeat)?,
+                padding,
+                state.shuffled,
+                padding,
+            )?;
+            writeln!(output, "{}", "=".repeat(max_width))?;
 
             // Format queue items
             for (i, track) in queue.iter().enumerate() {
@@ -124,7 +123,13 @@ async fn main() -> anyhow::Result<()> {
                 } else {
                     (i + 1).to_string() + "."
                 };
-                writeln!(output, " {} {}", prefix, track).unwrap();
+                writeln!(output, " {} {}", prefix, track)?;
+            }
+
+            if queue.is_empty() {
+                writeln!(output, "        Such empty.   ")?;
+            } else if index >= queue.len() {
+                writeln!(output, ">> ( END )")?;
             }
 
             println!("{}", output);
@@ -134,8 +139,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-macro_rules! ensure_write {
-    ($client: ident, $data: ident) => {
+macro_rules! send_and_recv {
+    ($client: ident, $data: ident) => {{
         loop {
             $client.writable().await?;
             match $client.try_write(&$data) {
@@ -144,11 +149,7 @@ macro_rules! ensure_write {
                 Err(e) => return Err(e.into()),
             }
         }
-    };
-}
 
-macro_rules! ensure_read {
-    ($client:ident) => {{
         let mut buf = [0u8; 1024];
         loop {
             $client.readable().await?;
@@ -169,8 +170,7 @@ async fn unix_send(request: PlayerRequest) -> anyhow::Result<PlayerResponse> {
     let client = UnixStream::connect("/tmp/sunflower-daemon.sock").await?;
     let data = serialize_request(request);
 
-    ensure_write!(client, data);
-    let buf = ensure_read!(client);
+    let buf = send_and_recv!(client, data);
 
     let resp = deserialize_response(&buf)?;
 
@@ -181,10 +181,7 @@ async fn tcp_send(request: PlayerRequest) -> anyhow::Result<PlayerResponse> {
     let client = TcpStream::connect("localhost:8888").await?;
     let data = serialize_request(request);
 
-    ensure_write!(client, data);
-
-    println!("Receiving response");
-    let buf = ensure_read!(client);
+    let buf = send_and_recv!(client, data);
 
     let resp = deserialize_response(&buf)?;
 
@@ -211,8 +208,7 @@ async fn windows_send(request: PlayerRequest) -> anyhow::Result<PlayerResponse> 
 
     let data = serialize_request(request);
 
-    ensure_write!(client, data);
-    let buf = ensure_read!(client);
+    let buf = send_and_recv!(client, data);
 
     let resp = deserialize_response(&buf)?;
 

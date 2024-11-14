@@ -46,7 +46,7 @@ pub enum SearchPlatform {
 }
 
 impl Display for SearchPlatform {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             Self::Youtube => "ytsearch",
             Self::SoundCloud => "scsearch",
@@ -144,7 +144,7 @@ impl YtDlp {
     }
 
     pub async fn download(&self, query: DownloadOption) -> ProviderResult<TrackObject> {
-        // Try parse to platform-specific source
+        // Try parse to platform-specific sources
         let query = self.parse_download_query(query);
 
         // Try to find existing download first

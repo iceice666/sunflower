@@ -107,10 +107,9 @@ async fn message_transfer(
             connected_client
         };
 
-        match exchange(&sender, &mut receiver, socket).await {
-            Ok(v) => v,
-            Err(e) => error!("Error occurred during message exchange: {}", e),
-        }
+        exchange(&sender, &mut receiver, socket)
+            .await
+            .unwrap_or_else(|e| error!("Error occurred during message exchange: {}", e))
     }
 }
 

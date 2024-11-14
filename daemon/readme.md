@@ -2,7 +2,7 @@
 
 # sunflower-daemon
 
-Support following method to transfer message:  
+Support the following method to transfer messages:  
 - TCP: `localhost:8888`
 - Windows Named Pipe:  `\\.\pipe\sunflower-daemon`
 - Unix Socket: `/tmp/sunflower-daemon.sock`

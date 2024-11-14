@@ -40,7 +40,7 @@ impl ValueEnum for RepeatState {
         }
     }
 
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+    fn to_possible_value(&self) -> Option<PossibleValue> {
         let value = match self.0 {
             ProtoRepeatState::None => "none",
             ProtoRepeatState::Track => "track",
@@ -68,7 +68,7 @@ where
 #[derive(Args, Debug)]
 #[group(required = true, multiple = false)]
 struct TrackAddOption {
-    /// Track id. Can be found in search result
+    /// Track id. Can be found in search results
     #[arg(long)]
     id: Option<String>,
 
