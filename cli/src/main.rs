@@ -7,7 +7,8 @@ use tokio::net::TcpStream;
 use clap::Parser;
 use cmd_opt::{CmdOptions, SendMethod};
 use sunflower_daemon_proto::{
-    deserialize_response, serialize_request, PlayerRequest, PlayerResponse, ProviderList, ResponsePayload, ResponseType, SearchResults,
+    deserialize_response, serialize_request, PlayerRequest, PlayerResponse, ProviderList,
+    RepeatState, ResponsePayload, ResponseType, SearchResults,
 };
 
 #[tokio::main]
@@ -33,7 +34,19 @@ async fn main() -> anyhow::Result<()> {
     }?;
 
     match ResponseType::try_from(response.r#type).unwrap() {
-        ResponseType::Ok => println!("Success"),
+        ResponseType::Ok => {
+            if let Some(data) = response.payload {
+                match data {
+                    ResponsePayload::Data(msg) => println!("{}", msg),
+                    ResponsePayload::RepeatState(state) => {
+                        println!("Repeat state: {}", RepeatState::try_from(state).unwrap())
+                    }
+                    _ => unreachable!(),
+                }
+            } else {
+                println!("OK");
+            }
+        }
         ResponseType::Error => {
             let ResponsePayload::Error(error) = response.payload.unwrap() else {
                 return Err(anyhow!("Error: Invalid response payload"));
