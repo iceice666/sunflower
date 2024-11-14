@@ -1,10 +1,10 @@
+use super::helper::DownloadOption;
 use crate::provider::error::{ProviderError, ProviderResult};
 use crate::provider::providers::yt_dlp::helper::{SearchOption, SearchPlatform, YtDlp};
 use crate::provider::sources::TrackObject;
 use crate::provider::{Provider, SearchResult};
 use std::collections::HashMap;
-
-use super::helper::DownloadOption;
+use tracing::debug;
 
 macro_rules! add_provider {
     (
@@ -36,11 +36,13 @@ macro_rules! add_provider {
 
             async fn search(&mut self, query: &str) -> SearchResult {
                 // pattern: search amonut + keyword
-                let (keyword, len) = query.split_once('+').ok_or(ProviderError::InvalidData)?;
+                let (len, keyword) = query.split_once('+').ok_or(ProviderError::InvalidData("Invalid query".to_string()))?;
+                let len= len.trim().parse().map_err(|e| ProviderError::InvalidData(format!("{}", e)))?;
+
 
                 let query = SearchOption {
                     platform: SearchPlatform::$platform,
-                    len: len.parse().map_err(|_| ProviderError::InvalidData)?,
+                    len,
                     keyword: keyword.to_string(),
                 };
 

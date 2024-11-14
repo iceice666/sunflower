@@ -18,8 +18,8 @@ pub enum ProviderError {
     #[error{"Expected data, but got None"}]
     EmptyData,
 
-    #[error("Invalid data")]
-    InvalidData,
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
 
     #[error("UTF-8 error: {0}")]
     Utf8(#[from] std::string::FromUtf8Error),
