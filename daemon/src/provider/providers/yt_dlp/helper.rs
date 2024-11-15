@@ -200,14 +200,14 @@ impl YtDlp {
             SearchPlatform::Youtube => "Youtube",
             SearchPlatform::BiliBili => "BiliBili",
             SearchPlatform::SoundCloud => "SoundCloud",
-            _ => unreachable!(),
+            SearchPlatform::UrlSpecified => return Ok(None),
         };
         let csv_query = format!("{},{}", query.video_id, platform);
 
         csv_content
             .lines()
             .find(|line| line.starts_with(&csv_query))
-            .and_then(|line| line.split(',').nth(3))
+            .and_then(|line| { line.split(',').nth(2) })
             .map(|path| {
                 let track: TrackObject = Box::new(LocalFileTrack::new(path));
                 Ok(track)

@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Format queue items
             for (i, track) in queue.iter().enumerate() {
-                let prefix = if i == index {
+                let prefix = if (i + 1) == index {
                     ">>".to_string()
                 } else {
                     (i + 1).to_string() + "."
@@ -128,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
 
             if queue.is_empty() {
                 writeln!(output, "        Such empty.   ")?;
-            } else if index >= queue.len() {
+            } else if index > queue.len() {
                 writeln!(output, ">> ( END )")?;
             }
 
