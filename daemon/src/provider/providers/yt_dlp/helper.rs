@@ -1,6 +1,8 @@
 use crate::provider::error::{ProviderError, ProviderResult};
 use crate::provider::sources::local_file::LocalFileTrack;
 use crate::provider::sources::TrackObject;
+use codepage::to_encoding;
+use encoding_rs::Encoding;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -9,20 +11,53 @@ use std::io::Write;
 use std::process::Command;
 use std::sync::LazyLock;
 use std::{format, fs, matches, println, write, writeln};
+use tracing::{debug, warn};
+
+#[cfg(windows)]
+static WINDOWS_ENCODING: LazyLock<&'static Encoding> = LazyLock::new(|| {
+    let output = Command::new("powershell.exe")
+        .args(["-Command", "chcp"])
+        .output()
+        .unwrap()
+        .stdout;
+    let colon_pos = output.iter().position(|&x| x == b':').unwrap() + 1;
+    let coding_digit = String::from_utf8(output[colon_pos..].to_vec()).unwrap();
+    let coding_digit = coding_digit.trim().parse().unwrap();
+    to_encoding(coding_digit).unwrap()
+});
 
 // FIXME: Having encoding issues at Windows
+// Consider using FFI to call the python version yt-dlp
 fn decode_utf8(buf: &[u8]) -> String {
-    match String::from_utf8(buf.to_vec()) {
-        Ok(s) => s,
-        Err(_) => String::from_utf8_lossy(buf).to_string(),
+    #[cfg(unix)]
+    {
+        String::from_utf8(buf.to_vec()).unwrap_or(String::from_utf8_lossy(buf).to_string())
+    }
+
+    #[cfg(windows)]
+    {
+        let (cow, encoding_used, had_errors) = WINDOWS_ENCODING.decode(buf);
+        if had_errors || encoding_used != *WINDOWS_ENCODING {
+            warn!("Unable to decode the output with UTF-8 correctly.")
+        }
+        cow.to_string()
     }
 }
 
 pub fn run_cmd(cmd_args: &[&str]) -> ProviderResult<String> {
-    let exe = cmd_args[0];
-    let args = &cmd_args[1..];
-
-    let output = Command::new(exe).args(args).output()?;
+   
+    #[cfg(unix)]
+    let output = {
+        let exe = cmd_args[0];
+        let args = &cmd_args[1..];
+        Command::new(exe).args(args).output()? 
+    };
+    
+    #[cfg(windows)]
+    let output = {
+        let cmd_str = cmd_args.join(" ");
+        Command::new("cmd.exe").args(["/C", cmd_str.as_str()]).output()?
+    };
 
     if output.status.success() {
         Ok(decode_utf8(&output.stdout))
