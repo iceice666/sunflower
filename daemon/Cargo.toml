@@ -1,0 +1,37 @@
+[package]
+name = "sunflower-daemon"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+rodio = { version = "0.20", features = ["symphonia-all"] }
+symphonia = "0.5.4"
+
+async-trait = "0.1.83"
+futures = "0.3.31"
+tokio = { version = "1.41.1", features = ["full"] }
+actix = "0.13"
+
+anyhow = "1.0.93"
+thiserror = "2.0"
+
+log = "0.4.22"
+time = { version = "0.3.36", features = ["local-offset"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["time"] }
+
+rand = "0.8.5"
+
+regex = { version = "1.5.5", optional = true }
+lofty = { version = "0.21", optional = true }
+uuid = { version = "1.11.0", features = ["v4"] }
+[features]
+
+provider-local_file = ["dep:lofty", "dep:regex"]
+provider-yt-dlp = []
+
+
+default = ["provider-local_file"]
+provider-all = ["provider-local_file", "provider-yt-dlp"]
+
