@@ -294,7 +294,7 @@ impl CmdOptions {
                     } else {
                         PlayerRequest {
                             r#type: RequestType::RemoveTrack.into(),
-                            payload: Some(RequestPayload::Data(format!("{}", opt.index.unwrap()))),
+                            payload: Some(RequestPayload::Data(format!("{}", opt.index.unwrap() - 1))),
                         }
                     }
                 }

@@ -3,6 +3,14 @@ include!(concat!(env!("OUT_DIR"), "/protocol.rs"));
 use std::collections::HashMap;
 use std::fmt::Display;
 
+impl Display for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ty = RequestType::try_from(self.r#type).unwrap().as_str_name();
+        let payload = self.payload.as_ref().map(|v| format!("{:?}", v)).unwrap_or_default();
+        write!(f, "{}: {}", ty, payload)
+    }
+}
+
 impl Response {
     pub fn ok(data: Option<String>) -> Self {
         Self {
