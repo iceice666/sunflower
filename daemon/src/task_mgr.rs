@@ -20,7 +20,7 @@ pub enum TaskMessage<T: Send + 'static> {
     Async(Box<dyn Future<Output = T> + Send>),
 }
 
-impl<T: Send > Debug for TaskMessage<T> {
+impl<T: Send> Debug for TaskMessage<T> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TaskMessage::Sync(_) => write!(fmt, "TaskMessage::Sync({:?})", TypeId::of::<T>()),
