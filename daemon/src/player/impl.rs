@@ -1,4 +1,4 @@
-use crate::source::RawTrackSource;
+use crate::source::RawAudioSource;
 use rodio::source::SeekError;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use single_value_channel::{Receiver, Updater};
@@ -44,14 +44,14 @@ impl Player {
     ///
     /// # Parameters
     /// - `callback`: A callback function that provides a `Source` when called.
-    pub fn main_loop(&self, callback: impl FnOnce() -> RawTrackSource) {
+    pub fn main_loop(&self, callback: impl FnOnce() -> RawAudioSource) {
         let source = callback();
         let duration = source.total_duration();
         self.__current_source_duration_tx.update(duration).unwrap();
         match source {
-            RawTrackSource::I16(src) => self.sink.append(src),
-            RawTrackSource::U16(src) => self.sink.append(src),
-            RawTrackSource::F32(src) => self.sink.append(src),
+            RawAudioSource::I16(src) => self.sink.append(src),
+            RawAudioSource::U16(src) => self.sink.append(src),
+            RawAudioSource::F32(src) => self.sink.append(src),
         }
         self.sink.sleep_until_end();
     }

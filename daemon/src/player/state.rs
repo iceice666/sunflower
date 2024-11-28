@@ -1,5 +1,5 @@
 use crate::source::error::SourceResult;
-use crate::source::{RawTrackSource, SourceKinds, SourceTrait};
+use crate::source::{RawAudioSource, SourceKinds, SourceTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -67,7 +67,7 @@ impl PlayerState {
     pub fn is_playing(&self) -> bool {
         self.playing && !self.queue.is_empty()
     }
-    
+
     #[inline]
     pub fn set_playing(&mut self, playing: bool) {
         self.playing = playing;
@@ -77,7 +77,7 @@ impl PlayerState {
     pub fn is_shuffled(&self) -> bool {
         self.shuffled
     }
-    
+
     #[inline]
     pub fn set_shuffled(&mut self, shuffled: bool) {
         self.shuffled = shuffled;
@@ -105,7 +105,7 @@ impl PlayerState {
         }
     }
 
-    pub fn make_source(&mut self) -> SourceResult<RawTrackSource> {
+    pub fn make_source(&mut self) -> SourceResult<RawAudioSource> {
         let track = self.queue.get(self.current_index).unwrap();
         track.build_source()
     }
