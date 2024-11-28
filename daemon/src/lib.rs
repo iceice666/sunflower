@@ -1,7 +1,6 @@
-mod player;
-mod provider;
-mod source;
-mod task_mgr;
+pub mod player;
+pub mod provider;
+pub mod source;
 
 pub fn init_logger() {
     let _ = tracing_subscriber::fmt()

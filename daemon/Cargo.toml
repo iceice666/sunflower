@@ -10,7 +10,8 @@ symphonia = "0.5.4"
 
 async-trait = "0.1.83"
 tokio = { version = "1.41.1", features = ["full"] }
-actix = "0.13"
+parking_lot = "0.12.3"
+single_value_channel = "1.2.2"
 
 anyhow = "1.0.93"
 thiserror = "2.0"
