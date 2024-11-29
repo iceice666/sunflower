@@ -3,7 +3,7 @@ use crate::source::{RawAudioSource, SourceKinds, SourceTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Copy, Clone)]
 pub enum Repeat {
     None,
     Track,
@@ -19,6 +19,7 @@ pub struct PlayerState {
 
     playing: bool,
     shuffled: bool,
+    reversed: bool,
 }
 
 impl Default for PlayerState {
@@ -35,6 +36,7 @@ impl PlayerState {
             current_index: 0,
             playing: false,
             shuffled: false,
+            reversed: false,
         }
     }
 
@@ -83,7 +85,23 @@ impl PlayerState {
         self.shuffled = shuffled;
     }
 
-    pub fn update_index(&mut self, reverse: bool) {
+    #[inline]
+    pub fn toggle_shuffle(&mut self) {self.shuffled = !self.shuffled;}
+
+    #[inline]
+    pub fn is_reversed(&self) -> bool { self.reversed }
+
+    #[inline]
+    pub fn set_reversed(&mut self, reversed: bool) { self.reversed = reversed; }
+
+    #[inline]
+    pub fn get_repeat(&self) -> Repeat { self.repeat }
+
+    #[inline]
+    pub fn set_repeat(&mut self, repeat: Repeat) { self.repeat = repeat; }
+
+    pub fn update_index(&mut self) {
+        let reverse = self.reversed;
         match self.repeat {
             Repeat::None => {
                 if reverse && self.current_index == 0 {
