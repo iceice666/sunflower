@@ -1,11 +1,14 @@
 use crate::source::error::SourceResult;
 use crate::source::local_file::LocalFileTrack;
+use crate::source::sinewave::SineWaveTrack;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Duration;
 
 pub mod error;
-mod local_file;
+
+pub mod local_file;
+pub mod sinewave;
 
 type TrackSourceType<T> = Box<dyn rodio::Source<Item = T> + Send + Sync>;
 
@@ -26,13 +29,37 @@ impl RawAudioSource {
 }
 
 pub type SourceInfo = HashMap<String, String>;
+
+/// Trait representing a generic audio source which can be used
+/// to gather metadata and build audio sources.
 pub trait SourceTrait: Send + Sync + Debug {
+    /// Retrieves information about the audio source.
+    ///
+    /// # Returns
+    /// A `SourceResult` wrapping a `HashMap` where the keys and values
+    /// contain metadata about the audio source.
     fn info(&self) -> SourceResult<SourceInfo>;
 
+    /// Builds the raw audio source from the implementing type.
+    ///
+    /// # Returns
+    /// A `SourceResult` wrapping a `RawAudioSource` which can be
+    /// used for playback.
     fn build_source(&self) -> SourceResult<RawAudioSource>;
 
+    /// Obtains a unique identifier for the audio source.
+    ///
+    /// # Returns
+    /// A `String` that uniquely identifies the audio source.
     fn get_unique_id(&self) -> String;
 
+    /// Displays a title for the audio source.
+    ///
+    /// This method returns the unique identifier by default but can
+    /// be overridden to provide a more descriptive title.
+    ///
+    /// # Returns
+    /// A `String` representing the title of the audio source.
     fn display_title(&self) -> String {
         self.get_unique_id()
     }
@@ -47,7 +74,7 @@ macro_rules! define_source_kinds {
         #[derive(Debug)]
         pub enum SourceKinds{
             $f_name($f_clz)
-            $(,$name ($clz))*          
+            $(,$name ($clz))*
         }
 
         impl SourceTrait for SourceKinds {
@@ -76,5 +103,6 @@ macro_rules! define_source_kinds {
 }
 
 define_source_kinds! {
+    Sinwave=>SineWaveTrack,
     Local=>LocalFileTrack
 }
