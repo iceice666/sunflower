@@ -2,6 +2,8 @@ use crate::source::error::SourceResult;
 use crate::source::{RawAudioSource, SourceKinds, SourceTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::sync::Arc;
+use parking_lot::Condvar;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Copy, Clone)]
 pub enum Repeat {
@@ -20,6 +22,8 @@ pub struct PlayerState {
     playing: bool,
     shuffled: bool,
     reversed: bool,
+
+    pub play_signal: Arc<Condvar>,
 }
 
 impl Default for PlayerState {
@@ -37,6 +41,7 @@ impl PlayerState {
             playing: false,
             shuffled: false,
             reversed: false,
+            play_signal: Arc::new(Condvar::new()),
         }
     }
 
@@ -73,6 +78,9 @@ impl PlayerState {
     #[inline]
     pub fn set_playing(&mut self, playing: bool) {
         self.playing = playing;
+        if self.is_playing() {
+            self.play_signal.notify_all();
+        }
     }
 
     #[inline]

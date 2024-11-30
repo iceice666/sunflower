@@ -1,15 +1,15 @@
 use crate::source::RawAudioSource;
+use crate::utils::single_item_channel::{channel, Receiver, Sender};
 use rodio::source::SeekError;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
-use single_value_channel::{Receiver, Updater};
 use std::time::Duration;
 
 pub struct Player {
     sink: Sink,
     __stream_handle: OutputStreamHandle,
-    __current_source_duration: Option<Duration>,
-    __current_source_duration_tx: Updater<Option<Duration>>,
-    __current_source_duration_rx: Receiver<Option<Duration>>,
+
+    __duration_updater: Sender<Option<Duration>>,
+    __duration_receiver: Receiver<Option<Duration>>,
 }
 
 impl Default for Player {
@@ -27,34 +27,41 @@ impl Player {
     pub fn new() -> Self {
         let (_stream, __stream_handle) = OutputStream::try_default().unwrap();
         let sink = Sink::try_new(&__stream_handle).unwrap();
-        let (rx, tx) = single_value_channel::channel();
+        let (tx, rx) = channel();
+
         Self {
             sink,
             __stream_handle,
-            __current_source_duration: None,
-            __current_source_duration_tx: tx,
-            __current_source_duration_rx: rx,
+            __duration_updater: tx,
+            __duration_receiver: rx,
         }
     }
 
     /// Starts the main loop.
     ///
-    /// This will block the current thread.
+    /// This will create a new thread.
     /// The provided callback is used to get the initial `Source` to be played.
     ///
     /// # Parameters
     /// - `callback`: A callback function that provides a `Source` when called.
-    pub fn main_loop(&self, callback: impl FnOnce() -> RawAudioSource) {
-        let source = callback();
-        let duration = source.total_duration();
-        self.__current_source_duration_tx.update(duration).unwrap();
-        match source {
-            RawAudioSource::I16(src) => self.sink.append(src),
-            RawAudioSource::U16(src) => self.sink.append(src),
-            RawAudioSource::F32(src) => self.sink.append(src),
+    pub fn main_loop(
+        &self,
+        mut callback: impl Send + FnMut() -> RawAudioSource ,
+    )  {
+        loop {
+            let source = callback();
+            let duration = source.total_duration();
+            self.__duration_updater.update(duration);
+            match source {
+                RawAudioSource::I16(src) => self.sink.append(src),
+                RawAudioSource::U16(src) => self.sink.append(src),
+                RawAudioSource::F32(src) => self.sink.append(src),
+            }
+            self.sink.sleep_until_end();
         }
-        self.sink.sleep_until_end();
     }
+
+
 
     /// Sets the volume of the player.
     ///
@@ -98,8 +105,8 @@ impl Player {
     /// The duration as an `Option<Duration>`.
     /// If the duration is not available, it returns `None`.
     #[inline]
-    pub fn get_duration(&mut self) -> Option<Duration> {
-        *self.__current_source_duration_rx.latest()
+    pub fn get_duration(&self) -> Option<Duration> {
+        self.__duration_receiver.latest().expect("Remote dropped")
     }
 
     /// Gets the current playback position.
