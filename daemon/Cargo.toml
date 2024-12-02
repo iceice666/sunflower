@@ -26,6 +26,7 @@ rand = "0.8.5"
 regex = { version = "1.5.5", optional = true }
 lofty = { version = "0.21", optional = true }
 uuid = { version = "1.11.0", features = ["v4"] }
+serde = {version =  "1.0.215", features = ["derive"] }
 [features]
 
 provider-local_file = ["dep:lofty", "dep:regex"]
