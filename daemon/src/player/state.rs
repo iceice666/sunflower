@@ -1,9 +1,9 @@
 use crate::source::error::SourceResult;
 use crate::source::{RawAudioSource, SourceKinds, SourceTrait};
+use parking_lot::Condvar;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
-use parking_lot::Condvar;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Copy, Clone)]
 pub enum Repeat {
@@ -94,19 +94,29 @@ impl PlayerState {
     }
 
     #[inline]
-    pub fn toggle_shuffle(&mut self) {self.shuffled = !self.shuffled;}
+    pub fn toggle_shuffle(&mut self) {
+        self.shuffled = !self.shuffled;
+    }
 
     #[inline]
-    pub fn is_reversed(&self) -> bool { self.reversed }
+    pub fn is_reversed(&self) -> bool {
+        self.reversed
+    }
 
     #[inline]
-    pub fn set_reversed(&mut self, reversed: bool) { self.reversed = reversed; }
+    pub fn set_reversed(&mut self, reversed: bool) {
+        self.reversed = reversed;
+    }
 
     #[inline]
-    pub fn get_repeat(&self) -> Repeat { self.repeat }
+    pub fn get_repeat(&self) -> Repeat {
+        self.repeat
+    }
 
     #[inline]
-    pub fn set_repeat(&mut self, repeat: Repeat) { self.repeat = repeat; }
+    pub fn set_repeat(&mut self, repeat: Repeat) {
+        self.repeat = repeat;
+    }
 
     pub fn update_index(&mut self) {
         let reverse = self.reversed;

@@ -2,7 +2,7 @@
 pub enum ProviderError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("Track not found: {0}")]
     TrackNotFound(String),
 

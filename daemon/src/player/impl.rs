@@ -44,10 +44,7 @@ impl Player {
     ///
     /// # Parameters
     /// - `callback`: A callback function that provides a `Source` when called.
-    pub fn main_loop(
-        &self,
-        mut callback: impl Send + FnMut() -> RawAudioSource ,
-    )  {
+    pub fn main_loop(&self, mut callback: impl Send + FnMut() -> RawAudioSource) {
         loop {
             let source = callback();
             let duration = source.total_duration();
@@ -60,8 +57,6 @@ impl Player {
             self.sink.sleep_until_end();
         }
     }
-
-
 
     /// Sets the volume of the player.
     ///

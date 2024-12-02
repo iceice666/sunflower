@@ -11,7 +11,7 @@ use std::collections::HashMap;
 pub type SearchResult<'a> = ProviderResult<&'a HashMap<String, String>>;
 
 /// A trait for providing music tracks.
-pub trait ProviderTrait{
+pub trait ProviderTrait {
     /// Get the name of the provider.
     ///
     /// This is used to identify the provider.

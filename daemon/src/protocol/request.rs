@@ -21,14 +21,13 @@ pub enum PlayerRequest {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub enum PlayerStateRequest{
+pub enum PlayerStateRequest {
     // Player state related
     GetRepeat,
     SetRepeat(Repeat),
     GetShuffle,
     ToggleShuffle,
 }
-
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum Request {

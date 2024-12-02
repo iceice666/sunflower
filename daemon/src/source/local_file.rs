@@ -1,5 +1,5 @@
 use crate::source::error::SourceResult;
-use crate::source::{RawAudioSource, SourceTrait, SourceInfo};
+use crate::source::{RawAudioSource, SourceInfo, SourceTrait};
 use rodio::Decoder;
 use std::collections::HashMap;
 use std::fmt::Debug;

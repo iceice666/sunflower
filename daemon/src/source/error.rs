@@ -1,6 +1,5 @@
 use rodio::decoder::DecoderError;
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum SourceError {
     #[error("IO error: {0}")]
