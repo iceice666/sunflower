@@ -79,6 +79,12 @@ pub struct ProviderRegistry {
     providers: HashMap<String, ProviderKinds>,
 }
 
+impl Default for ProviderRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProviderRegistry {
     pub fn new() -> Self {
         Self {
@@ -112,13 +118,14 @@ impl ProviderRegistry {
     pub fn search(
         &mut self,
         keyword: &str,
+        max_results: usize,
         mut filter: impl FnMut(&String) -> bool,
     ) -> ProviderResult<HashMap<String, HashMap<String, String>>> {
         let keyword = keyword.trim();
         let mut result = HashMap::new();
 
         for (name, provider) in self.providers.iter_mut() {
-            if !filter(&name) {
+            if !filter(name) {
                 continue;
             }
 

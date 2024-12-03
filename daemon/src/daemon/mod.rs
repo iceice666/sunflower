@@ -1,6 +1,10 @@
+mod handler;
+use crate::daemon::handler::Handler;
 use crate::player::{Player, PlayerState};
-use crate::protocol::{EventError, PlayerRequest, PlayerStateRequest, Request, Response};
+use crate::protocol::{Request, Response};
 use crate::source::RawAudioSource;
+
+use crate::provider::ProviderRegistry;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -10,6 +14,7 @@ use tracing::error;
 pub struct Daemon {
     player: Player,
     state: Mutex<PlayerState>,
+    provider_registry: Mutex<ProviderRegistry>,
 }
 
 impl Daemon {
@@ -17,49 +22,50 @@ impl Daemon {
         Arc::new(Self {
             player: Player::new(),
             state: Mutex::new(PlayerState::new()),
+            provider_registry: Mutex::new(ProviderRegistry::new()),
         })
     }
 
-    fn set_playing(&self, playing: bool) {
-        let mut state = self.state.lock();
-        state.set_playing(playing);
-    }
-
-    async fn start_player_thread(self: Arc<Self>) {
+    fn start_player_thread(self: Arc<Self>) {
         self.state.lock().set_playing(true);
 
-        let daemon = self.clone();
-        let cb = move || {
-            let source_maker = || daemon.clone().make_source();
-            daemon.player.main_loop(source_maker)
-        };
+        let this = self.clone();
 
-        tokio::task::spawn_blocking(cb);
+        let source_maker = || this.clone().make_source();
+        this.player.main_loop(source_maker)
     }
 
     async fn start_event_thread(
         self: Arc<Self>,
-    ) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
-        let (req_tx, mut req_rx) = mpsc::unbounded_channel();
-        let (res_tx, res_rx) = mpsc::unbounded_channel();
+        mut req_rx: UnboundedReceiver<Request>,
+        res_tx: UnboundedSender<Response>,
+    ) {
+        loop {
+            let request = req_rx.recv().await.expect("Remote disconnected");
+            let this = self.clone();
+            let tx = res_tx.clone();
 
-        tokio::task::spawn(async move {
-            loop {
-                let request = req_rx.recv().await.expect("Remote disconnected");
-                let this = self.clone();
-                let tx = res_tx.clone();
-                tokio::spawn(async move { this.handle_events(tx, request).await });
-            }
-        });
-
-        (req_tx, res_rx)
+            tokio::spawn(async move {
+                let response = match request {
+                    Request::Player(r) => this.handle(r),
+                    Request::State(r) => this.handle(r),
+                    Request::Track(r) => this.handle(r),
+                    Request::Provider(r) => this.handle(r),
+                };
+                tx.send(response).expect("Remote disconnected");
+            });
+        }
     }
 
-    pub async fn main_loop(
-        self: Arc<Self>,
-    ) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
-        self.clone().start_player_thread().await;
-        self.start_event_thread().await
+    pub async fn start(self: Arc<Self>) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
+        let (req_tx, req_rx) = mpsc::unbounded_channel();
+        let (res_tx, res_rx) = mpsc::unbounded_channel();
+
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || this.clone().start_player_thread());
+        tokio::spawn(self.start_event_thread(req_rx, res_tx));
+
+        (req_tx, res_rx)
     }
 
     fn make_source(self: Arc<Self>) -> RawAudioSource {
@@ -90,94 +96,6 @@ impl Daemon {
                         drop(state_guard); // Drop lock
                     }
                 }
-            }
-        }
-    }
-}
-
-// Events dispatches
-impl Daemon {
-    async fn handle_events(self: Arc<Self>, tx: UnboundedSender<Response>, request: Request) {
-        let response = self.dispatch_events(request);
-        tx.send(response).expect("Remote disconnected");
-    }
-
-    fn dispatch_events(&self, request: Request) -> Response {
-        match request {
-            Request::Player(req) => self.handle_player_events(req),
-            Request::State(req) => self.handle_state_events(req),
-        }
-    }
-
-    fn handle_player_events(&self, request: PlayerRequest) -> Response {
-        match request {
-            PlayerRequest::Play => {
-                self.player.play();
-                Response::Ok(None)
-            }
-            PlayerRequest::Stop => {
-                self.player.stop();
-                self.set_playing(false);
-                Response::Ok(None)
-            }
-            PlayerRequest::Next => {
-                self.player.stop();
-                Response::Ok(None)
-            }
-            PlayerRequest::Prev => {
-                let mut state_guard = self.state.lock();
-                state_guard.set_reversed(true);
-                self.player.stop();
-                Response::Ok(None)
-            }
-            PlayerRequest::Pause => {
-                self.player.pause();
-                Response::Ok(None)
-            }
-            PlayerRequest::GetVolume => {
-                let vol = self.player.get_volume();
-                Response::Volume(vol)
-            }
-            PlayerRequest::SetVolume(vol) => {
-                self.player.set_volume(vol);
-                Response::Ok(None)
-            }
-            PlayerRequest::GetPos => {
-                let pos = self.player.get_pos();
-                Response::Position(pos)
-            }
-            PlayerRequest::GetTotalDuration => {
-                let total = self.player.get_duration();
-                Response::Total(total)
-            }
-            PlayerRequest::JumpTo(pos) => match self.player.try_seek(pos) {
-                Ok(()) => Response::Ok(None),
-                Err(e) => Response::Err(EventError::from(e).to_string()),
-            },
-        }
-    }
-
-    fn handle_state_events(&self, request: PlayerStateRequest) -> Response {
-        match request {
-            PlayerStateRequest::GetRepeat => {
-                let state_guard = self.state.lock();
-                let repeat = state_guard.get_repeat();
-                Response::Repeat(repeat)
-            }
-            PlayerStateRequest::SetRepeat(repeat) => {
-                let mut state_guard = self.state.lock();
-                state_guard.set_repeat(repeat);
-                Response::Ok(None)
-            }
-            PlayerStateRequest::GetShuffle => {
-                let state_guard = self.state.lock();
-                let shuffled = state_guard.is_shuffled();
-                Response::Shuffled(shuffled)
-            }
-            PlayerStateRequest::ToggleShuffle => {
-                let mut state_guard = self.state.lock();
-                state_guard.toggle_shuffle();
-                Response::Ok(None)
             }
         }
     }
