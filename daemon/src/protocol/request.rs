@@ -1,6 +1,5 @@
 use crate::player::Repeat;
-use crate::provider::{ProviderFields, ProviderKinds};
-use crate::source::SourceKinds;
+use crate::provider::ProviderFields;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::Duration;
@@ -50,4 +49,11 @@ pub enum ProviderRequest {
         max_results: usize,
         query: String,
     },
+}
+
+pub enum Request {
+    Player(PlayerRequest),
+    State(PlayerStateRequest),
+    Track(TrackRequest),
+    Provider(ProviderRequest),
 }
