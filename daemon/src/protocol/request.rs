@@ -1,10 +1,12 @@
 use crate::player::Repeat;
+use crate::provider::{ProviderFields, ProviderKinds};
+use crate::source::SourceKinds;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum PlayerRequest {
-    // Player related
     Play,
     Stop,
     Next,
@@ -22,7 +24,6 @@ pub enum PlayerRequest {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum PlayerStateRequest {
-    // Player state related
     GetRepeat,
     SetRepeat(Repeat),
     GetShuffle,
@@ -30,7 +31,24 @@ pub enum PlayerStateRequest {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub enum Request {
-    Player(PlayerRequest),
-    State(PlayerStateRequest),
+pub enum TrackRequest {
+    AddTrack {
+        provider_name: String,
+        track_id: String,
+    },
+    RemoveTrack {
+        idx: usize,
+    },
+    
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub enum ProviderRequest {
+    Register(ProviderFields),
+    Unregister(String),
+    SearchTracks {
+        providers: HashSet<String>,
+        max_results: usize,
+        query: String,
+    },
 }
