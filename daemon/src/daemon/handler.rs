@@ -1,7 +1,5 @@
 use crate::daemon::Daemon;
-use crate::protocol::{
-    PlayerRequest, PlayerStateRequest, ProviderRequest, Response, TrackRequest,
-};
+use crate::protocol::{PlayerRequest, PlayerStateRequest, ProviderRequest, Response, TrackRequest};
 use tracing::error;
 
 pub trait Handler<T> {
