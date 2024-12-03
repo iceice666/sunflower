@@ -32,7 +32,7 @@ pub type SourceInfo = HashMap<String, String>;
 
 /// Trait representing a generic audio source which can be used
 /// to gather metadata and build audio sources.
-pub trait SourceTrait: Send + Sync + Debug {
+pub trait SourceTrait: Send + Sync + Debug + PartialEq {
     /// Retrieves information about the audio source.
     ///
     /// # Returns
@@ -71,7 +71,7 @@ macro_rules! define_source_kinds {
         $(,$name:ident=>$clz:ident)*
 
     ) => {
-        #[derive(Debug)]
+        #[derive(Debug,  PartialEq,)]
         pub enum SourceKinds{
             $f_name($f_clz)
             $(,$name ($clz))*

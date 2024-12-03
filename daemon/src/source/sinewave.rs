@@ -5,7 +5,7 @@ use rodio::Source;
 use std::collections::HashMap;
 use std::time::Duration;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SineWaveTrack {
     pub freq: f32,
     pub duration: f32,

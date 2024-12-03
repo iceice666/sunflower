@@ -15,7 +15,7 @@ use crate::source::local_file::LocalFileTrack;
 use crate::source::SourceKinds;
 use regex::Regex;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct LocalFileProvider {
     music_folder: PathBuf,
     __search_cache: HashMap<String, String>,

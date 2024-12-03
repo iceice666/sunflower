@@ -3,15 +3,18 @@ pub mod sinewave;
 mod error;
 mod local_file;
 
-use crate::provider::error::ProviderResult;
+use crate::provider::error::{ProviderError, ProviderResult};
+use crate::provider::local_file::LocalFileProvider;
 use crate::provider::sinewave::SineWaveProvider;
 use crate::source::SourceKinds;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use tracing::error;
 
 pub type SearchResult<'a> = ProviderResult<&'a HashMap<String, String>>;
 
 /// A trait for providing music tracks.
-pub trait ProviderTrait {
+pub trait ProviderTrait: PartialEq + Eq {
     /// Get the name of the provider.
     ///
     /// This is used to identify the provider.
@@ -35,7 +38,7 @@ macro_rules! define_provider_kinds {
         $(,$name:ident=>$clz:ident)*
 
     ) => {
-        #[derive(Debug)]
+        #[derive(Debug, Eq, PartialEq)]
         pub enum ProviderKinds{
             $f_name($f_clz)
             $(,$name ($clz))*
@@ -67,5 +70,82 @@ macro_rules! define_provider_kinds {
 }
 
 define_provider_kinds! {
-    Sinewave => SineWaveProvider
+    Sinewave => SineWaveProvider,
+    LocalFile => LocalFileProvider
+}
+
+#[derive(Debug)]
+pub struct ProviderRegistry {
+    providers: HashMap<String, ProviderKinds>,
+}
+
+impl ProviderRegistry {
+    pub fn new() -> Self {
+        Self {
+            providers: HashMap::new(),
+        }
+    }
+
+    pub fn all_providers(&self) -> HashSet<String> {
+        self.providers.keys().cloned().collect()
+    }
+
+    pub fn register(&mut self, kind: ProviderKinds) {
+        self.providers.insert(kind.get_name(), kind);
+    }
+
+    pub fn unregister(&mut self, name: &str) {
+        self.providers.remove(name);
+    }
+
+    pub fn create(&mut self, fields: ProviderFields) {
+        let provider = match fields {
+            ProviderFields::Sinewave => ProviderKinds::Sinewave(SineWaveProvider),
+            ProviderFields::LocalFile { music_folder } => {
+                ProviderKinds::LocalFile(LocalFileProvider::new(music_folder))
+            }
+        };
+
+        self.register(provider);
+    }
+
+    pub fn search(
+        &mut self,
+        keyword: &str,
+        mut filter: impl FnMut(&String) -> bool,
+    ) -> ProviderResult<HashMap<String, HashMap<String, String>>> {
+        let keyword = keyword.trim();
+        let mut result = HashMap::new();
+
+        for (name, provider) in self.providers.iter_mut() {
+            if !filter(&name) {
+                continue;
+            }
+
+            match provider.search(keyword) {
+                Ok(results) => {
+                    result.insert(name.to_string(), results.to_owned());
+                }
+                Err(error) => {
+                    error!("Unable to search with {}: {}", name, error);
+                    continue;
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    pub fn get_track(&self, provider: &str, id: &str) -> ProviderResult<SourceKinds> {
+        match self.providers.get(provider) {
+            Some(provider) => provider.get_track(id),
+            None => Err(ProviderError::ProviderNotFound(provider.to_string())),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum ProviderFields {
+    Sinewave,
+    LocalFile { music_folder: String },
 }
