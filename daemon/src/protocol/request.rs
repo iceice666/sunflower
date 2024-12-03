@@ -39,7 +39,6 @@ pub enum TrackRequest {
     RemoveTrack {
         idx: usize,
     },
-    
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
