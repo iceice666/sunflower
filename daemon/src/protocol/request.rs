@@ -51,9 +51,24 @@ pub enum ProviderRequest {
     },
 }
 
-pub enum Request {
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub enum RequestKind {
     Player(PlayerRequest),
     State(PlayerStateRequest),
     Track(TrackRequest),
     Provider(ProviderRequest),
+}
+
+pub struct Request {
+    pub kind: RequestKind,
+    pub id: String,
+}
+
+impl Request {
+    pub fn new(kind: RequestKind, id: String) -> Self {
+        Request {
+            kind,
+            id,
+        }
+    }
 }

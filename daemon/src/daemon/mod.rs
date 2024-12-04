@@ -1,7 +1,7 @@
 mod handler;
 use crate::daemon::handler::Handler;
 use crate::player::{Player, PlayerState};
-use crate::protocol::{Request, Response};
+use crate::protocol::{Request, RequestKind, Response, ResponseKind};
 use crate::source::RawAudioSource;
 
 use crate::provider::ProviderRegistry;
@@ -46,18 +46,25 @@ impl Daemon {
             let tx = res_tx.clone();
 
             tokio::spawn(async move {
-                let response = match request {
-                    Request::Player(r) => this.handle(r),
-                    Request::State(r) => this.handle(r),
-                    Request::Track(r) => this.handle(r),
-                    Request::Provider(r) => this.handle(r),
+                let id = request.id;
+                let kind = match request.kind {
+                    RequestKind::Player(r) => this.handle(r),
+                    RequestKind::State(r) => this.handle(r),
+                    RequestKind::Track(r) => this.handle(r),
+                    RequestKind::Provider(r) => this.handle(r),
                 };
+                let response = Response { kind, id };
                 tx.send(response).expect("Remote disconnected");
             });
         }
     }
 
-    pub async fn start(self: Arc<Self>) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
+    pub async fn start(
+        self: Arc<Self>,
+    ) -> (
+        UnboundedSender<Request>,
+        UnboundedReceiver<Response>,
+    ) {
         let (req_tx, req_rx) = mpsc::unbounded_channel();
         let (res_tx, res_rx) = mpsc::unbounded_channel();
 

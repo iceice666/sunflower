@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub enum Response {
+pub enum ResponseKind {
     Ok(Option<String>),
     Err(String),
 
@@ -16,6 +16,11 @@ pub enum Response {
     Shuffled(bool),
 
     TrackSearchResult(HashMap<String, HashMap<String, String>>),
+}
+
+pub struct Response {
+    pub(crate) kind: ResponseKind,
+    pub(crate) id: String,
 }
 
 #[derive(Debug, thiserror::Error)]
