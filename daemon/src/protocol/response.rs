@@ -6,6 +6,8 @@ use std::time::Duration;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum ResponseKind {
+    ImAlive,
+    
     Ok(Option<String>),
     Err(String),
 
@@ -21,6 +23,12 @@ pub enum ResponseKind {
 pub struct Response {
     pub(crate) kind: ResponseKind,
     pub(crate) id: String,
+}
+
+impl Response {
+    pub fn new(kind: ResponseKind, id: String) -> Self {
+        Self { kind, id }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

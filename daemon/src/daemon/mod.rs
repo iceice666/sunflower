@@ -48,6 +48,9 @@ impl Daemon {
             tokio::spawn(async move {
                 let id = request.id;
                 let kind = match request.kind {
+                    RequestKind::AreYouAlive => {
+                        ResponseKind::ImAlive
+                    }
                     RequestKind::Player(r) => this.handle(r),
                     RequestKind::State(r) => this.handle(r),
                     RequestKind::Track(r) => this.handle(r),

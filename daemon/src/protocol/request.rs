@@ -53,6 +53,7 @@ pub enum ProviderRequest {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum RequestKind {
+    AreYouAlive,
     Player(PlayerRequest),
     State(PlayerStateRequest),
     Track(TrackRequest),
