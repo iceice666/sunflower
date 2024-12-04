@@ -59,12 +59,7 @@ impl Daemon {
         }
     }
 
-    pub async fn start(
-        self: Arc<Self>,
-    ) -> (
-        UnboundedSender<Request>,
-        UnboundedReceiver<Response>,
-    ) {
+    pub async fn start(self: Arc<Self>) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
         let (req_tx, req_rx) = mpsc::unbounded_channel();
         let (res_tx, res_rx) = mpsc::unbounded_channel();
 

@@ -66,9 +66,6 @@ pub struct Request {
 
 impl Request {
     pub fn new(kind: RequestKind, id: String) -> Self {
-        Request {
-            kind,
-            id,
-        }
+        Request { kind, id }
     }
 }
