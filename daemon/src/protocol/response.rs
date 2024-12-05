@@ -1,7 +1,7 @@
 use crate::player::Repeat;
 use rodio::source::SeekError;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -16,8 +16,17 @@ pub enum ResponseKind {
     Total(Option<Duration>),
     Repeat(Repeat),
     Shuffled(bool),
+    CurrentState {
+        volume: f32,
+        position: Duration,
+        total: Option<Duration>,
+        repeat: Repeat,
+        shuffled: bool,
+    },
+    CurrentQueue(Vec<String>),
 
     TrackSearchResult(HashMap<String, HashMap<String, String>>),
+    Registers(HashSet<String>),
 }
 
 pub struct Response {

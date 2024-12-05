@@ -28,10 +28,11 @@ pub enum PlayerStateRequest {
     SetRepeat(Repeat),
     GetShuffle,
     ToggleShuffle,
+    GetAllState
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub enum TrackRequest {
+pub enum QueueRequest {
     AddTrack {
         provider_name: String,
         track_id: String,
@@ -39,6 +40,8 @@ pub enum TrackRequest {
     RemoveTrack {
         idx: usize,
     },
+    ClearQueue,
+    GetQueue,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -50,6 +53,7 @@ pub enum ProviderRequest {
         max_results: usize,
         query: String,
     },
+    GetRegistered
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -57,7 +61,7 @@ pub enum RequestKind {
     AreYouAlive,
     Player(PlayerRequest),
     State(PlayerStateRequest),
-    Track(TrackRequest),
+    Track(QueueRequest),
     Provider(ProviderRequest),
 }
 
@@ -67,8 +71,8 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(kind: RequestKind, id: String) -> Self {
-        Request { kind, id }
+    pub fn id(&self) -> &str {
+        self.id.as_str()
     }
 }
 

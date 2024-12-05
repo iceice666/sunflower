@@ -7,7 +7,6 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument, trace};
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct TaskPool {
@@ -37,9 +36,9 @@ impl TaskPool {
         self: &Arc<Self>,
         request_kind: RequestKind,
     ) -> Result<oneshot::Receiver<ResponseKind>, SendError<Request>> {
-        let id = Uuid::new_v4().to_string();
         let (tx, rx) = oneshot::channel();
-        let request = Request::new(request_kind, id.clone());
+        let request = Request::from(request_kind);
+        let id = request.id().to_string();
 
         trace!("Created new task");
 

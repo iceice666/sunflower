@@ -1,6 +1,6 @@
 use crate::daemon::Daemon;
 use crate::protocol::{
-    PlayerRequest, PlayerStateRequest, ProviderRequest, ResponseKind, TrackRequest,
+    PlayerRequest, PlayerStateRequest, ProviderRequest, QueueRequest, ResponseKind,
 };
 use tracing::error;
 
@@ -104,6 +104,13 @@ impl Handler<PlayerStateRequest> for Daemon {
                 state.toggle_shuffle();
                 ResponseKind::Ok(None)
             }
+            PlayerStateRequest::GetAllState => ResponseKind::CurrentState {
+                volume: self.player.get_volume(),
+                position: self.player.get_pos(),
+                total: self.player.get_duration(),
+                repeat: state.get_repeat(),
+                shuffled: state.is_shuffled(),
+            },
         }
     }
 }
@@ -133,17 +140,21 @@ impl Handler<ProviderRequest> for Daemon {
                 return_error!(result, result);
                 ResponseKind::TrackSearchResult(result)
             }
+            ProviderRequest::GetRegistered => {
+                let registers = provider_registry.all_providers();
+                ResponseKind::Registers(registers)
+            }
         }
     }
 }
 
-impl Handler<TrackRequest> for Daemon {
+impl Handler<QueueRequest> for Daemon {
     type Output = ResponseKind;
 
-    fn handle(&self, msg: TrackRequest) -> Self::Output {
+    fn handle(&self, msg: QueueRequest) -> Self::Output {
         let mut state = self.state.lock();
         match msg {
-            TrackRequest::AddTrack {
+            QueueRequest::AddTrack {
                 provider_name,
                 track_id,
             } => {
@@ -154,9 +165,17 @@ impl Handler<TrackRequest> for Daemon {
 
                 ResponseKind::Ok(None)
             }
-            TrackRequest::RemoveTrack { idx } => {
+            QueueRequest::RemoveTrack { idx } => {
                 state.remove(idx);
                 ResponseKind::Ok(None)
+            }
+            QueueRequest::ClearQueue => {
+                state.clear();
+                ResponseKind::Ok(None)
+            }
+            QueueRequest::GetQueue => {
+                let queue = state.get_queue();
+                ResponseKind::CurrentQueue(queue)
             }
         }
     }

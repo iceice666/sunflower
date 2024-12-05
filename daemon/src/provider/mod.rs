@@ -118,7 +118,7 @@ impl ProviderRegistry {
     pub fn search(
         &mut self,
         keyword: &str,
-        max_results: usize,
+        max_results: usize, // TODO: Support result limitation
         mut filter: impl FnMut(&String) -> bool,
     ) -> ProviderResult<HashMap<String, HashMap<String, String>>> {
         let keyword = keyword.trim();
@@ -151,6 +151,7 @@ impl ProviderRegistry {
     }
 }
 
+/// Used for create new provider
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum ProviderFields {
     Sinewave,
