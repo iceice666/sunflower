@@ -1,9 +1,11 @@
 use crate::protocol::{Request, RequestKind, Response, ResponseKind};
 use dashmap::DashMap;
+use parking_lot::Mutex;
 use std::sync::Arc;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument, trace};
 use uuid::Uuid;
 
@@ -11,6 +13,8 @@ use uuid::Uuid;
 pub struct TaskPool {
     tasks: DashMap<String, oneshot::Sender<ResponseKind>>,
     task_sender: UnboundedSender<Request>,
+
+    __main_loop_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl TaskPool {
@@ -20,6 +24,7 @@ impl TaskPool {
         Arc::new(Self {
             tasks: DashMap::new(),
             task_sender,
+            __main_loop_handle: Mutex::new(None),
         })
     }
 
@@ -52,10 +57,11 @@ impl TaskPool {
     /// This will not block the current thread.
     ///
     /// # Panics
-    /// Will panic if the receiver channel is closed unexpectedly
+    /// Will panic if the receiver channel is closed unexpectedly (like be dropped).
     #[instrument(skip(self, result_receiver))]
     pub fn run(self: Arc<Self>, mut result_receiver: UnboundedReceiver<Response>) {
-        tokio::spawn(async move {
+        let this = self.clone();
+        let handle = tokio::spawn(async move {
             info!("Starting main loop");
 
             while let Some(response) = result_receiver.recv().await {
@@ -77,16 +83,31 @@ impl TaskPool {
 
             error!("Result receiver channel closed unexpectedly");
         });
+
+        this.__main_loop_handle.lock().replace(handle);
+    }
+}
+
+impl Drop for TaskPool {
+    fn drop(&mut self) {
+        let handle = self.__main_loop_handle.lock().take();
+        if let Some(handle) = handle {
+            info!("Shutting down main loop");
+            handle.abort();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::init_logger;
     use tokio::sync::mpsc;
 
     #[tokio::test]
     async fn test_task_lifecycle() {
+        init_logger();
+
         let (tx, mut rx) = mpsc::unbounded_channel();
         let pool = TaskPool::new(tx);
 

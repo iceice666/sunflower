@@ -3,6 +3,7 @@ use crate::provider::ProviderFields;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::Duration;
+use uuid::Uuid;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum PlayerRequest {
@@ -68,5 +69,14 @@ pub struct Request {
 impl Request {
     pub fn new(kind: RequestKind, id: String) -> Self {
         Request { kind, id }
+    }
+}
+
+impl From<RequestKind> for Request {
+    fn from(value: RequestKind) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            kind: value,
+        }
     }
 }
