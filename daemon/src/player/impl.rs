@@ -1,7 +1,11 @@
 use crate::source::RawAudioSource;
 use crate::utils::single_item_channel::{channel, Receiver, Sender};
+use log::info;
 use rodio::source::SeekError;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::sleep;
 use std::time::Duration;
 
 pub struct Player {
@@ -10,6 +14,8 @@ pub struct Player {
 
     __duration_updater: Sender<Option<Duration>>,
     __duration_receiver: Receiver<Option<Duration>>,
+
+    __shutdown_flag: Arc<AtomicBool>,
 }
 
 impl Default for Player {
@@ -34,18 +40,19 @@ impl Player {
             __stream_handle,
             __duration_updater: tx,
             __duration_receiver: rx,
+            __shutdown_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Starts the main loop.
     ///
     /// This will create a new thread.
-    /// The provided callback is used to get the initial `Source` to be played.
+    /// The provided callback is used to get the `Source` to be played.
     ///
     /// # Parameters
     /// - `callback`: A callback function that provides a `Source` when called.
     pub fn main_loop(&self, mut callback: impl Send + FnMut() -> RawAudioSource) {
-        loop {
+        while !self.__shutdown_flag.load(Ordering::Acquire){
             let source = callback();
             let duration = source.total_duration();
             self.__duration_updater.update(duration);
@@ -54,9 +61,30 @@ impl Player {
                 RawAudioSource::U16(src) => self.sink.append(src),
                 RawAudioSource::F32(src) => self.sink.append(src),
             }
-            self.sink.sleep_until_end();
+
+
+            while !self.__shutdown_flag.load(Ordering::Acquire) {
+                if self.is_playing() {
+                    sleep(Duration::from_millis(100));
+                } else {
+                    break;
+                }
+            }
         }
+
+        self.sink.stop();
     }
+
+    /// Initiates a graceful shutdown of the player.
+    /// This method is now infallible and thread-safe.
+    pub fn shutdown(&self) {
+        // Signal shutdown
+        self.__shutdown_flag.store(true, Ordering::Release);
+
+        // Stop playback immediately
+        self.sink.stop();
+    }
+
 
     /// Sets the volume of the player.
     ///
@@ -142,5 +170,13 @@ impl Player {
     #[inline]
     pub fn is_playing(&self) -> bool {
         self.sink.empty()
+    }
+}
+
+impl Drop for Player {
+    fn drop(&mut self) {
+        // Ensure shutdown is called if it hasn't been already
+        self.__shutdown_flag.store(true, Ordering::Release);
+        info!("Shutting down player");
     }
 }
