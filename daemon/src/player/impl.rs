@@ -1,12 +1,12 @@
 use crate::source::RawAudioSource;
 use crate::utils::single_item_channel::{channel, Receiver, Sender};
 use log::info;
+use parking_lot::{Condvar, Mutex};
 use rodio::source::SeekError;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::sleep;
 use std::time::Duration;
+use tracing::debug;
 
 pub struct Player {
     sink: Sink,
@@ -15,7 +15,7 @@ pub struct Player {
     __duration_updater: Sender<Option<Duration>>,
     __duration_receiver: Receiver<Option<Duration>>,
 
-    __shutdown_flag: Arc<AtomicBool>,
+    __shutdown_flag: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl Default for Player {
@@ -40,7 +40,7 @@ impl Player {
             __stream_handle,
             __duration_updater: tx,
             __duration_receiver: rx,
-            __shutdown_flag: Arc::new(AtomicBool::new(false)),
+            __shutdown_flag: Arc::new((Mutex::new(false), Condvar::new())),
         }
     }
 
@@ -51,40 +51,53 @@ impl Player {
     ///
     /// # Parameters
     /// - `callback`: A callback function that provides a `Source` when called.
-    pub fn main_loop(&self, mut callback: impl Send + FnMut() -> RawAudioSource) {
-        while !self.__shutdown_flag.load(Ordering::Acquire){
-            let source = callback();
-            let duration = source.total_duration();
-            self.__duration_updater.update(duration);
-            match source {
-                RawAudioSource::I16(src) => self.sink.append(src),
-                RawAudioSource::U16(src) => self.sink.append(src),
-                RawAudioSource::F32(src) => self.sink.append(src),
+    ///   When provides None, it will be considered as a terminated signal.
+    pub fn main_loop(&self, mut callback: impl Send + FnMut() -> Option<RawAudioSource>) {
+        loop {
+            match callback() {
+                Some(src) => self.load_source(src),
+                None => break,
             }
+            // After loading source, it guarantees that self.is_playing() returns True.
 
+            let (flag, signal) = &*self.__shutdown_flag;
 
-            while !self.__shutdown_flag.load(Ordering::Acquire) {
-                if self.is_playing() {
-                    sleep(Duration::from_millis(100));
-                } else {
-                    break;
-                }
+            let mut shutdown_flag = flag.lock();
+
+            // We block the current thread until the playing reach end
+            // or receiving a shutdown signal
+            signal.wait_while(&mut shutdown_flag, |shutdown| {
+                !(self.is_playing() || *shutdown)
+            });
+
+            if *shutdown_flag {
+                debug!("Player is shutting down. Exiting.");
+                break;
             }
         }
 
         self.sink.stop();
     }
 
-    /// Initiates a graceful shutdown of the player.
-    /// This method is now infallible and thread-safe.
-    pub fn shutdown(&self) {
-        // Signal shutdown
-        self.__shutdown_flag.store(true, Ordering::Release);
-
-        // Stop playback immediately
-        self.sink.stop();
+    fn load_source(&self, source: RawAudioSource) {
+        let duration = source.total_duration();
+        self.__duration_updater.update(duration);
+        match source {
+            RawAudioSource::I16(src) => self.sink.append(src),
+            RawAudioSource::U16(src) => self.sink.append(src),
+            RawAudioSource::F32(src) => self.sink.append(src),
+        }
     }
 
+    /// Initiates a graceful shutdown of the player.
+    pub fn shutdown(&self) {
+        info!("Shutting down player");
+
+        let (flag, signal) = &*self.__shutdown_flag;
+
+        *flag.lock() = true;
+        signal.notify_all();
+    }
 
     /// Sets the volume of the player.
     ///
@@ -170,13 +183,5 @@ impl Player {
     #[inline]
     pub fn is_playing(&self) -> bool {
         self.sink.empty()
-    }
-}
-
-impl Drop for Player {
-    fn drop(&mut self) {
-        // Ensure shutdown is called if it hasn't been already
-        self.__shutdown_flag.store(true, Ordering::Release);
-        info!("Shutting down player");
     }
 }

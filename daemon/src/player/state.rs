@@ -78,9 +78,7 @@ impl PlayerState {
     #[inline]
     pub fn set_playing(&mut self, playing: bool) {
         self.playing = playing;
-        if self.is_playing() {
-            self.play_signal.notify_all();
-        }
+        self.play_signal.notify_all();
     }
 
     #[inline]
