@@ -28,7 +28,7 @@ pub enum PlayerStateRequest {
     SetRepeat(Repeat),
     GetShuffle,
     ToggleShuffle,
-    GetAllState
+    GetAllState,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -53,7 +53,7 @@ pub enum ProviderRequest {
         max_results: usize,
         query: String,
     },
-    GetRegistered
+    GetRegistered,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]

@@ -69,7 +69,7 @@ impl PlayerState {
     pub fn clear(&mut self) {
         self.queue.clear();
     }
-    
+
     #[inline]
     pub fn get_queue(&self) -> Vec<String> {
         self.queue.iter().map(|s| s.display_title()).collect()
