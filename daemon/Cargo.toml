@@ -3,34 +3,51 @@ name = "sunflower-daemon"
 version = "0.1.0"
 edition = "2021"
 
-
 [dependencies]
+# Audio
 rodio = { version = "0.20", features = ["symphonia-all"] }
 symphonia = "0.5.4"
+lofty = { version = "0.21", optional = true }
+
+# Async & Concurrency
+tokio = { version = "1.41", default-features = false, features = ["full"] }
 async-trait = "0.1.83"
-tokio = { version = "1.41.1", features = ["full"] }
 parking_lot = "0.12.3"
-dashmap = "6.1.0"
+dashmap = "6.1"
+
+# Error handling
 anyhow = "1.0.93"
 thiserror = "2.0"
+
+# Logging & Tracing
 log = "0.4.22"
-time = { version = "0.3.36", features = ["local-offset"] }
-tracing = "0.1"
+tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["time"] }
-serde = {version =  "1.0.215", features = ["derive"] }
+
+# Serialization
+serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0"
+
+# Utilities
+time = { version = "0.3.36", features = ["local-offset"] }
 rand = "0.8.5"
 regex = { version = "1.5.5", optional = true }
-lofty = { version = "0.21", optional = true }
-uuid = { version = "1.11.0", features = ["v4"] }
+uuid = { version = "1.11", features = ["v4"] }
 bytes = "1.0"
 
 [features]
-
-provider-local_file = ["dep:lofty", "dep:regex"]
-provider-yt-dlp = []
-
-
 default = ["provider-local_file"]
 provider-all = ["provider-local_file", "provider-yt-dlp"]
 
+# Individual providers
+provider-local_file = ["dep:lofty", "dep:regex"]
+provider-yt-dlp = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true      # Strip symbols from binary
+
+[profile.dev]
+opt-level = 1 # Slightly better performance in dev mode

@@ -35,34 +35,34 @@ pub trait ProviderTrait: PartialEq + Eq {
 macro_rules! define_provider_kinds {
     (
         $f_name:ident=>$f_clz:ident
-        $(,$name:ident=>$clz:ident)*
+        $(,#[$feature:literal] $name:ident=>$clz:ident)*
 
     ) => {
         #[derive(Debug, Eq, PartialEq)]
         pub enum ProviderKinds{
             $f_name($f_clz)
-            $(,$name ($clz))*
+            $(,#[cfg(feature=$feature)] $name ($clz))*
         }
 
         impl ProviderTrait for ProviderKinds {
             fn get_name(&self) -> String {
                 match self {
                     Self::$f_name(kind) => kind.get_name()
-                    $(,Self::$name(kind) => kind.get_name())*
+                    $(,#[cfg(feature=$feature)] Self::$name(kind) => kind.get_name())*
                 }
             }
 
             fn search(&mut self, term:&str) -> SearchResult {
                 match self {
                     Self::$f_name(kind) => kind.search(term)
-                    $(,Self::$name(kind) => kind.search(term))*
+                    $(,#[cfg(feature=$feature)] Self::$name(kind) => kind.search(term))*
                 }
             }
 
             fn get_track(&self,input: &str) -> ProviderResult<SourceKinds> {
                 match self {
                     Self::$f_name(kind) => kind.get_track(input)
-                    $(,Self::$name(kind) => kind.get_track(input))*
+                    $(,#[cfg(feature=$feature)] Self::$name(kind) => kind.get_track(input))*
                 }
             }
         }
@@ -71,6 +71,8 @@ macro_rules! define_provider_kinds {
 
 define_provider_kinds! {
     Sinewave => SineWaveProvider,
+
+    #["provider-local_file"]
     LocalFile => LocalFileProvider
 }
 
