@@ -7,7 +7,7 @@ use std::time::Duration;
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum ResponseKind {
     ImAlive,
-    
+
     Ok(Option<String>),
     Err(String),
 
