@@ -77,6 +77,20 @@ macro_rules! define_source_kinds {
             $(,$name ($clz))*
         }
 
+        impl From<$f_clz> for SourceKinds {
+            fn from(value: $f_clz) -> Self {
+                SourceKinds::$f_name(value)
+            }
+        }
+
+        $(
+        impl From<$clz> for SourceKinds {
+            fn from(value: $clz) -> Self {
+                SourceKinds::$name(value)
+            }
+        }
+        )*
+
         impl SourceTrait for SourceKinds {
             fn info(&self) -> SourceResult<SourceInfo> {
                 match self {
