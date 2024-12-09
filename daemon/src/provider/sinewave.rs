@@ -19,7 +19,7 @@ impl ProviderTrait for SineWaveProvider {
         "SineWaveProvider".to_string()
     }
 
-    fn search(&mut self, _: &str) -> SearchResult {
+    fn search(&mut self, _: &str, _: Option<usize>) -> SearchResult {
         Err(ProviderError::EmptySearchResult)
     }
 

@@ -50,7 +50,7 @@ pub enum ProviderRequest {
     Unregister(String),
     SearchTracks {
         providers: HashSet<String>,
-        max_results: usize,
+        max_results: Option<usize>,
         query: String,
     },
     GetRegistered,

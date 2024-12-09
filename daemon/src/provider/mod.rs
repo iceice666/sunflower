@@ -2,6 +2,7 @@ pub mod sinewave;
 
 mod error;
 mod local_file;
+pub mod ytdl;
 
 use crate::provider::error::{ProviderError, ProviderResult};
 use crate::provider::local_file::LocalFileProvider;
@@ -11,10 +12,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tracing::error;
 
-pub type SearchResult<'a> = ProviderResult<&'a HashMap<String, String>>;
+pub type SearchResult = ProviderResult<HashMap<String, String>>;
 
 /// A trait for providing music tracks.
-pub trait ProviderTrait: PartialEq + Eq {
+pub trait ProviderTrait {
     /// Get the name of the provider.
     ///
     /// This is used to identify the provider.
@@ -26,7 +27,7 @@ pub trait ProviderTrait: PartialEq + Eq {
     /// When no search result, return `ProviderError::EmptySearchResult`
     ///
     /// This operation might be expensive.
-    fn search(&mut self, keyword: &str) -> SearchResult;
+    fn search(&mut self, keyword: &str, max_results: Option<usize>) -> SearchResult;
 
     /// Get a track by its unique id.
     fn get_track(&self, id: &str) -> ProviderResult<SourceKinds>;
@@ -52,10 +53,10 @@ macro_rules! define_provider_kinds {
                 }
             }
 
-            fn search(&mut self, term:&str) -> SearchResult {
+            fn search(&mut self, term:&str, max_results: Option<usize>) -> SearchResult {
                 match self {
-                    Self::$f_name(kind) => kind.search(term)
-                    $(,#[cfg(feature=$feature)] Self::$name(kind) => kind.search(term))*
+                    Self::$f_name(kind) => kind.search(term, max_results)
+                    $(,#[cfg(feature=$feature)] Self::$name(kind) => kind.search(term, max_results))*
                 }
             }
 
@@ -107,20 +108,13 @@ impl ProviderRegistry {
     }
 
     pub fn create(&mut self, fields: ProviderFields) {
-        let provider = match fields {
-            ProviderFields::Sinewave => ProviderKinds::Sinewave(SineWaveProvider),
-            ProviderFields::LocalFile { music_folder } => {
-                ProviderKinds::LocalFile(LocalFileProvider::new(music_folder))
-            }
-        };
-
-        self.register(provider);
+        self.register(fields.into());
     }
 
     pub fn search(
         &mut self,
         keyword: &str,
-        max_results: usize, // TODO: Support result limitation
+        max_results: Option<usize>,
         mut filter: impl FnMut(&String) -> bool,
     ) -> ProviderResult<HashMap<String, HashMap<String, String>>> {
         let keyword = keyword.trim();
@@ -131,7 +125,7 @@ impl ProviderRegistry {
                 continue;
             }
 
-            match provider.search(keyword) {
+            match provider.search(keyword, max_results) {
                 Ok(results) => {
                     result.insert(name.to_string(), results.to_owned());
                 }
@@ -157,5 +151,22 @@ impl ProviderRegistry {
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum ProviderFields {
     Sinewave,
-    LocalFile { music_folder: String },
+
+    #[cfg(feature = "provider-local_file")]
+    LocalFile {
+        music_folder: String,
+    },
+}
+
+impl From<ProviderFields> for ProviderKinds {
+    fn from(fields: ProviderFields) -> Self {
+        match fields {
+            ProviderFields::Sinewave => ProviderKinds::Sinewave(SineWaveProvider),
+
+            #[cfg(feature = "provider-local_file")]
+            ProviderFields::LocalFile { music_folder } => {
+                ProviderKinds::LocalFile(LocalFileProvider::new(music_folder))
+            }
+        }
+    }
 }

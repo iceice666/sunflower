@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     io::{self},
     path::PathBuf,
@@ -37,14 +36,22 @@ impl ProviderTrait for LocalFileProvider {
         "LocalFileProvider".to_string()
     }
 
-    fn search(&mut self, pattern_regex: &str) -> SearchResult {
+    fn search(&mut self, pattern_regex: &str, max_result: Option<usize>) -> SearchResult {
         // Create a regex pattern, case-insensitive by default
         let regex = Regex::new(&format!("(?i){}", pattern_regex))
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
         let mut result = HashMap::new();
+        let mut count = 0;
 
         for entry in self.music_folder.read_dir()? {
+            // Check if we've hit the limit
+            if let Some(limit) = max_result {
+                if count >= limit {
+                    break;
+                }
+            }
+
             let path = entry?.path();
 
             if path.is_dir() {
@@ -56,13 +63,14 @@ impl ProviderTrait for LocalFileProvider {
                 if regex.is_match(filename_str) {
                     if let Some(filepath_str) = path.to_str() {
                         result.insert(filename_str.to_string(), filepath_str.to_string());
+                        count += 1;
                     }
                 }
             }
         }
 
         self.__search_cache = result;
-        Ok(self.__search_cache.borrow())
+        Ok(self.__search_cache.clone())
     }
 
     fn get_track(&self, name: &str) -> ProviderResult<SourceKinds> {
@@ -73,6 +81,6 @@ impl ProviderTrait for LocalFileProvider {
 
         let track = LocalFileTrack::new(target_path);
 
-        Ok(SourceKinds::Local(track))
+        Ok(track.into())
     }
 }
