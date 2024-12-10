@@ -122,10 +122,10 @@ impl Handler<ProviderRequest> for Daemon {
         let mut provider_registry = self.provider_registry.lock();
 
         match msg {
-            ProviderRequest::Register(fields) => {
-                provider_registry.create(fields);
-                ResponseKind::Ok(None)
-            }
+            ProviderRequest::Register(fields) => match provider_registry.create(fields) {
+                Ok(_) => ResponseKind::Ok(None),
+                Err(err) => ResponseKind::Err(err.to_string()),
+            },
             ProviderRequest::Unregister(name) => {
                 provider_registry.unregister(&name);
                 ResponseKind::Ok(None)

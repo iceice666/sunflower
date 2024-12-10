@@ -7,6 +7,7 @@ pub mod ytdl;
 use crate::provider::error::{ProviderError, ProviderResult};
 use crate::provider::local_file::LocalFileProvider;
 use crate::provider::sinewave::SineWaveProvider;
+use crate::provider::ytdl::YtdlProvider;
 use crate::source::SourceKinds;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -74,7 +75,10 @@ define_provider_kinds! {
     Sinewave => SineWaveProvider,
 
     #["provider-local_file"]
-    LocalFile => LocalFileProvider
+    LocalFile => LocalFileProvider,
+
+    #["provider-yt-dlp"]
+    Ytdl => YtdlProvider
 }
 
 #[derive(Debug)]
@@ -107,8 +111,9 @@ impl ProviderRegistry {
         self.providers.remove(name);
     }
 
-    pub fn create(&mut self, fields: ProviderFields) {
-        self.register(fields.into());
+    pub fn create(&mut self, fields: ProviderFields) -> ProviderResult<()> {
+        self.register(fields.try_into()?);
+        Ok(())
     }
 
     pub fn search(
@@ -156,17 +161,25 @@ pub enum ProviderFields {
     LocalFile {
         music_folder: String,
     },
+
+    #[cfg(feature = "provider-yt-dlp")]
+    Ytdl,
 }
 
-impl From<ProviderFields> for ProviderKinds {
-    fn from(fields: ProviderFields) -> Self {
-        match fields {
+impl TryFrom<ProviderFields> for ProviderKinds {
+    type Error = ProviderError;
+
+    fn try_from(fields: ProviderFields) -> Result<Self, Self::Error> {
+        Ok(match fields {
             ProviderFields::Sinewave => ProviderKinds::Sinewave(SineWaveProvider),
 
             #[cfg(feature = "provider-local_file")]
             ProviderFields::LocalFile { music_folder } => {
                 ProviderKinds::LocalFile(LocalFileProvider::new(music_folder))
             }
-        }
+
+            #[cfg(feature = "provider-yt-dlp")]
+            ProviderFields::Ytdl => ProviderKinds::Ytdl(YtdlProvider::try_new()?),
+        })
     }
 }

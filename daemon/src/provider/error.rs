@@ -14,6 +14,9 @@ pub enum ProviderError {
 
     #[error("Failed to perform SQL query: {0}")]
     Sql(#[from] rusqlite::Error),
+
+    #[error("{0}")]
+    Other(String),
 }
 
 pub type ProviderResult<T> = Result<T, ProviderError>;
