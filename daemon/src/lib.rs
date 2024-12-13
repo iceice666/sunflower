@@ -1,13 +1,13 @@
 pub(crate) mod daemon;
 pub(crate) mod player;
 
-pub(crate) mod protocol;
+pub mod protocol;
 pub(crate) mod provider;
 pub(crate) mod source;
 pub(crate) mod utils;
 
 pub use crate::daemon::Daemon;
-pub use crate::protocol::{Request, RequestKind, ResponseKind};
+pub use crate::provider::ProviderFields;
 pub use crate::utils::task_pool::TaskPool;
 
 pub fn init_logger() {

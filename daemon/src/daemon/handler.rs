@@ -1,6 +1,6 @@
 use crate::daemon::Daemon;
 use crate::protocol::{
-    PlayerRequest, PlayerStateRequest, ProviderRequest, QueueRequest, ResponseKind,
+    PlayerRequest, PlayerStateRequest, ProviderRequest, ResponseKind, TrackRequest,
 };
 use tracing::error;
 
@@ -148,13 +148,13 @@ impl Handler<ProviderRequest> for Daemon {
     }
 }
 
-impl Handler<QueueRequest> for Daemon {
+impl Handler<TrackRequest> for Daemon {
     type Output = ResponseKind;
 
-    fn handle(&self, msg: QueueRequest) -> Self::Output {
+    fn handle(&self, msg: TrackRequest) -> Self::Output {
         let mut state = self.state.lock();
         match msg {
-            QueueRequest::AddTrack {
+            TrackRequest::AddTrack {
                 provider_name,
                 track_id,
             } => {
@@ -165,15 +165,15 @@ impl Handler<QueueRequest> for Daemon {
 
                 ResponseKind::Ok(None)
             }
-            QueueRequest::RemoveTrack { idx } => {
+            TrackRequest::RemoveTrack { idx } => {
                 state.remove(idx);
                 ResponseKind::Ok(None)
             }
-            QueueRequest::ClearQueue => {
+            TrackRequest::ClearQueue => {
                 state.clear();
                 ResponseKind::Ok(None)
             }
-            QueueRequest::GetQueue => {
+            TrackRequest::GetQueue => {
                 let queue = state.get_queue();
                 ResponseKind::CurrentQueue(queue)
             }

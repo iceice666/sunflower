@@ -32,7 +32,7 @@ pub enum PlayerStateRequest {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub enum QueueRequest {
+pub enum TrackRequest {
     AddTrack {
         provider_name: String,
         track_id: String,
@@ -59,9 +59,10 @@ pub enum ProviderRequest {
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum RequestKind {
     AreYouAlive,
+    Terminate,
     Player(PlayerRequest),
     State(PlayerStateRequest),
-    Track(QueueRequest),
+    Track(TrackRequest),
     Provider(ProviderRequest),
 }
 

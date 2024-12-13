@@ -86,6 +86,10 @@ impl Daemon {
 
                 let kind = match request.kind {
                     RequestKind::AreYouAlive => ResponseKind::ImAlive,
+                    RequestKind::Terminate => {
+                        this.shutdown();
+                        ResponseKind::Ok(None)
+                    }
                     RequestKind::Player(r) => this.handle(r),
                     RequestKind::State(r) => this.handle(r),
                     RequestKind::Track(r) => this.handle(r),
