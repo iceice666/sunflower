@@ -1,8 +1,21 @@
 [package]
-name = "sunflower-daemon"
+name = "sunflower-core"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80.0"
+license = "AGPL-3"
+authors = ["Brian Duan <iceice666@outlook.com>"]
+description = "Sunflower daemon player implementation."
+
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true      # Strip symbols from binary
+
+[profile.dev]
+opt-level = 1 # Slightly better performance in dev mode
 
 [dependencies]
 # Audio
@@ -14,7 +27,6 @@ lofty = { version = "0.21", optional = true }
 tokio = { version = "1.41", features = ["full"] }
 async-trait = "0.1.83"
 parking_lot = "0.12.3"
-dashmap = "6.1"
 
 # Error handling
 anyhow = "1.0.93"
@@ -27,7 +39,6 @@ tracing-subscriber = { version = "0.3", features = ["time"] }
 
 # Serialization
 serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0"
 
 # Data storage
 rusqlite = { version = "0.32.0", features = ["bundled"] }
@@ -48,11 +59,3 @@ provider-all = ["provider-local_file", "provider-yt-dlp"]
 provider-local_file = ["dep:lofty", "dep:regex"]
 provider-yt-dlp = []
 
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true      # Strip symbols from binary
-
-[profile.dev]
-opt-level = 1 # Slightly better performance in dev mode

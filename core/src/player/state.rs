@@ -1,6 +1,7 @@
 use crate::source::error::SourceResult;
 use crate::source::{RawAudioSource, SourceKinds, SourceTrait};
 use parking_lot::Condvar;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -122,24 +123,35 @@ impl PlayerState {
     }
 
     pub fn update_index(&mut self) {
-        let reverse = self.reversed;
-        match self.repeat {
-            Repeat::None => {
-                if reverse && self.current_index == 0 {
+        match (self.repeat, self.reversed, self.shuffled) {
+            (Repeat::Track, _, true) => {
+                self.current_index = rand::thread_rng().gen_range(0..self.queue.len());
+            }
+            (Repeat::Track, _, _) => {}
+            (Repeat::None, true, _) => {
+                if self.current_index == 0 {
                     self.playing = false;
-                } else if !reverse && self.current_index + 1 == self.queue.len() {
+                } else {
+                    self.current_index -= 1;
+                }
+            }
+            (Repeat::None, false, _) => {
+                if self.current_index + 1 >= self.queue.len() {
                     self.playing = false;
-                    self.current_index += 1;
-                } else if reverse {
-                    self.current_index = self.current_index.saturating_sub(1);
+                    self.current_index = self.queue.len();
                 } else {
                     self.current_index += 1;
                 }
             }
-            Repeat::Track => {}
-            Repeat::Queue => {
-                self.current_index += if reverse { self.queue.len() - 1 } else { 1 };
-                self.current_index %= self.queue.len() + 1;
+            (Repeat::Queue, true, _) => {
+                self.current_index = if self.current_index == 0 {
+                    self.queue.len() - 1
+                } else {
+                    self.current_index - 1
+                };
+            }
+            (Repeat::Queue, false, _) => {
+                self.current_index = (self.current_index + 1) % self.queue.len();
             }
         }
     }
