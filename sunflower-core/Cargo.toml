@@ -7,16 +7,6 @@ license = "AGPL-3"
 authors = ["Brian Duan <iceice666@outlook.com>"]
 description = "Sunflower daemon player implementation."
 
-
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true      # Strip symbols from binary
-
-[profile.dev]
-opt-level = 1 # Slightly better performance in dev mode
-
 [dependencies]
 # Audio
 rodio = { version = "0.20", features = ["symphonia-all"] }

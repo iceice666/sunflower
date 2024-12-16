@@ -115,7 +115,7 @@ impl Daemon {
     /// * Sender for sending requests to the daemon
     /// * Receiver for receiving responses from the daemon
     #[instrument(skip(self))]
-    pub async fn start(self: Arc<Self>) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
+    pub fn start(self: Arc<Self>) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
         info!("Initializing daemon startup sequence");
         let (req_tx, req_rx) = mpsc::unbounded_channel();
         let (res_tx, res_rx) = mpsc::unbounded_channel();
@@ -225,7 +225,7 @@ mod tests {
         init_logger();
 
         let daemon = Daemon::new();
-        let (tx, mut rx) = daemon.clone().start().await;
+        let (tx, mut rx) = daemon.clone().start();
 
         // Verify daemon responsiveness
         tx.send(RequestKind::AreYouAlive.into())
