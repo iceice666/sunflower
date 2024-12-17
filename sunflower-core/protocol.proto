@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package player.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto"; // For empty requests/responses
+
+// Common status and error handling
+message Status {
+  enum Code {
+    OK = 0;
+    ERROR = 1;
+    NOT_FOUND = 2;
+    INVALID_ARGUMENT = 3;
+    PROVIDER_ERROR = 4;
+  }
+  Code code = 1;
+  string message = 2;
+}
+
+// Main service definition
+service PlayerService {
+  // System operations
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Player controls
+  rpc Control(ControlRequest) returns (ControlResponse);
+  rpc GetPlayerState(google.protobuf.Empty) returns (PlayerState);
+  rpc SetPlayerState(PlayerStateRequest) returns (PlayerState);
+
+  // Queue management
+  rpc ManageQueue(QueueRequest) returns (QueueResponse);
+
+  // Provider operations
+  rpc ManageProvider(ProviderRequest) returns (ProviderResponse);
+  rpc SearchTracks(SearchRequest) returns (SearchResponse);
+}
+
+// Health check related messages
+message HealthCheckRequest { bool terminate = 1; }
+
+message HealthCheckResponse {
+  bool is_healthy = 1;
+  string version = 2;
+  string uptime = 3;
+}
+
+// Player control related messages
+message ControlRequest {
+  enum Command {
+    COMMAND_UNSPECIFIED = 0;
+    PLAY = 1;
+    PAUSE = 2;
+    STOP = 3;
+    NEXT = 4;
+    PREVIOUS = 5;
+    SEEK = 6;
+    SET_VOLUME = 7;
+  }
+
+  Command command = 1;
+  oneof params {
+    SeekParams seek_params = 2;
+    VolumeParams volume_params = 3;
+  }
+}
+
+message SeekParams { google.protobuf.Duration position = 1; }
+
+message VolumeParams { float volume = 1; }
+
+message ControlResponse {
+  Status status = 1;
+  PlayerState state = 2;
+}
+
+// Player state related messages
+message PlayerState {
+  enum PlaybackState {
+    PLAYBACK_UNKNOWN = 0;
+    PLAYING = 1;
+    PAUSED = 2;
+    STOPPED = 3;
+    LOADING = 4;
+    ERROR = 5;
+  }
+
+  enum RepeatMode {
+    REPEAT_OFF = 0;
+    REPEAT_ALL = 1;
+    REPEAT_ONE = 2;
+  }
+
+  PlaybackState playback_state = 1;
+  float volume = 2;
+  google.protobuf.Duration position = 3; // Current playback position
+  google.protobuf.Duration duration = 4; // Total track duration
+  RepeatMode repeat_mode = 5;
+  bool shuffle_enabled = 6;
+  Track current_track = 7; // Currently playing track
+  Status status = 8;       // Any error status
+}
+
+message PlayerStateRequest {
+  optional RepeatMode repeat_mode = 1;
+  optional bool shuffle_enabled = 2;
+}
+
+// Queue related messages
+message QueueRequest {
+  oneof action {
+    AddTrackRequest add_track = 1;
+    RemoveTrackRequest remove_track = 2;
+    ClearQueueRequest clear_queue = 3;
+    MoveTrackRequest move_track = 4; // Added move functionality
+  }
+}
+
+message AddTrackRequest {
+  Track track = 1;
+  optional uint32 position = 2; // Insert at specific position
+}
+
+message RemoveTrackRequest { uint32 position = 1; }
+
+message ClearQueueRequest {
+  bool keep_current = 1; // Whether to keep currently playing track
+}
+
+message MoveTrackRequest {
+  uint32 from_position = 1;
+  uint32 to_position = 2;
+}
+
+message QueueResponse {
+  Status status = 1;
+  Queue queue = 2;
+}
+
+message Queue {
+  repeated Track tracks = 1;
+  uint32 current_index = 2;      // Added current track index
+  uint32 total_duration_sec = 3; // Added total queue duration
+}
+
+// Track related messages
+message Track {
+  string id = 1;
+  string provider_id = 2;
+  string title = 3; // Added metadata fields
+  string artist = 4;
+  string album = 5;
+  google.protobuf.Duration duration = 6;
+  map<string, string> metadata = 7; // Additional flexible metadata
+}
+
+// Provider related messages
+message ProviderRequest {
+  oneof action {
+    RegisterProviderRequest register = 1;
+    UnregisterProviderRequest unregister = 2;
+    google.protobuf.Empty get_registered = 3;
+  }
+}
+
+message RegisterProviderRequest {
+  oneof provider {
+    SineWaveProvider sinewave = 1;
+    LocalFileProvider local_file = 2;
+    YtdlProvider ytdl = 3;
+  }
+}
+
+message SineWaveProvider {
+  // Configuration for sine wave provider
+}
+
+message LocalFileProvider {
+  string music_folder = 1;
+  bool recursive_scan = 2; // Added scan option
+}
+
+message YtdlProvider {
+  optional string binary_path = 1;
+  repeated string extra_args = 2;
+}
+
+message UnregisterProviderRequest { string provider_id = 1; }
+
+message ProviderResponse {
+  Status status = 1;
+  repeated ProviderInfo providers = 2;
+}
+
+message ProviderInfo {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  repeated string capabilities = 4; // What the provider can do
+  bool is_active = 5;
+}
+
+// Search related messages
+message SearchRequest {
+  string query = 1;
+  repeated string provider_ids = 2;
+  uint32 max_results = 3;
+  map<string, string> filters = 4; // Added search filters
+}
+
+message SearchResponse {
+  Status status = 1;
+  map<string, ProviderSearchResults> results = 2;
+}
+
+message ProviderSearchResults {
+  repeated Track tracks = 1;
+  bool has_more = 2; // Indication if more results are available
+}

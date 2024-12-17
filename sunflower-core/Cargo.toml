@@ -33,6 +33,11 @@ serde = { version = "1.0.215", features = ["derive"] }
 # Data storage
 rusqlite = { version = "0.32.0", features = ["bundled"] }
 
+# gRPC
+tonic = "*"
+prost = "0.13"
+prost-types = "0.13"
+
 # Utilities
 time = { version = "0.3.36", features = ["local-offset"] }
 rand = "0.8.5"
@@ -40,6 +45,10 @@ regex = { version = "1.5.5", optional = true }
 uuid = { version = "1.11", features = ["v4"] }
 bytes = "1.0"
 duct = "0.13.7"
+
+
+[build-dependencies]
+tonic-build = "*"
 
 [features]
 default = ["provider-local_file"]
