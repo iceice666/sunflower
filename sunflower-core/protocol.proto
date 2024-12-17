@@ -29,7 +29,7 @@ service PlayerService {
   rpc SetPlayerState(PlayerStateRequest) returns (PlayerState);
 
   // Queue management
-  rpc ManageQueue(QueueRequest) returns (QueueResponse);
+  rpc ManageQueue(QueueRequest) returns (stream QueueResponse); // The queue can be very large
 
   // Provider operations
   rpc ManageProvider(ProviderRequest) returns (ProviderResponse);
@@ -102,7 +102,7 @@ message PlayerState {
 }
 
 message PlayerStateRequest {
-  optional RepeatMode repeat_mode = 1;
+  optional PlayerState.RepeatMode repeat_mode = 1;
   optional bool shuffle_enabled = 2;
 }
 
@@ -112,24 +112,26 @@ message QueueRequest {
     AddTrackRequest add_track = 1;
     RemoveTrackRequest remove_track = 2;
     ClearQueueRequest clear_queue = 3;
-    MoveTrackRequest move_track = 4; // Added move functionality
+    MoveTrackRequest move_track = 4;
   }
 }
 
 message AddTrackRequest {
   Track track = 1;
-  optional uint32 position = 2; // Insert at specific position
+  optional uint32 index = 2;
 }
 
-message RemoveTrackRequest { uint32 position = 1; }
+message RemoveTrackRequest {
+  uint32 index = 1;
+}
 
 message ClearQueueRequest {
   bool keep_current = 1; // Whether to keep currently playing track
 }
 
 message MoveTrackRequest {
-  uint32 from_position = 1;
-  uint32 to_position = 2;
+  uint32 from_index = 1;
+  uint32 to_index = 2;
 }
 
 message QueueResponse {
@@ -147,11 +149,11 @@ message Queue {
 message Track {
   string id = 1;
   string provider_id = 2;
-  string title = 3; // Added metadata fields
+  string title = 3;
   string artist = 4;
   string album = 5;
   google.protobuf.Duration duration = 6;
-  map<string, string> metadata = 7; // Additional flexible metadata
+  map<string, string> metadata = 7;
 }
 
 // Provider related messages
@@ -172,12 +174,12 @@ message RegisterProviderRequest {
 }
 
 message SineWaveProvider {
-  // Configuration for sine wave provider
+  // empty
 }
 
 message LocalFileProvider {
   string music_folder = 1;
-  bool recursive_scan = 2; // Added scan option
+  bool recursive_scan = 2;
 }
 
 message YtdlProvider {
@@ -196,7 +198,7 @@ message ProviderInfo {
   string id = 1;
   string name = 2;
   string version = 3;
-  repeated string capabilities = 4; // What the provider can do
+  repeated string capabilities = 4; // What the provider can do // Reserved for later usage
   bool is_active = 5;
 }
 
@@ -210,7 +212,7 @@ message SearchRequest {
 
 message SearchResponse {
   Status status = 1;
-  map<string, ProviderSearchResults> results = 2;
+  map<string, ProviderSearchResults> results = 2; // provider_id => provider_result
 }
 
 message ProviderSearchResults {
