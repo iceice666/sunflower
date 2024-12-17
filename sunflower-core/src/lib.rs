@@ -7,6 +7,10 @@ pub(crate) mod source;
 pub(crate) mod utils;
 
 pub use crate::daemon::Daemon;
+pub use crate::protocol::{
+    PlayerRequest, PlayerStateRequest, ProviderRequest, Request, RequestKind, Response,
+    ResponseKind, TrackRequest,
+};
 pub use crate::provider::ProviderFields;
 
 pub fn init_logger() {

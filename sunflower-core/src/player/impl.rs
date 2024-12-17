@@ -4,6 +4,7 @@ use log::info;
 use parking_lot::{Condvar, Mutex};
 use rodio::source::SeekError;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::debug;
@@ -16,6 +17,12 @@ pub struct Player {
     __duration_receiver: Receiver<Option<Duration>>,
 
     __shutdown_flag: Arc<(Mutex<bool>, Condvar)>,
+}
+
+impl Debug for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Player").finish()
+    }
 }
 
 impl Default for Player {

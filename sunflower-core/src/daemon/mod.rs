@@ -16,6 +16,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 ///
 /// The `Daemon` struct coordinates audio playback, state management, and request handling
 /// through multiple threads.
+#[derive(Debug)]
 pub struct Daemon {
     /// The core audio player component
     player: Player,
