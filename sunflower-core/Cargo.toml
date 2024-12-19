@@ -7,6 +7,11 @@ license = "AGPL-3"
 authors = ["Brian Duan <iceice666@outlook.com>"]
 description = "Sunflower daemon player implementation."
 
+[[bin]]
+name = "grpc-server"
+path = "src/server.rs"
+
+
 [dependencies]
 # Audio
 rodio = { version = "0.20", features = ["symphonia-all"] }
@@ -45,6 +50,7 @@ regex = { version = "1.5.5", optional = true }
 uuid = { version = "1.11", features = ["v4"] }
 bytes = "1.0"
 duct = "0.13.7"
+rayon = "1.10.0"
 
 
 [build-dependencies]
