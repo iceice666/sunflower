@@ -122,6 +122,16 @@ impl PlayerState {
         self.repeat = repeat;
     }
 
+    #[inline]
+    pub fn get_current_index(&self) -> usize {
+        self.current_index
+    }
+
+    #[inline]
+    pub fn get_current_track(&self) -> &SourceKinds {
+        self.queue.get(self.current_index).unwrap()
+    }
+
     pub fn update_index(&mut self) {
         match (self.repeat, self.reversed, self.shuffled) {
             (Repeat::Track, _, true) => {
