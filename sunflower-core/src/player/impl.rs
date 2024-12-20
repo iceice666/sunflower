@@ -65,7 +65,7 @@ impl Player {
                 Some(src) => self.load_source(src),
                 None => break,
             }
-            // After loading source, it guarantees that self.is_playing() returns True.
+            // After loading source, it guarantees that self.is_stopped() returns False.
 
             let (flag, signal) = &*self.__shutdown_flag;
 
@@ -74,7 +74,7 @@ impl Player {
             // We block the current thread until the playing reach end
             // or receiving a shutdown signal
             signal.wait_while(&mut shutdown_flag, |shutdown| {
-                !(self.is_playing() || *shutdown)
+                !(self.is_stopped() || *shutdown)
             });
 
             if *shutdown_flag {
@@ -183,12 +183,12 @@ impl Player {
         self.sink.is_paused()
     }
 
-    /// Checks if the player is playing.
+    /// Checks if the player is stopped.
     ///
     /// # Returns
-    /// `true` if the player is playing, otherwise `false`.
+    /// `true` if the player is stopped, otherwise `false`.
     #[inline]
-    pub fn is_playing(&self) -> bool {
+    pub fn is_stopped(&self) -> bool {
         self.sink.empty()
     }
 }
