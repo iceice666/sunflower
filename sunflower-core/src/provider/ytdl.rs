@@ -18,6 +18,8 @@ const DB_PATH: &str = "audio/yt-dlp/ytdl.sqlite";
 #[derive(Debug)]
 pub struct YtdlProvider {
     db_conn: Connection,
+    binary_path: String,
+    extra_args: Vec<String>,
 }
 
 impl PartialEq<Self> for YtdlProvider {
@@ -29,10 +31,14 @@ impl PartialEq<Self> for YtdlProvider {
 impl Eq for YtdlProvider {}
 
 impl YtdlProvider {
-    pub fn try_new() -> ProviderResult<Self> {
+    pub fn try_new(
+        binary_path: impl Into<String>,
+        extra_args: Vec<String>,
+    ) -> ProviderResult<Self> {
         info!("Initializing YtdlProvider");
+        let binary_path = binary_path.into();
 
-        match cmd!("yt-dlp", "--version").read() {
+        match cmd!(&binary_path, "--version").read() {
             Ok(version) => debug!("yt-dlp version: {}", version),
             Err(e) => {
                 error!("Failed to verify yt-dlp installation: {}", e);
@@ -68,7 +74,11 @@ impl YtdlProvider {
         ",
         )?;
 
-        Ok(Self { db_conn: conn })
+        Ok(Self {
+            db_conn: conn,
+            binary_path,
+            extra_args,
+        })
     }
 
     #[instrument(skip(self))]
@@ -146,13 +156,16 @@ impl ProviderTrait for YtdlProvider {
 
         debug!("Searching term:({}) with yt-dlp", ytdl_search_term);
         #[rustfmt::skip]
-        let output = cmd![
-            "yt-dlp",
+        let mut args = vec![
             "--no-playlist",
             "--print", "id",
             "--print", "fulltitle",
             ytdl_search_term,
-        ].read();
+        ];
+
+        args.extend(self.extra_args.iter().map(String::as_str));
+
+        let output = cmd(&self.binary_path, args).read();
 
         match output {
             Ok(output) => {
@@ -204,8 +217,7 @@ impl ProviderTrait for YtdlProvider {
 
         debug!("Downloading track with yt-dlp...");
         #[rustfmt::skip]
-        let output = cmd![
-            "yt-dlp",
+        let mut args = vec![
             "--no-keep-video",
             "--extract-audio",
             "--audio-format", "mp3",
@@ -215,8 +227,11 @@ impl ProviderTrait for YtdlProvider {
             "--print", "after_move:filepath",
             "--output", OUTPUT_TEMPLATE,
             uri,
-        ].read()?;
+        ];
 
+        args.extend(self.extra_args.iter().map(String::as_str));
+
+        let output = cmd(&self.binary_path, args).read()?;
         let mut iter = output.trim().lines();
         let (url, title, path) = match (iter.next(), iter.next(), iter.next()) {
             (Some(a), Some(b), Some(c)) => (a, b, c),
@@ -251,7 +266,7 @@ mod tests {
     fn test() -> anyhow::Result<()> {
         init_logger();
 
-        let mut provider = YtdlProvider::try_new()?;
+        let mut provider = YtdlProvider::try_new("ytdl", vec![])?;
 
         let result = provider.search("never gonna give you up", Some(5))?;
         println!("{:?}", result);
