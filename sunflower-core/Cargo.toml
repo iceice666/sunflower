@@ -16,7 +16,7 @@ path = "src/server.rs"
 # Audio
 rodio = { version = "0.20", features = ["symphonia-all"] }
 symphonia = "0.5.4"
-lofty = { version = "0.21", optional = true }
+lofty = { version = "0.21" }
 
 # Async & Concurrency
 tokio = { version = "1.41", features = ["full"] }
@@ -46,7 +46,7 @@ prost-types = "0.13"
 # Utilities
 time = { version = "0.3.36", features = ["local-offset"] }
 rand = "0.8.5"
-regex = { version = "1.5.5", optional = true }
+regex = { version = "1.5.5" }
 uuid = { version = "1.11", features = ["v4"] }
 bytes = "1.0"
 duct = "0.13.7"
@@ -56,11 +56,4 @@ rayon = "1.10.0"
 [build-dependencies]
 tonic-build = "*"
 
-[features]
-default = ["provider-local_file"]
-provider-all = ["provider-local_file", "provider-yt-dlp"]
-
-# Individual providers
-provider-local_file = ["dep:lofty", "dep:regex"]
-provider-yt-dlp = []
 
