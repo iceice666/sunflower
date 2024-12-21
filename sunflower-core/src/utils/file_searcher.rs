@@ -1,14 +1,8 @@
 use rayon::prelude::*;
 use regex::Regex;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-
-#[derive(Debug)]
-pub struct SearchResult {
-    filename: String,
-    filepath: PathBuf,
-    metadata: Option<std::fs::Metadata>,
-}
 
 pub struct FolderSearcher {
     folder: PathBuf,
@@ -35,9 +29,9 @@ impl FolderSearcher {
         self
     }
 
-    pub fn search(&self, pattern: Regex) -> std::io::Result<Vec<SearchResult>> {
+    pub fn search(&self, pattern: Regex) -> std::io::Result<HashMap<String, String>> {
         let dir = &self.folder;
-        let results = Arc::new(Mutex::new(Vec::new()));
+        let results = Arc::new(Mutex::new(HashMap::new()));
         let count = Arc::new(Mutex::new(0usize));
 
         self.search_internal(dir, &pattern, &results, &count)?;
@@ -49,21 +43,14 @@ impl FolderSearcher {
         &self,
         dir: &Path,
         pattern: &Regex,
-        results: &Arc<Mutex<Vec<SearchResult>>>,
+        results: &Arc<Mutex<HashMap<String, String>>>,
         count: &Arc<Mutex<usize>>,
     ) -> std::io::Result<()> {
         let entries: Vec<_> = dir.read_dir()?.collect::<Result<_, _>>()?;
 
-        // Process entries in parallel for large directories
-        if entries.len() > 100 {
-            entries
-                .par_iter()
-                .try_for_each(|entry| self.process_entry(entry, &pattern, results, count))?;
-        } else {
-            entries
-                .iter()
-                .try_for_each(|entry| self.process_entry(entry, &pattern, results, count))?;
-        }
+        entries
+            .par_iter()
+            .try_for_each(|entry| self.process_entry(entry, pattern, results, count))?;
 
         Ok(())
     }
@@ -72,7 +59,7 @@ impl FolderSearcher {
         &self,
         entry: &std::fs::DirEntry,
         pattern: &Regex,
-        results: &Arc<Mutex<Vec<SearchResult>>>,
+        results: &Arc<Mutex<HashMap<String, String>>>,
         count: &Arc<Mutex<usize>>,
     ) -> std::io::Result<()> {
         let path = entry.path();
@@ -85,13 +72,6 @@ impl FolderSearcher {
             }
         }
 
-        // Handle symlinks
-        let metadata = if metadata.is_symlink() {
-            return Ok(());
-        } else {
-            metadata
-        };
-
         if metadata.is_dir() && self.recursive {
             self.search_internal(&path, pattern, results, count)?;
         } else if metadata.is_file() {
@@ -101,11 +81,8 @@ impl FolderSearcher {
                     if pattern.is_match(filename_str) {
                         let mut results = results.lock().unwrap();
                         let mut count = count.lock().unwrap();
-                        results.push(SearchResult {
-                            filename: filename_str.to_string(),
-                            filepath: path,
-                            metadata: Some(metadata),
-                        });
+                        results
+                            .insert(filename_str.to_string(), path.to_string_lossy().to_string());
                         *count += 1;
                     }
                 }
