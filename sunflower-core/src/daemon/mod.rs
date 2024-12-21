@@ -30,34 +30,34 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    /// Creates a new instance of the Daemon wrapped in an Arc.
-    ///
-    /// Returns an Arc<Daemon> to allow shared ownership across threads.
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self {
+    /// Creates a new instance of the Daemon.
+    /// And starts the audio player thread and initializes the playing state.
+    pub fn new() -> Self {
+        let this = Self {
             player: Player::new(),
             state: Mutex::new(PlayerState::new()),
             provider_registry: Mutex::new(ProviderRegistry::new()),
             event_task_handle: Mutex::new(None),
             shutdown_flag: Arc::new(Mutex::new(false)),
             __started_time: std::time::Instant::now(),
-        })
+        };
+
+        this.start_player_thread();
+
+        this
     }
 
-    /// Starts the audio player thread and initializes the playing state.
-    ///
     /// This method runs in a dedicated thread and continuously processes audio
     /// through the player's main loop.
     /// It uses the `make_source` method to
     /// create new audio sources as needed.
     #[instrument(skip(self))]
-    fn start_player_thread(self: Arc<Self>) {
+    fn start_player_thread(&self) {
         info!("Starting player thread");
         self.state.lock().set_playing(true);
 
-        let this = self.clone();
-        let source_maker = || this.clone().make_source();
-        this.player.main_loop(source_maker)
+        let source_maker = || self.make_source();
+        self.player.main_loop(source_maker);
     }
 
     /// Creates a new audio source with retry logic.
@@ -70,7 +70,7 @@ impl Daemon {
     /// # Returns
     /// Option<RawAudioSource> - The created audio source if successful
     #[instrument(skip(self))]
-    fn make_source(self: Arc<Self>) -> Option<RawAudioSource> {
+    fn make_source(&self) -> Option<RawAudioSource> {
         const MAX_RETRIES: u32 = 5;
         const RETRY_DELAY_SECS: u64 = 5;
 
