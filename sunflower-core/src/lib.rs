@@ -7,6 +7,7 @@ pub(crate) mod source;
 pub(crate) mod utils;
 
 pub use crate::daemon::Daemon;
+pub use crate::protocol::proto::player_service_server::PlayerServiceServer;
 
 pub fn init_logger() {
     #[cfg(debug_assertions)]
