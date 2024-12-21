@@ -91,7 +91,17 @@ macro_rules! define_source_kinds {
         }
         )*
 
+        impl SourceKinds {
+            pub fn get_source_kind(&self) -> &'static str {
+                match self {
+                    Self::$f_name(_) => stringify!($f_name)
+                    $(,Self::$name(_) => stringify!($name))*
+                }
+            }
+        }
+
         impl SourceTrait for SourceKinds {
+
             fn info(&self) -> SourceResult<SourceInfo> {
                 match self {
                     Self::$f_name(kind) => kind.info()
