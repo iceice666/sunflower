@@ -25,7 +25,6 @@ pub fn init_logger() {
         .try_init();
 }
 
-
 pub mod version {
     include!(concat!(env!("OUT_DIR"), "/git_hash.rs"));
 }

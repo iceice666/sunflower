@@ -9,13 +9,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let daemon = Daemon::new();
 
-    let service:PlayerServiceServer<Daemon> = PlayerServiceServer::new(daemon);
+    let service: PlayerServiceServer<Daemon> = PlayerServiceServer::new(daemon);
 
-    Server::builder()
-        .add_service(service)
-        .serve(addr)
-        .await
-        ?;
+    Server::builder().add_service(service).serve(addr).await?;
 
     Ok(())
 }
