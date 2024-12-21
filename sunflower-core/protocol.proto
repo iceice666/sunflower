@@ -28,7 +28,7 @@ message HealthCheckRequest { bool terminate = 1; }
 
 message HealthCheckResponse {
   bool is_alive = 1;
-  string version = 2;
+  string commit_hash = 2;
   string uptime = 3;
 }
 
@@ -94,21 +94,18 @@ message QueueRequest {
   oneof action {
     AddTrackRequest add_track = 1;
     RemoveTrackRequest remove_track = 2;
-    ClearQueueRequest clear_queue = 3;
-    MoveTrackRequest move_track = 4;
+    google.protobuf.Empty clear_queue = 3;
+    google.protobuf.Empty get_queue = 4;
   }
 }
 
 message AddTrackRequest {
-  Track track = 1;
-  optional uint32 index = 2;
+  string provider_id = 1;
+  string track_id = 2;
 }
 
 message RemoveTrackRequest { uint32 index = 1; }
 
-message ClearQueueRequest {
-  bool keep_current = 1; // Whether to keep currently playing track
-}
 
 message MoveTrackRequest {
   uint32 from_index = 1;
@@ -116,14 +113,14 @@ message MoveTrackRequest {
 }
 
 message QueueResponse {
-  repeated Track tracks = 1;
+  repeated string tracks = 1;
   uint32 current_index = 2;
 }
 
 // Track related messages
 message Track {
   string id = 1;
-  string provider_id = 2;
+  string source_kind = 2;
   string title = 3;
   map<string, string> metadata = 4;
 }
@@ -169,8 +166,7 @@ message ProviderResponse {
 message SearchRequest {
   string query = 1;
   repeated string provider_ids = 2;
-  uint32 max_results = 3;
-  map<string, string> filters = 4; // Added search filters
+  optional uint32 max_results = 3;
 }
 
 message SearchResponse {
@@ -178,6 +174,5 @@ message SearchResponse {
 }
 
 message ProviderSearchResults {
-  repeated Track tracks = 1;
-  bool has_more = 2; // Indication if more results are available
+  map<string, string> results = 1; // track_id : track_result
 }
