@@ -1,15 +1,11 @@
-mod handler;
+mod grpc_server;
 
-use crate::daemon::handler::Handler;
 use crate::player::{Player, PlayerState};
-use crate::protocol::{Request, RequestKind, Response, ResponseKind};
 use crate::provider::ProviderRegistry;
 use crate::source::RawAudioSource;
 
 use parking_lot::Mutex;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 /// A daemon that manages audio playback and handles client requests.
@@ -28,6 +24,9 @@ pub struct Daemon {
     event_task_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Flag to coordinate shutdown across threads
     shutdown_flag: Arc<Mutex<bool>>,
+
+    // internal use
+    pub(self) __started_time: std::time::Instant,
 }
 
 impl Daemon {
@@ -41,6 +40,7 @@ impl Daemon {
             provider_registry: Mutex::new(ProviderRegistry::new()),
             event_task_handle: Mutex::new(None),
             shutdown_flag: Arc::new(Mutex::new(false)),
+            __started_time: std::time::Instant::now(),
         })
     }
 
@@ -58,78 +58,6 @@ impl Daemon {
         let this = self.clone();
         let source_maker = || this.clone().make_source();
         this.player.main_loop(source_maker)
-    }
-
-    /// Handles incoming requests and manages response distribution.
-    ///
-    /// This method runs in a dedicated async task and:
-    /// 1. Receives requests from clients
-    /// 2. Processes them asynchronously
-    /// 3. Sends responses back through the response channel
-    ///
-    /// # Arguments
-    /// * `req_rx` - Receiver for incoming requests
-    /// * `res_tx` - Sender for outgoing responses
-    #[instrument(skip(self, req_rx, res_tx))]
-    async fn start_event_thread(
-        self: Arc<Self>,
-        mut req_rx: UnboundedReceiver<Request>,
-        res_tx: UnboundedSender<Response>,
-    ) {
-        while let Some(request) = req_rx.recv().await {
-            let this = self.clone();
-            let tx = res_tx.clone();
-
-            // Spawn a new task for each request to handle them concurrently
-            tokio::spawn(async move {
-                let id = request.id;
-                trace!(?id, "Processing incoming request");
-
-                let kind = match request.kind {
-                    RequestKind::AreYouAlive => ResponseKind::ImAlive,
-                    RequestKind::Terminate => {
-                        this.shutdown();
-                        ResponseKind::Ok(None)
-                    }
-                    RequestKind::Player(r) => this.handle(r),
-                    RequestKind::State(r) => this.handle(r),
-                    RequestKind::Track(r) => this.handle(r),
-                    RequestKind::Provider(r) => this.handle(r),
-                };
-
-                if let Err(e) = tx.send(Response {
-                    kind,
-                    id: id.clone(),
-                }) {
-                    error!(request_id = ?id, "Failed to send response: {}", e);
-                } else {
-                    trace!(request_id = ?id, "Successfully processed request");
-                }
-            });
-        }
-    }
-
-    /// Initializes and starts the daemon, returning communication channels.
-    ///
-    /// # Returns
-    /// A tuple containing:
-    /// * Sender for sending requests to the daemon
-    /// * Receiver for receiving responses from the daemon
-    #[instrument(skip(self))]
-    pub fn start(self: Arc<Self>) -> (UnboundedSender<Request>, UnboundedReceiver<Response>) {
-        info!("Initializing daemon startup sequence");
-        let (req_tx, req_rx) = mpsc::unbounded_channel();
-        let (res_tx, res_rx) = mpsc::unbounded_channel();
-
-        // Start the player thread in a blocking context since it may perform I/O
-        let this = self.clone();
-        tokio::task::spawn_blocking(move || this.clone().start_player_thread());
-
-        // Start the event handling thread
-        let event = tokio::spawn(self.clone().start_event_thread(req_rx, res_tx));
-        self.event_task_handle.lock().replace(event);
-
-        (req_tx, res_rx)
     }
 
     /// Creates a new audio source with retry logic.
@@ -198,7 +126,7 @@ impl Daemon {
     /// 1. Set shutdown flag
     /// 2. Stops the player
     /// 3. Abort any running tasks
-    pub fn shutdown(self: Arc<Self>) {
+    pub fn shutdown(&self) {
         info!("Initiating daemon shutdown sequence");
         *self.shutdown_flag.lock() = true;
 
@@ -215,29 +143,19 @@ impl Daemon {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::init_logger;
-    use tokio::test;
+use crate::protocol::proto::player_state::PlaybackState;
+impl Daemon {
+    pub(crate) fn get_playback_state(&self) -> PlaybackState {
+        let state = self.state.lock();
 
-    #[test]
-    async fn test_daemon_start_stop() {
-        init_logger();
-
-        let daemon = Daemon::new();
-        let (tx, mut rx) = daemon.clone().start();
-
-        // Verify daemon responsiveness
-        tx.send(RequestKind::AreYouAlive.into())
-            .expect("Failed to send alive check request");
-
-        let response = rx
-            .recv()
-            .await
-            .expect("Failed to receive alive check response");
-        assert!(matches!(response.kind, ResponseKind::ImAlive));
-
-        daemon.shutdown();
+        if self.player.is_stopped() {
+            PlaybackState::Stopped
+        } else if state.is_playing() {
+            PlaybackState::Playing
+        } else if self.player.is_paused() {
+            PlaybackState::Paused
+        } else {
+            PlaybackState::PlaybackUnknown
+        }
     }
 }
