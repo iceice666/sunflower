@@ -157,6 +157,7 @@ type Song struct {
 	LoudnessDb      pgtype.Float8      `db:"loudness_db" json:"loudness_db"`
 	LastResolvedAt  pgtype.Timestamptz `db:"last_resolved_at" json:"last_resolved_at"`
 	RawMetadata     json.RawMessage    `db:"raw_metadata" json:"raw_metadata"`
+	LocalPath       pgtype.Text        `db:"local_path" json:"local_path"`
 }
 
 type SongArtist struct {

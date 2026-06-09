@@ -56,6 +56,10 @@ func UpsertTrack(ctx context.Context, pool *pgxpool.Pool, m *TrackMeta) error {
 	if m.DurationMs > 0 {
 		durationMs = pgtype.Int4{Int32: int32(m.DurationMs), Valid: true}
 	}
+	localPath := pgtype.Text{}
+	if m.Path != "" {
+		localPath = pgtype.Text{String: m.Path, Valid: true}
+	}
 	if _, err = q.UpsertSong(ctx, gen.UpsertSongParams{
 		MediaID:         m.MediaID,
 		SourceType:      "local",
@@ -64,6 +68,7 @@ func UpsertTrack(ctx context.Context, pool *pgxpool.Pool, m *TrackMeta) error {
 		AlbumID:         albumRef,
 		PrimaryArtistID: artistRef,
 		RawMetadata:     emptyMeta,
+		LocalPath:       localPath,
 	}); err != nil {
 		return err
 	}

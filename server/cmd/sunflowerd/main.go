@@ -48,6 +48,7 @@ func main() {
 		DB:      pool,
 		Jobs:    jobRegistry,
 		Scanner: scanner,
+		DataDir: cfg.DataDir,
 	})
 
 	srv := &http.Server{

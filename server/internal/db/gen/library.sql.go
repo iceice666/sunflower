@@ -12,6 +12,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getSongStream = `-- name: GetSongStream :one
+SELECT media_id, local_path FROM songs WHERE media_id = $1
+`
+
+type GetSongStreamRow struct {
+	MediaID   string      `db:"media_id" json:"media_id"`
+	LocalPath pgtype.Text `db:"local_path" json:"local_path"`
+}
+
+func (q *Queries) GetSongStream(ctx context.Context, mediaID string) (GetSongStreamRow, error) {
+	row := q.db.QueryRow(ctx, getSongStream, mediaID)
+	var i GetSongStreamRow
+	err := row.Scan(&i.MediaID, &i.LocalPath)
+	return i, err
+}
+
 const listAlbums = `-- name: ListAlbums :many
 SELECT media_id, source_type, title, primary_artist_id, year, available, raw_metadata, created_at FROM albums
 WHERE available = true
@@ -93,9 +109,27 @@ func (q *Queries) ListArtists(ctx context.Context, arg ListArtistsParams) ([]Art
 }
 
 const listSongs = `-- name: ListSongs :many
-SELECT media_id, source_type, title, duration_ms, album_id, primary_artist_id, explicit, video_only, available, loudness_db, last_resolved_at, raw_metadata FROM songs
-WHERE available = true
-ORDER BY title
+SELECT
+    s.media_id,
+    s.source_type,
+    s.title,
+    s.duration_ms,
+    s.album_id,
+    s.primary_artist_id,
+    s.explicit,
+    s.video_only,
+    s.available,
+    s.loudness_db,
+    s.last_resolved_at,
+    s.raw_metadata,
+    COALESCE(ar.name, '')    AS artist_name,
+    COALESCE(al.title, '')   AS album_title,
+    (s.album_id IS NOT NULL) AS has_art
+FROM songs s
+LEFT JOIN artists ar ON ar.media_id = s.primary_artist_id
+LEFT JOIN albums  al ON al.media_id = s.album_id
+WHERE s.available = true
+ORDER BY s.title
 LIMIT $2 OFFSET $1
 `
 
@@ -104,15 +138,33 @@ type ListSongsParams struct {
 	PageSize   int32 `db:"page_size" json:"page_size"`
 }
 
-func (q *Queries) ListSongs(ctx context.Context, arg ListSongsParams) ([]Song, error) {
+type ListSongsRow struct {
+	MediaID         string             `db:"media_id" json:"media_id"`
+	SourceType      string             `db:"source_type" json:"source_type"`
+	Title           string             `db:"title" json:"title"`
+	DurationMs      pgtype.Int4        `db:"duration_ms" json:"duration_ms"`
+	AlbumID         pgtype.Text        `db:"album_id" json:"album_id"`
+	PrimaryArtistID pgtype.Text        `db:"primary_artist_id" json:"primary_artist_id"`
+	Explicit        bool               `db:"explicit" json:"explicit"`
+	VideoOnly       bool               `db:"video_only" json:"video_only"`
+	Available       bool               `db:"available" json:"available"`
+	LoudnessDb      pgtype.Float8      `db:"loudness_db" json:"loudness_db"`
+	LastResolvedAt  pgtype.Timestamptz `db:"last_resolved_at" json:"last_resolved_at"`
+	RawMetadata     json.RawMessage    `db:"raw_metadata" json:"raw_metadata"`
+	ArtistName      string             `db:"artist_name" json:"artist_name"`
+	AlbumTitle      string             `db:"album_title" json:"album_title"`
+	HasArt          interface{}        `db:"has_art" json:"has_art"`
+}
+
+func (q *Queries) ListSongs(ctx context.Context, arg ListSongsParams) ([]ListSongsRow, error) {
 	rows, err := q.db.Query(ctx, listSongs, arg.PageOffset, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Song
+	var items []ListSongsRow
 	for rows.Next() {
-		var i Song
+		var i ListSongsRow
 		if err := rows.Scan(
 			&i.MediaID,
 			&i.SourceType,
@@ -126,6 +178,9 @@ func (q *Queries) ListSongs(ctx context.Context, arg ListSongsParams) ([]Song, e
 			&i.LoudnessDb,
 			&i.LastResolvedAt,
 			&i.RawMetadata,
+			&i.ArtistName,
+			&i.AlbumTitle,
+			&i.HasArt,
 		); err != nil {
 			return nil, err
 		}
@@ -216,15 +271,16 @@ func (q *Queries) UpsertArtist(ctx context.Context, arg UpsertArtistParams) (Art
 }
 
 const upsertSong = `-- name: UpsertSong :one
-INSERT INTO songs (media_id, source_type, title, duration_ms, album_id, primary_artist_id, raw_metadata)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO songs (media_id, source_type, title, duration_ms, album_id, primary_artist_id, raw_metadata, local_path)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (media_id) DO UPDATE SET
     title             = EXCLUDED.title,
     duration_ms       = EXCLUDED.duration_ms,
     album_id          = EXCLUDED.album_id,
     primary_artist_id = EXCLUDED.primary_artist_id,
-    raw_metadata      = EXCLUDED.raw_metadata
-RETURNING media_id, source_type, title, duration_ms, album_id, primary_artist_id, explicit, video_only, available, loudness_db, last_resolved_at, raw_metadata
+    raw_metadata      = EXCLUDED.raw_metadata,
+    local_path        = EXCLUDED.local_path
+RETURNING media_id, source_type, title, duration_ms, album_id, primary_artist_id, explicit, video_only, available, loudness_db, last_resolved_at, raw_metadata, local_path
 `
 
 type UpsertSongParams struct {
@@ -235,6 +291,7 @@ type UpsertSongParams struct {
 	AlbumID         pgtype.Text     `db:"album_id" json:"album_id"`
 	PrimaryArtistID pgtype.Text     `db:"primary_artist_id" json:"primary_artist_id"`
 	RawMetadata     json.RawMessage `db:"raw_metadata" json:"raw_metadata"`
+	LocalPath       pgtype.Text     `db:"local_path" json:"local_path"`
 }
 
 func (q *Queries) UpsertSong(ctx context.Context, arg UpsertSongParams) (Song, error) {
@@ -246,6 +303,7 @@ func (q *Queries) UpsertSong(ctx context.Context, arg UpsertSongParams) (Song, e
 		arg.AlbumID,
 		arg.PrimaryArtistID,
 		arg.RawMetadata,
+		arg.LocalPath,
 	)
 	var i Song
 	err := row.Scan(
@@ -261,6 +319,7 @@ func (q *Queries) UpsertSong(ctx context.Context, arg UpsertSongParams) (Song, e
 		&i.LoudnessDb,
 		&i.LastResolvedAt,
 		&i.RawMetadata,
+		&i.LocalPath,
 	)
 	return i, err
 }

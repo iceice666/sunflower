@@ -172,11 +172,15 @@ jobDone:
 	songsResp.Body.Close()
 
 	// Decode into strict flat struct — if pgtype wrappers leak, this fails.
+	// artist_name and album_title must be plain strings (not {"String":…,"Valid":…})
+	// because COALESCE in the query prevents NULL from flowing through to pgtype.
 	var songsBody struct {
 		Songs []struct {
-			MediaID    string `json:"media_id"`
-			Title      string `json:"title"`
-			SourceType string `json:"source_type"`
+			MediaID     string `json:"media_id"`
+			Title       string `json:"title"`
+			SourceType  string `json:"source_type"`
+			ArtistName  string `json:"artist_name"`
+			AlbumTitle  string `json:"album_title"`
 		} `json:"songs"`
 	}
 	if err := json.Unmarshal(raw, &songsBody); err != nil {
@@ -194,6 +198,12 @@ jobDone:
 		}
 		if s.SourceType != "local" {
 			t.Errorf("song source_type: got %q, want %q", s.SourceType, "local")
+		}
+		if s.ArtistName != "Artist One" {
+			t.Errorf("song artist_name: got %q, want %q", s.ArtistName, "Artist One")
+		}
+		if s.AlbumTitle != "Album Alpha" {
+			t.Errorf("song album_title: got %q, want %q", s.AlbumTitle, "Album Alpha")
 		}
 	}
 }
@@ -223,6 +233,169 @@ func TestUnauthenticatedReturns401(t *testing.T) {
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s %s: want 401, got %d", tc.method, tc.path, resp.StatusCode)
 		}
+	}
+}
+
+// TestM2StreamEndpoints verifies the M2 audio stream and album art routes.
+//
+// Requires Docker / OrbStack for the testcontainers Postgres instance.
+func TestM2StreamEndpoints(t *testing.T) {
+	ctx := context.Background()
+
+	// --- Spin up Postgres (same pattern as TestM1Integration) ---
+	pgc, err := tcpostgres.Run(ctx,
+		"postgres:16-alpine",
+		tcpostgres.WithDatabase("sunflower"),
+		tcpostgres.WithUsername("postgres"),
+		tcpostgres.WithPassword("postgres"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2),
+		),
+	)
+	if err != nil {
+		t.Fatalf("start postgres container: %v", err)
+	}
+	t.Cleanup(func() { _ = pgc.Terminate(ctx) })
+
+	dsn, err := pgc.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		t.Fatalf("get connection string: %v", err)
+	}
+
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	sqlDB := stdlib.OpenDB(*cfg.ConnConfig)
+	defer sqlDB.Close()
+	goose.SetBaseFS(migrations.Files)
+	if err := goose.SetDialect("postgres"); err != nil {
+		t.Fatal(err)
+	}
+	if err := goose.UpContext(ctx, sqlDB, "."); err != nil {
+		t.Fatalf("migrations: %v", err)
+	}
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("pgxpool: %v", err)
+	}
+	defer pool.Close()
+
+	dataDir := t.TempDir()
+	scanner := library.NewScanner(pool, dataDir, zerolog.Nop())
+	jobReg := jobs.NewRegistry()
+	handler := api.NewRouter(api.Deps{
+		Log:     zerolog.Nop(),
+		DB:      pool,
+		Jobs:    jobReg,
+		Scanner: scanner,
+		DataDir: dataDir,
+	})
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	// --- Register ---
+	var reg struct{ Token string `json:"token"` }
+	mustDecode(t, doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
+		map[string]string{"device_name": "test", "platform": "test", "client_version": "0.0.1"}, "").Body,
+		&reg)
+	if reg.Token == "" {
+		t.Fatal("register-device: empty token")
+	}
+
+	// --- Write a known MP3 to a temp dir and scan it ---
+	musicDir := t.TempDir()
+	mp3Bytes := makeMP3("Stream Test Track", "Artist One", "Album Alpha", 1, 2024)
+	mp3Path := filepath.Join(musicDir, "stream_test.mp3")
+	if err := os.WriteFile(mp3Path, mp3Bytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanResp := doJSON(t, srv, http.MethodPost, "/api/v1/library/scan",
+		map[string]any{"roots": []string{musicDir}}, reg.Token)
+	if scanResp.StatusCode != http.StatusOK {
+		t.Fatalf("start-scan: want 200, got %d", scanResp.StatusCode)
+	}
+	var scan struct{ JobID string `json:"job_id"` }
+	mustDecode(t, scanResp.Body, &scan)
+
+	// Wait for scan to finish.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		jobResp := doJSON(t, srv, http.MethodGet, "/api/v1/jobs/"+scan.JobID, nil, reg.Token)
+		var jobBody struct{ Status string `json:"status"` }
+		mustDecode(t, jobResp.Body, &jobBody)
+		if jobBody.Status == "completed" {
+			break
+		}
+		if jobBody.Status == "failed" {
+			t.Fatal("scan job failed")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Get the media_id for the scanned track.
+	songsResp := doJSON(t, srv, http.MethodGet, "/api/v1/library/songs", nil, reg.Token)
+	if songsResp.StatusCode != http.StatusOK {
+		t.Fatalf("list-songs: want 200, got %d", songsResp.StatusCode)
+	}
+	var songsBody struct {
+		Songs []struct {
+			MediaID string `json:"media_id"`
+		} `json:"songs"`
+	}
+	mustDecode(t, songsResp.Body, &songsBody)
+	if len(songsBody.Songs) != 1 {
+		t.Fatalf("want 1 song, got %d", len(songsBody.Songs))
+	}
+	mediaID := songsBody.Songs[0].MediaID
+
+	// --- 1. Stream endpoint returns 200 and the correct bytes ---
+	streamURL := "/api/v1/library/songs/" + mediaID + "/stream"
+	streamResp := doJSON(t, srv, http.MethodGet, streamURL, nil, reg.Token)
+	if streamResp.StatusCode != http.StatusOK {
+		t.Fatalf("stream: want 200, got %d", streamResp.StatusCode)
+	}
+	gotBytes, _ := io.ReadAll(streamResp.Body)
+	streamResp.Body.Close()
+	if !bytes.Equal(gotBytes, mp3Bytes) {
+		t.Errorf("stream body mismatch: got %d bytes, want %d", len(gotBytes), len(mp3Bytes))
+	}
+
+	// --- 2. Range request → 206 with Content-Range ---
+	rangeReq, _ := http.NewRequest(http.MethodGet, srv.URL+streamURL, nil)
+	rangeReq.Header.Set("Authorization", "Bearer "+reg.Token)
+	rangeEnd := strconv.Itoa(min(99, len(mp3Bytes)-1))
+	rangeReq.Header.Set("Range", "bytes=0-"+rangeEnd)
+	rangeResp, err := http.DefaultClient.Do(rangeReq)
+	if err != nil {
+		t.Fatalf("range request: %v", err)
+	}
+	rangeResp.Body.Close()
+	if rangeResp.StatusCode != http.StatusPartialContent {
+		t.Errorf("range: want 206, got %d", rangeResp.StatusCode)
+	}
+	if cr := rangeResp.Header.Get("Content-Range"); cr == "" {
+		t.Error("range: missing Content-Range header")
+	}
+
+	// --- 3. Unauthenticated stream → 401 ---
+	unauth, _ := http.Get(srv.URL + streamURL)
+	unauth.Body.Close()
+	if unauth.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated stream: want 401, got %d", unauth.StatusCode)
+	}
+
+	// --- 4. Art route returns 404 for fixture without embedded cover art ---
+	// makeMP3 emits no APIC frame, so the scanner writes no art file.
+	// We use "local:000000000000" as a placeholder (any unknown album_media_id works).
+	artResp := doJSON(t, srv, http.MethodGet,
+		"/api/v1/library/albums/local%3A000000000000/art", nil, reg.Token)
+	artResp.Body.Close()
+	if artResp.StatusCode != http.StatusNotFound {
+		t.Errorf("art (no cover): want 404, got %d", artResp.StatusCode)
 	}
 }
 

@@ -20,9 +20,12 @@ type Deps struct {
 	DB      *pgxpool.Pool
 	Jobs    *jobs.Registry
 	Scanner *library.Scanner
+	// DataDir is the root directory for server-managed data files (cover art, etc.).
+	// Required by the stream and art handlers; matches config.Config.DataDir.
+	DataDir string
 }
 
-// NewRouter builds the chi router with all M0–M1 routes and middleware.
+// NewRouter builds the chi router with all M0–M2 routes and middleware.
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 
@@ -42,6 +45,8 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/library/songs", d.listSongs)
 			r.Get("/library/albums", d.listAlbums)
 			r.Get("/library/artists", d.listArtists)
+			r.Get("/library/songs/{media_id}/stream", d.streamSong)
+			r.Get("/library/albums/{album_media_id}/art", d.serveAlbumArt)
 			r.Get("/jobs/{id}", d.getJob)
 		})
 	})
