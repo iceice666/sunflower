@@ -1,0 +1,44 @@
+name: sunflower
+description: Sunflower music client — self-hosted, cross-platform.
+publish_to: 'none'
+version: 0.2.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Audio
+  just_audio: ^0.9.41
+  audio_service: ^0.18.15
+
+  # Networking
+  dio: ^5.7.0
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Storage
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.5
+  path_provider: ^2.1.5
+
+  # Utilities
+  uuid: ^4.5.1
+
+  # UI
+  cached_network_image: ^3.4.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  mockito: ^5.4.5
+  build_runner: ^2.4.13
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
