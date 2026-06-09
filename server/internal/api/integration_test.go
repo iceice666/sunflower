@@ -176,11 +176,12 @@ jobDone:
 	// because COALESCE in the query prevents NULL from flowing through to pgtype.
 	var songsBody struct {
 		Songs []struct {
-			MediaID     string `json:"media_id"`
-			Title       string `json:"title"`
-			SourceType  string `json:"source_type"`
-			ArtistName  string `json:"artist_name"`
-			AlbumTitle  string `json:"album_title"`
+			MediaID    string `json:"media_id"`
+			Title      string `json:"title"`
+			SourceType string `json:"source_type"`
+			ArtistName string `json:"artist_name"`
+			AlbumTitle string `json:"album_title"`
+			HasArt     bool   `json:"has_art"`
 		} `json:"songs"`
 	}
 	if err := json.Unmarshal(raw, &songsBody); err != nil {
@@ -204,6 +205,12 @@ jobDone:
 		}
 		if s.AlbumTitle != "Album Alpha" {
 			t.Errorf("song album_title: got %q, want %q", s.AlbumTitle, "Album Alpha")
+		}
+		// has_art is true whenever album_id IS NOT NULL — all fixture tracks have an
+		// album, so the sql boolean expression (s.album_id IS NOT NULL) must be true.
+		// This also exercises the interface{}→bool type assertion in toSongResponse.
+		if !s.HasArt {
+			t.Errorf("song %q: want has_art=true (has an album), got false", s.MediaID)
 		}
 	}
 }
@@ -297,7 +304,9 @@ func TestM2StreamEndpoints(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	// --- Register ---
-	var reg struct{ Token string `json:"token"` }
+	var reg struct {
+		Token string `json:"token"`
+	}
 	mustDecode(t, doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
 		map[string]string{"device_name": "test", "platform": "test", "client_version": "0.0.1"}, "").Body,
 		&reg)
@@ -318,14 +327,18 @@ func TestM2StreamEndpoints(t *testing.T) {
 	if scanResp.StatusCode != http.StatusOK {
 		t.Fatalf("start-scan: want 200, got %d", scanResp.StatusCode)
 	}
-	var scan struct{ JobID string `json:"job_id"` }
+	var scan struct {
+		JobID string `json:"job_id"`
+	}
 	mustDecode(t, scanResp.Body, &scan)
 
 	// Wait for scan to finish.
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		jobResp := doJSON(t, srv, http.MethodGet, "/api/v1/jobs/"+scan.JobID, nil, reg.Token)
-		var jobBody struct{ Status string `json:"status"` }
+		var jobBody struct {
+			Status string `json:"status"`
+		}
 		mustDecode(t, jobResp.Body, &jobBody)
 		if jobBody.Status == "completed" {
 			break
@@ -470,7 +483,7 @@ func makeMP3(title, artist, album string, trackNum, year int) []byte {
 	var out bytes.Buffer
 	out.WriteString("ID3")
 	out.Write([]byte{3, 0, 0}) // ID3v2.3, minor 0, no flags
-	out.Write([]byte{ // syncsafe 28-bit tag size
+	out.Write([]byte{          // syncsafe 28-bit tag size
 		byte((tagSize >> 21) & 0x7F),
 		byte((tagSize >> 14) & 0x7F),
 		byte((tagSize >> 7) & 0x7F),

@@ -28,14 +28,14 @@ func (d *Deps) startScan(w http.ResponseWriter, r *http.Request) {
 // All nullable fields are unwrapped from pgtype wrappers so the client gets
 // plain JSON values (strings, ints, nulls) rather than {"String":…,"Valid":…}.
 type songResponse struct {
-	MediaID     string  `json:"media_id"`
-	SourceType  string  `json:"source_type"`
-	Title       string  `json:"title"`
-	DurationMs  *int32  `json:"duration_ms"`
-	AlbumID     *string `json:"album_id"`
-	ArtistName  string  `json:"artist_name"`
-	AlbumTitle  string  `json:"album_title"`
-	HasArt      bool    `json:"has_art"`
+	MediaID    string  `json:"media_id"`
+	SourceType string  `json:"source_type"`
+	Title      string  `json:"title"`
+	DurationMs *int32  `json:"duration_ms"`
+	AlbumID    *string `json:"album_id"`
+	ArtistName string  `json:"artist_name"`
+	AlbumTitle string  `json:"album_title"`
+	HasArt     bool    `json:"has_art"`
 }
 
 func toSongResponse(row gen.ListSongsRow) songResponse {
