@@ -11,10 +11,8 @@ import (
 )
 
 // TestHealthz verifies the /healthz endpoint without a database.
-// This is a pure unit test — the router is built with a no-op logger and
-// exercised via httptest; no Postgres connection is required.
 func TestHealthz(t *testing.T) {
-	handler := api.NewRouter(zerolog.Nop())
+	handler := api.NewRouter(api.Deps{Log: zerolog.Nop()})
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()

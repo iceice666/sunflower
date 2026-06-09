@@ -15,6 +15,9 @@ type Config struct {
 	// CookieKey is the 32-byte hex key for libsodium cookie encryption
 	// (SUNFLOWER_COOKIE_KEY). Not validated in M0 — cookie logic lands later.
 	CookieKey string
+
+	// DataDir is the root directory for server-managed data files (cover art, etc.).
+	DataDir string
 }
 
 // Load returns a Config populated from the environment.
@@ -24,6 +27,7 @@ func Load() Config {
 		ListenAddr:  envOr("LISTEN_ADDR", ":8080"),
 		DatabaseURL: envOr("DATABASE_URL", "postgres://postgres@localhost:5432/sunflower?sslmode=disable"),
 		CookieKey:   os.Getenv("SUNFLOWER_COOKIE_KEY"),
+		DataDir:     envOr("DATA_DIR", "./data"),
 	}
 }
 

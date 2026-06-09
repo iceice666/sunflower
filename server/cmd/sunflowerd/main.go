@@ -13,11 +13,12 @@ import (
 	"github.com/iceice666/sunflower/server/internal/api"
 	"github.com/iceice666/sunflower/server/internal/config"
 	"github.com/iceice666/sunflower/server/internal/db"
+	"github.com/iceice666/sunflower/server/internal/jobs"
+	"github.com/iceice666/sunflower/server/internal/library"
 	"github.com/rs/zerolog"
 )
 
 func main() {
-	// Structured logger — human-readable in development via ConsoleWriter.
 	log := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).
 		With().Timestamp().Logger()
 
@@ -27,7 +28,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Connect to Postgres.
 	pool, err := db.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to postgres")
@@ -35,16 +35,21 @@ func main() {
 	defer pool.Close()
 	log.Info().Str("url", cfg.DatabaseURL).Msg("postgres connected")
 
-	// Apply pending migrations on boot (D1 — also runnable via `make migrate`).
 	if err := db.Migrate(ctx, cfg.DatabaseURL); err != nil {
 		log.Fatal().Err(err).Msg("migration failed")
 	}
 	log.Info().Msg("migrations applied")
 
-	// Build the HTTP router.
-	handler := api.NewRouter(log)
+	scanner := library.NewScanner(pool, cfg.DataDir, log)
+	jobRegistry := jobs.NewRegistry()
 
-	// HTTP server with graceful shutdown.
+	handler := api.NewRouter(api.Deps{
+		Log:     log,
+		DB:      pool,
+		Jobs:    jobRegistry,
+		Scanner: scanner,
+	})
+
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
 		Handler:      handler,
@@ -53,7 +58,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Listen for OS signals in a goroutine; shut down gracefully on receipt.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 

@@ -1,5 +1,8 @@
 # M1 — Auth + Library Ingestion
 
+**Status: complete** — implemented 2026-06-09; all acceptance criteria verified.
+See implementation notes below.
+
 ## Demo target
 
 ```
@@ -84,3 +87,25 @@ server/db/queries/
 - Likes (M5).
 - YouTube catalog (M3+).
 - Multi-user (out of scope for v1 entirely).
+
+## Implementation notes
+
+**File placement** — auth registration lives in `internal/auth/auth.go` (not
+`device.go`); SQL queries are at `internal/db/query/` (not `db/queries/`).
+
+**sqlc jsonb override** — `sqlc.yaml` maps `jsonb → encoding/json.RawMessage`
+so API responses produce flat JSON objects rather than base64 blobs.
+
+**Pagination reserved keywords** — `@limit`/`@offset` are SQL reserved words
+and fail in sqlc named params; renamed to `@page_size`/`@page_offset`.
+
+**Year frame** — dhowden/tag reads `TYER` for year in ID3v2.3 files; `TDRC`
+is ID3v2.4-only. Test fixtures use `TYER`.
+
+**processed_files race fix** — `Scanner.Scan` returns `(int, error)`;
+`RunScanJob` uses a `sync.WaitGroup` to drain the progress goroutine before
+writing the final authoritative count in the `completed` update.
+
+**argon2id per-request cost** — HashToken (~50–100 ms) runs on every
+authenticated request. Acceptable at M1 scale; cache by token→device if M8
+tick rate makes it a bottleneck.

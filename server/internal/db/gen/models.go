@@ -5,6 +5,8 @@
 package gen
 
 import (
+	"encoding/json"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,7 +17,7 @@ type Album struct {
 	PrimaryArtistID pgtype.Text        `db:"primary_artist_id" json:"primary_artist_id"`
 	Year            pgtype.Int4        `db:"year" json:"year"`
 	Available       bool               `db:"available" json:"available"`
-	RawMetadata     []byte             `db:"raw_metadata" json:"raw_metadata"`
+	RawMetadata     json.RawMessage    `db:"raw_metadata" json:"raw_metadata"`
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
@@ -24,7 +26,7 @@ type Artist struct {
 	SourceType  string             `db:"source_type" json:"source_type"`
 	Name        string             `db:"name" json:"name"`
 	Available   bool               `db:"available" json:"available"`
-	RawMetadata []byte             `db:"raw_metadata" json:"raw_metadata"`
+	RawMetadata json.RawMessage    `db:"raw_metadata" json:"raw_metadata"`
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
@@ -104,10 +106,10 @@ type PlaylistItem struct {
 }
 
 type QueueItem struct {
-	QueueID    pgtype.UUID `db:"queue_id" json:"queue_id"`
-	Position   int32       `db:"position" json:"position"`
-	MediaID    string      `db:"media_id" json:"media_id"`
-	SourceData []byte      `db:"source_data" json:"source_data"`
+	QueueID    pgtype.UUID     `db:"queue_id" json:"queue_id"`
+	Position   int32           `db:"position" json:"position"`
+	MediaID    string          `db:"media_id" json:"media_id"`
+	SourceData json.RawMessage `db:"source_data" json:"source_data"`
 }
 
 type QueueSession struct {
@@ -118,14 +120,14 @@ type QueueSession struct {
 	SeedID    pgtype.Text        `db:"seed_id" json:"seed_id"`
 	Version   int64              `db:"version" json:"version"`
 	Title     pgtype.Text        `db:"title" json:"title"`
-	Items     []byte             `db:"items" json:"items"`
+	Items     json.RawMessage    `db:"items" json:"items"`
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type RecCache struct {
 	CacheKey    string             `db:"cache_key" json:"cache_key"`
 	UserID      pgtype.UUID        `db:"user_id" json:"user_id"`
-	Payload     []byte             `db:"payload" json:"payload"`
+	Payload     json.RawMessage    `db:"payload" json:"payload"`
 	GeneratedAt pgtype.Timestamptz `db:"generated_at" json:"generated_at"`
 	ExpiresAt   pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 }
@@ -154,7 +156,7 @@ type Song struct {
 	Available       bool               `db:"available" json:"available"`
 	LoudnessDb      pgtype.Float8      `db:"loudness_db" json:"loudness_db"`
 	LastResolvedAt  pgtype.Timestamptz `db:"last_resolved_at" json:"last_resolved_at"`
-	RawMetadata     []byte             `db:"raw_metadata" json:"raw_metadata"`
+	RawMetadata     json.RawMessage    `db:"raw_metadata" json:"raw_metadata"`
 }
 
 type SongArtist struct {
