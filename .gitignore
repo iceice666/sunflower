@@ -1,0 +1,16 @@
+# Nix
+result
+result-*
+.direnv/
+
+# Local Postgres (Nix-driven)
+server/.pgdata/
+server/.pgsock/
+
+# Go binaries
+server/sunflowerd
+
+# Editor
+.DS_Store
+*.swp
+*.swo
