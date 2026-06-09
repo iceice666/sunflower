@@ -4,7 +4,9 @@ This file provides guidance to agents when working with code in this repository.
 
 ## What this repository is
 
-**Sunflower** is a self-hosted music system: a Go server (`sunflowerd`) + a cross-platform Flutter client. The system is currently in the **planning phase** — no implementation code exists yet. All content is design documents and milestone plans.
+**Sunflower** is a self-hosted music system: a Go server (`sunflowerd`) + a cross-platform Flutter client.
+
+**Current status (2026-06-10):** M0, M1, and M2 are implemented and committed. The `server/` tree is a real Go module; the `client/` tree is a real Flutter project. Do not treat this as a planning-only repository.
 
 - `plans/README.md` — overview, locked decisions, milestone index
 - `plans/architecture.md` — static reference: component map, wire protocol, Postgres schema, server and client internals
