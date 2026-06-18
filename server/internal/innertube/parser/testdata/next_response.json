@@ -1,0 +1,93 @@
+{
+  "contents": {
+    "singleColumnMusicWatchNextResultsRenderer": {
+      "tabbedRenderer": {
+        "watchNextTabbedResultsRenderer": {
+          "tabs": [
+            {
+              "tabRenderer": {
+                "content": {
+                  "musicQueueRenderer": {
+                    "content": {
+                      "playlistPanelRenderer": {
+                        "contents": [
+                          {
+                            "playlistPanelVideoRenderer": {
+                              "videoId": "dQw4w9WgXcQ",
+                              "title": {
+                                "runs": [{"text": "Never Gonna Give You Up"}]
+                              },
+                              "shortBylineText": {
+                                "runs": [
+                                  {
+                                    "text": "Rick Astley",
+                                    "navigationEndpoint": {
+                                      "browseEndpoint": {
+                                        "browseId": "UC0uRtB7re3wFa4xfXFv9kMQ",
+                                        "browseEndpointContextSupportedConfigs": {
+                                          "browseEndpointContextMusicConfig": {
+                                            "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "thumbnail": {
+                                "thumbnails": [
+                                  {"url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg", "width": 320, "height": 180}
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "playlistPanelVideoRenderer": {
+                              "videoId": "abc123def456",
+                              "title": {
+                                "runs": [{"text": "Another Song"}]
+                              },
+                              "shortBylineText": {
+                                "runs": [
+                                  {
+                                    "text": "Another Artist",
+                                    "navigationEndpoint": {
+                                      "browseEndpoint": {
+                                        "browseId": "UCsomeArtistId",
+                                        "browseEndpointContextSupportedConfigs": {
+                                          "browseEndpointContextMusicConfig": {
+                                            "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "thumbnail": {
+                                "thumbnails": [
+                                  {"url": "https://i.ytimg.com/vi/abc123def456/mqdefault.jpg", "width": 320, "height": 180}
+                                ]
+                              }
+                            }
+                          }
+                        ],
+                        "continuations": [
+                          {
+                            "nextRadioContinuationData": {
+                              "continuation": "CBQSFQoTZFF3NHc5V2dYY1EiAyJlbiI%3D"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

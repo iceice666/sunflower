@@ -58,7 +58,7 @@ func ParseSearchPage(raw json.RawMessage) models.SearchPage {
 					"watchEndpoint", "videoId")
 			}
 			if videoID != "" {
-				page.Songs = append(page.Songs, parseSongItem(mr))
+				page.Songs = append(page.Songs, parseResponsiveListSong(mr))
 				continue
 			}
 
@@ -74,13 +74,13 @@ func ParseSearchPage(raw json.RawMessage) models.SearchPage {
 				case "MUSIC_PAGE_TYPE_ARTIST":
 					page.Artists = append(page.Artists, parseArtistItem(mr))
 				default:
-					page.Songs = append(page.Songs, parseSongItem(mr))
+					page.Songs = append(page.Songs, parseResponsiveListSong(mr))
 				}
 				continue
 			}
 
 			// Fallthrough: treat as song.
-			page.Songs = append(page.Songs, parseSongItem(mr))
+			page.Songs = append(page.Songs, parseResponsiveListSong(mr))
 		}
 	}
 

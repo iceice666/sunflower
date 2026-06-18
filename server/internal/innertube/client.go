@@ -178,18 +178,21 @@ func parsePlayerResponseRaw(ctx context.Context, raw json.RawMessage, cache *sig
 	}
 
 	var streams []models.StreamURL
+	var firstNsigErr error
 	for _, f := range pr.StreamingData.AdaptiveFormats {
-		// Only audio formats.
 		if !strings.HasPrefix(f.MimeType, "audio/") {
 			continue
 		}
 		rawURL := f.URL
 		if rawURL == "" {
-			continue // signatureCipher path not yet supported (Task 11)
+			continue // signatureCipher path not yet supported
 		}
-		decoded, err := cache.DecodeN(ctx, rawURL, pr.VideoDetails.PlayerJsUrl)
-		if err != nil {
-			decoded = rawURL // best-effort: use undecoded URL
+		decoded, decErr := cache.DecodeN(ctx, rawURL, pr.VideoDetails.PlayerJsUrl)
+		if decErr != nil {
+			if firstNsigErr == nil {
+				firstNsigErr = fmt.Errorf("nsig decode itag %d: %w", f.Itag, decErr)
+			}
+			decoded = rawURL // best-effort: may be throttled
 		}
 		streams = append(streams, models.StreamURL{
 			URL:      decoded,
@@ -212,5 +215,6 @@ func parsePlayerResponseRaw(ctx context.Context, raw json.RawMessage, cache *sig
 		PlayerJsURL: pr.VideoDetails.PlayerJsUrl,
 		Stream:      best,
 		AllStreams:   streams,
+		NsigErr:     firstNsigErr,
 	}, nil
 }

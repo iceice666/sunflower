@@ -42,6 +42,7 @@ func runNext(args []string) {
 	fs := flag.NewFlagSet("next", flag.ExitOnError)
 	videoID := fs.String("video-id", "", "YouTube video ID (required)")
 	output := fs.String("o", "json", "output format: json|url")
+	dumpRaw := fs.String("dump-raw", "", "write raw /next JSON to this file (e.g. for fixture capture)")
 	fs.Parse(args)
 
 	if *videoID == "" {
@@ -68,6 +69,9 @@ func runNext(args []string) {
 		fmt.Fprintf(os.Stderr, "player: %v\n", err)
 		os.Exit(1)
 	}
+	if playerResp.NsigErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: nsig decode failed — stream URL may be throttled: %v\n", playerResp.NsigErr)
+	}
 
 	nextRaw, err := client.Next(ctx, *videoID, nil)
 	if err != nil {
@@ -75,12 +79,11 @@ func runNext(args []string) {
 		os.Exit(1)
 	}
 
-	// Save fixture for parser tests (best-effort; run from repo root).
-	fixtureDir := "server/internal/innertube/parser/testdata"
-	if err := os.MkdirAll(fixtureDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: fixture dir: %v\n", err)
-	} else if err := os.WriteFile(fixtureDir+"/next_response.json", nextRaw, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: fixture write: %v\n", err)
+	// Write raw response only when explicitly requested (avoids overwriting committed fixtures).
+	if *dumpRaw != "" {
+		if err := os.WriteFile(*dumpRaw, nextRaw, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: dump-raw write: %v\n", err)
+		}
 	}
 
 	nextPage := parser.ParseNextPage(nextRaw)

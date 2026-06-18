@@ -16,9 +16,12 @@ func TestParseHomePage_EmptyJSON(t *testing.T) {
 func TestParseHomePage_FromFixture(t *testing.T) {
 	raw, err := os.ReadFile("testdata/home_response.json")
 	if err != nil {
-		t.Skipf("fixture not captured yet: %v", err)
+		t.Fatalf("fixture missing: %v", err)
 	}
 	page := parser.ParseHomePage(raw)
+	if len(page.Sections) == 0 {
+		t.Error("expected at least one section")
+	}
 	t.Logf("sections: %d, chips: %d", len(page.Sections), len(page.Chips))
 }
 
@@ -30,9 +33,18 @@ func TestParseSearchPage_EmptyJSON(t *testing.T) {
 func TestParseSearchPage_FromFixture(t *testing.T) {
 	raw, err := os.ReadFile("testdata/search_response.json")
 	if err != nil {
-		t.Skipf("fixture not captured yet: %v", err)
+		t.Fatalf("fixture missing: %v", err)
 	}
 	page := parser.ParseSearchPage(raw)
+	if len(page.Songs) == 0 {
+		t.Error("expected at least one song")
+	}
+	if page.Songs[0].VideoID == "" {
+		t.Error("song VideoID should not be empty")
+	}
+	if page.Songs[0].Title == "" {
+		t.Error("song Title should not be empty")
+	}
 	t.Logf("songs: %d, albums: %d, artists: %d", len(page.Songs), len(page.Albums), len(page.Artists))
 }
 

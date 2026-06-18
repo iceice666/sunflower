@@ -38,7 +38,7 @@ func ParsePlaylistPage(raw json.RawMessage) []models.SongItem {
 					continue
 				}
 				if mr := getMap(ri, "musicResponsiveListItemRenderer"); mr != nil {
-					items = append(items, parseSongItem(mr))
+					items = append(items, parseResponsiveListSong(mr))
 				}
 				// Unknown renderer — skip silently.
 			}

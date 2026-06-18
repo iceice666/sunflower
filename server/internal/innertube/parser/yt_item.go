@@ -48,6 +48,74 @@ func parseSongItem(m map[string]any) models.SongItem {
 	}
 }
 
+// parseResponsiveListSong parses a musicResponsiveListItemRenderer into a SongItem.
+// This renderer is used by search, related, and playlist pages.
+// It differs from parseSongItem (playlistPanelVideoRenderer) in where fields live.
+func parseResponsiveListSong(m map[string]any) models.SongItem {
+	if m == nil {
+		return models.SongItem{}
+	}
+
+	// videoId is in playlistItemData or in the overlay play button.
+	videoID := getString(m, "playlistItemData", "videoId")
+	if videoID == "" {
+		videoID = getString(m, "overlay", "musicItemThumbnailOverlayRenderer",
+			"content", "musicPlayButtonRenderer", "playNavigationEndpoint",
+			"watchEndpoint", "videoId")
+	}
+
+	// flexColumns[0] holds title; flexColumns[1] holds secondary info (artist, album).
+	var title string
+	var artists []string
+	flexCols := getArray(m, "flexColumns")
+	if len(flexCols) > 0 {
+		if col0, ok := flexCols[0].(map[string]any); ok {
+			colRenderer := getMap(col0, "musicResponsiveListItemFlexColumnRenderer")
+			if colRenderer != nil {
+				title = firstRunText(colRenderer, "text")
+			}
+		}
+	}
+	if len(flexCols) > 1 {
+		if col1, ok := flexCols[1].(map[string]any); ok {
+			colRenderer := getMap(col1, "musicResponsiveListItemFlexColumnRenderer")
+			if colRenderer != nil {
+				for _, run := range getArray(colRenderer, "text", "runs") {
+					r, ok := run.(map[string]any)
+					if !ok {
+						continue
+					}
+					ep := getMap(r, "navigationEndpoint", "browseEndpoint")
+					if ep == nil {
+						continue
+					}
+					pageType := getString(ep, "browseEndpointContextSupportedConfigs",
+						"browseEndpointContextMusicConfig", "pageType")
+					if pageType == "MUSIC_PAGE_TYPE_ARTIST" {
+						artists = append(artists, getString(r, "text"))
+					}
+				}
+			}
+		}
+	}
+
+	// Thumbnail lives under musicThumbnailRenderer for this renderer.
+	thumbnail := ""
+	thumbs := getArray(m, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")
+	if len(thumbs) > 0 {
+		if t, ok := thumbs[len(thumbs)-1].(map[string]any); ok {
+			thumbnail = getString(t, "url")
+		}
+	}
+
+	return models.SongItem{
+		VideoID:      videoID,
+		Title:        title,
+		Artists:      artists,
+		ThumbnailURL: thumbnail,
+	}
+}
+
 func parseAlbumItem(m map[string]any) models.AlbumItem {
 	if m == nil {
 		return models.AlbumItem{}

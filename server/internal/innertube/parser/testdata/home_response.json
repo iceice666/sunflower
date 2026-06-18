@@ -1,0 +1,52 @@
+{
+  "contents": {
+    "singleColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "sectionListRenderer": {
+                "contents": [
+                  {
+                    "musicCarouselShelfRenderer": {
+                      "header": {
+                        "musicCarouselShelfBasicHeaderRenderer": {
+                          "title": {
+                            "runs": [{"text": "Quick picks"}]
+                          }
+                        }
+                      },
+                      "contents": [
+                        {
+                          "musicTwoRowItemRenderer": {
+                            "title": {
+                              "runs": [{"text": "Never Gonna Give You Up"}]
+                            },
+                            "navigationEndpoint": {
+                              "watchEndpoint": {
+                                "videoId": "dQw4w9WgXcQ"
+                              }
+                            },
+                            "thumbnailRenderer": {
+                              "musicThumbnailRenderer": {
+                                "thumbnail": {
+                                  "thumbnails": [
+                                    {"url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg"}
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

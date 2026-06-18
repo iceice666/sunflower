@@ -2,7 +2,9 @@
 package cookies
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -61,8 +63,24 @@ func runProbe(ctx context.Context, db *pgxpool.Pool, key [32]byte, log zerolog.L
 	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	req, _ := http.NewRequestWithContext(probeCtx, http.MethodGet,
-		"https://music.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8", nil)
+	// POST with a minimal ANDROID_MUSIC player body. A 200 with cookies attached
+	// confirms cookies are accepted; 401/403 means expired/invalid.
+	body, _ := json.Marshal(map[string]any{
+		"context": map[string]any{
+			"client": map[string]any{
+				"clientName":    "ANDROID_MUSIC",
+				"clientVersion": "7.27.52",
+				"hl":            "en",
+				"gl":            "US",
+			},
+		},
+		"videoId": "dQw4w9WgXcQ",
+		"params":  "CgIQBg==",
+	})
+	req, _ := http.NewRequestWithContext(probeCtx, http.MethodPost,
+		"https://music.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		upsertHealth(ctx, db, "degraded", err.Error(), log)
@@ -70,9 +88,12 @@ func runProbe(ctx context.Context, db *pgxpool.Pool, key [32]byte, log zerolog.L
 	}
 	resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
 		upsertHealth(ctx, db, "ok", "", log)
-	} else {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		upsertHealth(ctx, db, "degraded", "cookies rejected: "+resp.Status, log)
+	default:
 		upsertHealth(ctx, db, "degraded", "probe status: "+resp.Status, log)
 	}
 }
