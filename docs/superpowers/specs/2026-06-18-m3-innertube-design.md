@@ -1,7 +1,7 @@
 # M3 InnerTube Client — Design Spec
 
 **Date:** 2026-06-18
-**Status:** approved (v3 — second reviewer pass applied)
+**Status:** approved (v4 — third reviewer pass applied)
 **Demo target:** `probe innertube next --video-id=<id>` returns a fresh, playable stream URL without any external service.
 
 ---
@@ -63,9 +63,9 @@ server/cmd/probe/
 3. `payloads/player.go` — POST body for `/player`
 4. `client.go` — bare HTTP client, no cookies yet
 5. `sig/base_js.go` + `sig/nsig.go` — Bootstrap (iframe_api), n-param decryption; add `goja` dep
-6. Wire `probe innertube next` → make real YT call → save response as `testdata/player_response.json`; capture base.js nsig fixture
-7. `parser/next_page.go` + `parser/yt_item.go` — parse captured fixture; **demo target met**
-8. Expansion pass (in order): `payloads/next.go`, `payloads/browse.go`, `payloads/search.go`; then `parser/home_page.go`, `parser/related_page.go`, `parser/artist_page.go`, `parser/album_page.go`, `parser/playlist_page.go`, `parser/search_page.go`; plus `probe home` and `probe search` subcommands; `sig/transform.go` (WEB cipher fallback)
+6. `payloads/player.go` + `payloads/next.go` + bare `client.go` — call `Client.Player` then `Client.Next` against a real video; save live responses as `testdata/player_response.json` and `testdata/next_response.json`; capture base.js nsig fixture
+7. `parser/next_page.go` + `parser/yt_item.go` — parse captured fixtures; `probe innertube next` emits `ProbeNextResult` JSON and `-o url` emits `CurrentURL`; **demo target met**
+8. Expansion pass (in order): `payloads/browse.go`, `payloads/search.go`; then `parser/home_page.go`, `parser/related_page.go`, `parser/artist_page.go`, `parser/album_page.go`, `parser/playlist_page.go`, `parser/search_page.go`; plus `probe home` and `probe search` subcommands; `sig/transform.go` (WEB cipher fallback)
 9. `cookies/store.go` + `0006_cookie_health.sql` migration + `handlers_cookies.go` + `refresh_job.go` + `probe cookies-set`
 
 ---
@@ -143,6 +143,16 @@ type SearchPage struct {
     Songs    []SongItem
     Albums   []AlbumItem
     Artists  []ArtistItem
+    Continuation Cursor
+}
+
+// ProbeNextResult is the output struct for `probe innertube next`.
+// It merges a Client.Player call (stream URL) and a Client.Next call (related items).
+type ProbeNextResult struct {
+    CurrentURL   string
+    ExpiresAt    time.Time
+    Itag         int
+    NextItems    []SongItem
     Continuation Cursor
 }
 ```
@@ -314,8 +324,10 @@ type Cursor []byte // opaque; extracted by parsers, posted back verbatim
 func (c Cursor) IsZero() bool
 ```
 
-Parsers return a `Cursor` inside typed response structs. The client base64-decodes
-a non-zero `Cursor` into the POST body's `continuation` field.
+Parsers extract the raw continuation token string from the response JSON and
+store it as `[]byte`. The client casts a non-zero `Cursor` directly to `string`
+and sets it as the POST body's `continuation` field — no base64 encoding or
+decoding occurs. The token is treated as fully opaque and is never inspected.
 
 ---
 
@@ -396,7 +408,10 @@ probe innertube search --query=<q> [--cookies=<path>]
 probe innertube cookies-set --file=<netscape-cookie-file>
 ```
 
-`-o url` prints only the resolved stream URL (enables the `curl "$(probe …)"` pattern from the demo). `-o json` (default) prints the full typed struct as JSON.
+`probe innertube next` calls `Client.Player` (for the stream URL) and
+`Client.Next` (for related items and continuation) sequentially, then merges
+the results into a `ProbeNextResult`. `-o url` prints only `CurrentURL`.
+`-o json` (default) prints the full `ProbeNextResult` as JSON.
 
 `probe innertube home` is part of the expansion pass (build order step 8).
 
