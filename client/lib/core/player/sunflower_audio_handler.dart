@@ -8,8 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/sunflower_api.dart';
 import '../db/database.dart';
 import 'expiry_guard.dart';
-import 'local_radio.dart';
 import 'lookahead_loader.dart';
+import 'source_resolver.dart';
 
 const _kLastMediaId = 'last_media_id';
 const _kLastPosition = 'last_position_ms';
@@ -51,6 +51,7 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   ExpiryGuard? _expiryGuard;
   LocalRadio? _localRadio;
   SunflowerDatabase? _db;
+  SourceResolver? _sourceResolver;
   // Per-source expiry, indexed in lockstep with the ConcatenatingAudioSource
   // children, so the expiry guard knows which entries need a refresh.
   final List<DateTime?> _expiries = [];
@@ -105,6 +106,7 @@ class SunflowerAudioHandler extends BaseAudioHandler {
     _loader = LookaheadLoader(api: api, db: db, queueId: queueId);
     _expiryGuard = ExpiryGuard(api: api);
     _localRadio = LocalRadio(db);
+    _sourceResolver = SourceResolver(db);
     _expiries.clear();
 
     final current = await _loader!.start(position);
@@ -142,14 +144,22 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   /// lockstep so [_refreshIfNeeded] can target it later. Also records the play
   /// into local history for the offline radio fallback.
   Future<void> _appendResolved(ResolvedStream s) async {
+    // Prefer a downloaded local file over the network URL (M6): if this media
+    // is downloaded, play from disk and never touch the network.
+    final localUri = await _sourceResolver?.localUriFor(s.mediaId);
+    final uri = localUri ?? s.streamUrl;
+    final isLocalFile = localUri != null;
     await _playlist.add(
       AudioSource.uri(
-        Uri.parse(s.streamUrl),
-        headers: s.source == 'local' ? _authHeaders : null,
+        Uri.parse(uri),
+        // file:// and local-server URLs both authenticate differently: a
+        // downloaded file needs no headers; a local-server stream does.
+        headers: (isLocalFile || s.source != 'local') ? null : _authHeaders,
         tag: _mediaItemForStream(s),
       ),
     );
-    _expiries.add(s.expiresAt);
+    // A local file never expires; otherwise track the network URL's expiry.
+    _expiries.add(isLocalFile ? null : s.expiresAt);
     unawaited(_recordPlay(s));
   }
 

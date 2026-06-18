@@ -71,11 +71,62 @@ class HomeCache extends Table {
   Set<Column> get primaryKey => {cacheKey};
 }
 
+/// A queued/active/completed download job (M6). The download manager runs these
+/// in a background isolate; the row persists progress so a job resumes after an
+/// app restart (Range-resumable via [receivedBytes]).
+///
+/// status: pending | running | completed | failed | canceled
+class DownloadJobs extends Table {
+  TextColumn get mediaId => text()();
+  TextColumn get title => text().withDefault(const Constant(''))();
+
+  /// The remote URL to fetch (server stream URL for local songs; resolved YT
+  /// URL for remote, best-effort).
+  TextColumn get sourceUrl => text()();
+  TextColumn get status =>
+      text().withDefault(const Constant('pending'))();
+  IntColumn get totalBytes => integer().withDefault(const Constant(0))();
+  IntColumn get receivedBytes => integer().withDefault(const Constant(0))();
+
+  /// Optional playlist this job was enqueued for (per-playlist downloads).
+  TextColumn get playlistId => text().nullable()();
+  TextColumn get error => text().nullable()();
+  DateTimeColumn get updatedAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {mediaId};
+}
+
+/// A completed, locally-stored track (M6). The player's source resolver prefers
+/// a row here over any `/next` URL so offline playback never touches the
+/// network. [sha256] is the verified hash for local-library files (null for
+/// best-effort YouTube downloads).
+class DownloadedTracks extends Table {
+  TextColumn get mediaId => text()();
+  TextColumn get localPath => text()();
+  IntColumn get bytes => integer().withDefault(const Constant(0))();
+  TextColumn get sha256 => text().nullable()();
+  DateTimeColumn get completedAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {mediaId};
+}
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
 
-@DriftDatabase(tables: [LookaheadCache, RecentPlays, HomeCache])
+@DriftDatabase(
+  tables: [
+    LookaheadCache,
+    RecentPlays,
+    HomeCache,
+    DownloadJobs,
+    DownloadedTracks,
+  ],
+)
 class SunflowerDatabase extends _$SunflowerDatabase {
   SunflowerDatabase() : super(_openConnection());
 
@@ -145,6 +196,91 @@ class SunflowerDatabase extends _$SunflowerDatabase {
           ..where((t) => t.cacheKey.equals(cacheKey))
           ..limit(1))
         .getSingleOrNull();
+  }
+
+  // --- Downloads ------------------------------------------------------------
+
+  /// Inserts or updates a download job (keyed on media id).
+  Future<void> upsertJob(DownloadJobsCompanion job) async {
+    await into(downloadJobs).insertOnConflictUpdate(job);
+  }
+
+  /// Updates progress for an in-flight job.
+  Future<void> updateJobProgress(
+    String mediaId, {
+    required int received,
+    required int total,
+    String? status,
+  }) async {
+    await (update(downloadJobs)..where((t) => t.mediaId.equals(mediaId))).write(
+      DownloadJobsCompanion(
+        receivedBytes: Value(received),
+        totalBytes: Value(total),
+        status: status == null ? const Value.absent() : Value(status),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Marks a job failed with an error message.
+  Future<void> failJob(String mediaId, String error) async {
+    await (update(downloadJobs)..where((t) => t.mediaId.equals(mediaId))).write(
+      DownloadJobsCompanion(
+        status: const Value('failed'),
+        error: Value(error),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Removes a job row (on cancel or after completion).
+  Future<void> deleteJob(String mediaId) async {
+    await (delete(downloadJobs)..where((t) => t.mediaId.equals(mediaId))).go();
+  }
+
+  /// All jobs not yet completed, oldest first — the resume queue on app start.
+  Future<List<DownloadJob>> pendingJobs() {
+    return (select(downloadJobs)
+          ..where((t) => t.status.isNotIn(['completed']))
+          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt)]))
+        .get();
+  }
+
+  /// Watches all jobs for the downloads UI.
+  Stream<List<DownloadJob>> watchJobs() {
+    return (select(downloadJobs)
+          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt)]))
+        .watch();
+  }
+
+  /// Records a completed local download (and removes its job row).
+  Future<void> completeDownload(DownloadedTracksCompanion track) async {
+    await transaction(() async {
+      await into(downloadedTracks).insertOnConflictUpdate(track);
+      final mediaId = track.mediaId.value;
+      await (update(downloadJobs)..where((t) => t.mediaId.equals(mediaId))).write(
+        const DownloadJobsCompanion(status: Value('completed')),
+      );
+    });
+  }
+
+  /// Returns the downloaded track for [mediaId], or null if not downloaded.
+  Future<DownloadedTrack?> downloadedTrack(String mediaId) {
+    return (select(downloadedTracks)
+          ..where((t) => t.mediaId.equals(mediaId))
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  /// True if [mediaId] is available locally.
+  Future<bool> isDownloaded(String mediaId) async {
+    return (await downloadedTrack(mediaId)) != null;
+  }
+
+  /// Removes a downloaded track record (after the file is deleted).
+  Future<void> removeDownloadedTrack(String mediaId) async {
+    await (delete(downloadedTracks)..where((t) => t.mediaId.equals(mediaId)))
+        .go();
   }
 }
 

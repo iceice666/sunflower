@@ -302,6 +302,23 @@ class Playlist {
   }
 }
 
+/// Server-computed SHA-256 of a local song file, for download verification.
+class SongHash {
+  const SongHash({required this.mediaId, required this.sha256, this.bytes = 0});
+
+  final String mediaId;
+  final String sha256;
+  final int bytes;
+
+  factory SongHash.fromJson(Map<String, dynamic> json) {
+    return SongHash(
+      mediaId: json['media_id'] as String? ?? '',
+      sha256: json['sha256'] as String? ?? '',
+      bytes: (json['bytes'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // API client
 // ---------------------------------------------------------------------------
@@ -484,6 +501,39 @@ class SunflowerApi {
       data: {'media_id': mediaId},
       options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // M6 offline downloads
+  // -------------------------------------------------------------------------
+
+  /// Fetches the server-computed SHA-256 of a local-library song for download
+  /// verification. Throws (DioException) for non-local songs (404).
+  Future<SongHash> songHash(String mediaId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/library/songs/$mediaId/hash',
+    );
+    return SongHash.fromJson(response.data ?? const {});
+  }
+
+  /// Registers a completed download with the server's per-device registry.
+  /// Mutating — carries an Idempotency-Key.
+  Future<void> registerDownload({
+    required String deviceId,
+    required String mediaId,
+    required String localPath,
+    required int bytes,
+  }) async {
+    await _dio.post<void>(
+      '/api/v1/devices/$deviceId/downloads',
+      data: {'media_id': mediaId, 'local_path': localPath, 'bytes': bytes},
+      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+    );
+  }
+
+  /// Removes a download registration from the server.
+  Future<void> deleteDownload(String deviceId, String mediaId) async {
+    await _dio.delete<void>('/api/v1/devices/$deviceId/downloads/$mediaId');
   }
 
   /// Authorization header map — pass to just_audio and cached_network_image.

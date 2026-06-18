@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
+import '../../core/downloads/downloads_providers.dart';
+import '../../core/player/capabilities.dart';
 
 final _playlistDetailProvider = FutureProvider.autoDispose
     .family<Playlist, String>((ref, id) async {
@@ -20,7 +22,26 @@ class PlaylistDetailScreen extends ConsumerWidget {
     final detailAsync = ref.watch(_playlistDetailProvider(playlistId));
 
     return Scaffold(
-      appBar: AppBar(title: Text(detailAsync.valueOrNull?.title ?? 'Playlist')),
+      appBar: AppBar(
+        title: Text(detailAsync.valueOrNull?.title ?? 'Playlist'),
+        actions: [
+          if (PlayerCapabilities.offlineDownloads)
+            IconButton(
+              icon: const Icon(Icons.download_outlined),
+              tooltip: 'Download for offline',
+              onPressed: () async {
+                final mgr = ref.read(downloadManagerProvider);
+                await mgr.start();
+                await mgr.enqueuePlaylist(playlistId);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Downloading playlist…')),
+                  );
+                }
+              },
+            ),
+        ],
+      ),
       body: detailAsync.when(
         data: (pl) {
           if (pl.items.isEmpty) {

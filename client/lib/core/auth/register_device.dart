@@ -3,12 +3,20 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 
-/// Registers this device with the Sunflower server at [baseUrl] and returns
-/// the opaque bearer token.
+/// Result of device registration: the opaque bearer token and the server's
+/// device id (needed for the M6 per-device download registry).
+class RegisterResult {
+  const RegisterResult({required this.token, required this.deviceId});
+  final String token;
+  final String deviceId;
+}
+
+/// Registers this device with the Sunflower server at [baseUrl] and returns the
+/// opaque bearer token plus the assigned device id.
 ///
 /// Throws [DioException] on network errors, [StateError] if the server returns
 /// a success status but the body has no token field.
-Future<String> registerDevice(String baseUrl) async {
+Future<RegisterResult> registerDevice(String baseUrl) async {
   final dio = Dio(BaseOptions(baseUrl: baseUrl));
   final idempotencyKey = const Uuid().v4();
 
@@ -26,7 +34,8 @@ Future<String> registerDevice(String baseUrl) async {
   if (token == null || token.isEmpty) {
     throw StateError('register-device: server returned no token');
   }
-  return token;
+  final deviceId = response.data?['device_id'] as String? ?? '';
+  return RegisterResult(token: token, deviceId: deviceId);
 }
 
 String _deviceName() {

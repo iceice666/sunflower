@@ -32,6 +32,7 @@ dependencies:
 
   # Utilities
   uuid: ^4.5.1
+  crypto: ^3.0.6
 
   # UI
   cached_network_image: ^3.4.1

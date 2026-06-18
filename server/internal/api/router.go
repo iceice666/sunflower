@@ -91,6 +91,12 @@ func NewRouter(d Deps) http.Handler {
 			r.Delete("/playlists/{id}", d.deletePlaylist)
 			r.Post("/playlists/{id}/items", d.addPlaylistItem)
 			r.Delete("/playlists/{id}/items/{media_id}", d.removePlaylistItem)
+
+			// M6 offline downloads (per-device registry + local-song hash).
+			r.Get("/devices/{id}/downloads", d.listDownloads)
+			r.Post("/devices/{id}/downloads", d.registerDownload)
+			r.Delete("/devices/{id}/downloads/{media_id}", d.deleteDownload)
+			r.Get("/library/songs/{media_id}/hash", d.songHash)
 		})
 
 		// Stream proxy is authorized by its short-lived HMAC token, not the

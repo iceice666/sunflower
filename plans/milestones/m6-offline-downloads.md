@@ -88,3 +88,45 @@ server/db/queries/
 
 - Full sync semantics for like / playlist edits while offline (M7).
 - Smart auto-download (e.g. "always keep liked songs downloaded") — v2.
+
+## Implementation status
+
+**Server half: done.** Verified (`go build`/`vet`/`test` incl. a testcontainers
+integration test `internal/api/integration_m6_test.go`, `gofmt`, `sqlc` green):
+
+- `db/query/downloads.sql` (+ generated layer) — `UpsertDownload`,
+  `ListDownloadsForDevice`, `DeleteDownload`, `GetSongHashInfo`. The
+  `downloaded_tracks` table already shipped in migration 0004.
+- `internal/api/handlers_downloads.go` + routes: `GET/POST
+  /devices/{id}/downloads`, `DELETE /devices/{id}/downloads/{media_id}` (each
+  asserts the path device id matches the authenticated device), and
+  `GET /library/songs/{media_id}/hash` (streams SHA-256 of the local file).
+- Test covers register → list → hash-verify → cross-device 403 → delete.
+
+**Client half: done.** Implemented to spec, parse/format-verified with
+`dart format` (no Flutter SDK here → `build_runner`/`flutter test` run in a
+Flutter env; see M4 note):
+
+- `core/db/database.dart` — `DownloadJobs` (resumable, status state machine) and
+  `DownloadedTracks` (verified local files) tables + DAOs.
+- `core/downloads/` — `isolate_runner.dart` (worker isolate + typed channel),
+  `download_worker.dart` (Range-resumable dio stream to a `.part` file, atomic
+  rename on completion), `download_manager.dart` (enqueue track/playlist,
+  cancel, remove, resume-on-start, SHA verify for local songs, server
+  registration), `storage.dart`, `verifier.dart` (streaming SHA-256),
+  `downloads_providers.dart`.
+- `core/player/source_resolver.dart` — prefer-local: a downloaded `file://`
+  URI wins over any `/next` URL; wired into the audio handler's queue mode so
+  offline playback never touches the network.
+- `features/downloads_ui/` — `downloads_screen.dart` (active progress + cancel,
+  completed + remove) and `download_button.dart` (reusable, platform-gated).
+- Playlist detail screen gains a "Download for offline" action; `app.dart`
+  adds a Downloads tab; device id now persisted at registration for the
+  per-device registry.
+- Test: `test/source_resolver_test.dart` (prefer-local rule over in-memory
+  Drift).
+
+Self-reviewed (review agents unavailable due to an environment/model error).
+Fixes applied during review: `cancel()` now deletes the `.part` file (not the
+final path), and a dead no-op `freeBytes()` pre-check was removed in favor of
+ENOSPC-at-write handling.

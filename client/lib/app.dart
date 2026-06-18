@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/token_store.dart';
+import 'features/downloads_ui/downloads_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/library/playlists_screen.dart';
 import 'features/library/songs_screen.dart';
@@ -55,7 +56,12 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
 
-  static const _tabs = [HomeScreen(), SongsScreen(), PlaylistsScreen()];
+  static const _tabs = [
+    HomeScreen(),
+    SongsScreen(),
+    PlaylistsScreen(),
+    DownloadsScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +85,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.queue_music_outlined),
             selectedIcon: Icon(Icons.queue_music),
             label: 'Playlists',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.download_outlined),
+            selectedIcon: Icon(Icons.download),
+            label: 'Downloads',
           ),
         ],
       ),

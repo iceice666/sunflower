@@ -34,8 +34,8 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
 
     final url = _urlController.text.trim().replaceAll(RegExp(r'/$'), '');
     try {
-      final token = await registerDevice(url);
-      await saveCredentials(ref, url, token);
+      final result = await registerDevice(url);
+      await saveCredentials(ref, url, result.token, deviceId: result.deviceId);
       // tokenProvider invalidation triggers app re-route to SongsScreen.
     } catch (e) {
       setState(() => _error = e.toString());
