@@ -148,12 +148,19 @@ type SearchPage struct {
 
 // ProbeNextResult is the output struct for `probe innertube next`.
 // It merges a Client.Player call (stream URL) and a Client.Next call (related items).
+// json tags match the milestone demo output (snake_case).
 type ProbeNextResult struct {
-    CurrentURL   string
-    ExpiresAt    time.Time
-    Itag         int
-    NextItems    []SongItem
-    Continuation Cursor
+    CurrentURL   string     `json:"current_url"`
+    ExpiresAt    time.Time  `json:"expires_at"`
+    Itag         int        `json:"itag"`
+    NextItems    []SongItem `json:"next_items"`
+    Continuation Cursor     `json:"continuation,omitempty"`
+}
+
+// Locale carries the language/region hint sent with every InnerTube request.
+type Locale struct {
+    HL string // e.g. "en"
+    GL string // e.g. "US"
 }
 ```
 
