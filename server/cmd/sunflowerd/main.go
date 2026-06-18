@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"os"
@@ -43,12 +44,22 @@ func main() {
 	scanner := library.NewScanner(pool, cfg.DataDir, log)
 	jobRegistry := jobs.NewRegistry()
 
+	var cookieKey [32]byte
+	if cfg.CookieKey != "" {
+		b, err := hex.DecodeString(cfg.CookieKey)
+		if err != nil || len(b) != 32 {
+			log.Fatal().Msg("SUNFLOWER_COOKIE_KEY must be 64 hex chars (32 bytes)")
+		}
+		copy(cookieKey[:], b)
+	}
+
 	handler := api.NewRouter(api.Deps{
-		Log:     log,
-		DB:      pool,
-		Jobs:    jobRegistry,
-		Scanner: scanner,
-		DataDir: cfg.DataDir,
+		Log:       log,
+		DB:        pool,
+		Jobs:      jobRegistry,
+		Scanner:   scanner,
+		DataDir:   cfg.DataDir,
+		CookieKey: cookieKey,
 	})
 
 	srv := &http.Server{

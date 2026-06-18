@@ -22,7 +22,8 @@ type Deps struct {
 	Scanner *library.Scanner
 	// DataDir is the root directory for server-managed data files (cover art, etc.).
 	// Required by the stream and art handlers; matches config.Config.DataDir.
-	DataDir string
+	DataDir   string
+	CookieKey [32]byte // zero = cookies disabled
 }
 
 // NewRouter builds the chi router with all M0–M2 routes and middleware.
@@ -48,6 +49,8 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/library/songs/{media_id}/stream", d.streamSong)
 			r.Get("/library/albums/{album_media_id}/art", d.serveAlbumArt)
 			r.Get("/jobs/{id}", d.getJob)
+			r.Post("/cookies/youtube", d.uploadYTCookies)
+			r.Get("/cookies/youtube/status", d.ytCookieStatus)
 		})
 	})
 
