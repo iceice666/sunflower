@@ -1,0 +1,10 @@
+{
+  "ops": [
+    {"kind": "reverse"},
+    {"kind": "splice", "arg": 3},
+    {"kind": "swap", "arg": 2}
+  ],
+  "cases": [
+    {"in": "abcdefghij", "out": "efgdcba"}
+  ]
+}
