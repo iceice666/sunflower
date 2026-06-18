@@ -11,47 +11,53 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const knownStableVideoID = "dQw4w9WgXcQ"
-
-// CookieChecker is a minimal interface for the innertube client call needed by the probe.
-type CookieChecker interface {
-	Next(ctx context.Context, videoID string, cont interface{ IsZero() bool }) (interface{}, error)
-}
-
 // StartRefreshJob runs the cookie health probe hourly in a background goroutine.
-// It stops when ctx is cancelled.
-func StartRefreshJob(ctx context.Context, db *pgxpool.Pool, key [32]byte, userID uuid.UUID, log zerolog.Logger) {
+// It stops when ctx is cancelled. The probe looks up the first registered user at
+// each tick so it works correctly on fresh installs where no user exists at startup.
+func StartRefreshJob(ctx context.Context, db *pgxpool.Pool, key [32]byte, log zerolog.Logger) {
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 		// Run once immediately on startup.
-		runProbe(ctx, db, key, userID, log)
+		runProbe(ctx, db, key, log)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				runProbe(ctx, db, key, userID, log)
+				runProbe(ctx, db, key, log)
 			}
 		}
 	}()
 }
 
-func runProbe(ctx context.Context, db *pgxpool.Pool, key [32]byte, userID uuid.UUID, log zerolog.Logger) {
+func runProbe(ctx context.Context, db *pgxpool.Pool, key [32]byte, log zerolog.Logger) {
+	// Look up the first registered user at each tick. On a fresh install there
+	// may be no users yet; in that case skip silently.
+	var userID uuid.UUID
+	if err := db.QueryRow(ctx, `SELECT id FROM users LIMIT 1`).Scan(&userID); err != nil {
+		log.Debug().Msg("cookie probe: no users registered yet, skipping")
+		return
+	}
+
 	raw, err := Load(ctx, db, key, userID, "youtube")
 	if err != nil {
 		upsertHealth(ctx, db, "degraded", "no cookies stored: "+err.Error(), log)
 		return
 	}
 
-	// Parse cookies from Netscape format and make a test InnerTube call.
-	httpClient := &http.Client{Timeout: 15 * time.Second}
-	httpClient.Jar = parseCookieJar(raw)
+	jar := parseCookieJar(raw)
+	if jar == nil {
+		// Cookie jar could not be parsed; we cannot validate the cookies.
+		upsertHealth(ctx, db, "degraded", "cookie jar parse failed; cannot validate cookies", log)
+		return
+	}
+
+	httpClient := &http.Client{Timeout: 15 * time.Second, Jar: jar}
 
 	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// Use a simple HTTP GET to music.youtube.com as a liveness check.
 	req, _ := http.NewRequestWithContext(probeCtx, http.MethodGet,
 		"https://music.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8", nil)
 	resp, err := httpClient.Do(req)
@@ -61,8 +67,7 @@ func runProbe(ctx context.Context, db *pgxpool.Pool, key [32]byte, userID uuid.U
 	}
 	resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusBadRequest {
-		// 400 means the cookies were accepted but the request was malformed (no body) — that's fine.
+	if resp.StatusCode == http.StatusOK {
 		upsertHealth(ctx, db, "ok", "", log)
 	} else {
 		upsertHealth(ctx, db, "degraded", "probe status: "+resp.Status, log)
@@ -89,10 +94,11 @@ func nullIfEmpty(s string) interface{} {
 }
 
 // parseCookieJar parses Netscape-format cookie bytes into a CookieJar.
-// Returns nil on parse failure (graceful degradation).
+// Returns nil when the input cannot be parsed.
 func parseCookieJar(raw []byte) http.CookieJar {
 	// Minimal Netscape parser — real implementation parses lines of the form:
 	// <domain>\t<flag>\t<path>\t<secure>\t<expiry>\t<name>\t<value>
-	// For M3, a nil jar (no cookies) is acceptable — the probe just checks reachability.
+	// Not yet implemented; returns nil.
+	_ = raw
 	return nil
 }

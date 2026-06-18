@@ -18,15 +18,7 @@ func ParseNextPage(raw json.RawMessage) models.NextPage {
 
 	var page models.NextPage
 
-	// Extract current item from videoDetails.
-	// Note: videoDetails is typically present in /player responses, not /next.
-	// It may be absent; Current will be zero in that case.
-	if vd := getMap(m, "videoDetails"); vd != nil {
-		page.Current = models.SongItem{
-			VideoID: getString(vd, "videoId"),
-			Title:   getString(vd, "title"),
-		}
-	}
+	// Current is populated by the Client layer from the /player response, not here.
 
 	// Extract related items from the automix/related shelf.
 	page.Related = extractRelatedItems(m)

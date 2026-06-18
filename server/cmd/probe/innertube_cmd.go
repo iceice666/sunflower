@@ -75,9 +75,13 @@ func runNext(args []string) {
 		os.Exit(1)
 	}
 
-	// Save fixture for parser tests.
-	_ = os.MkdirAll("server/internal/innertube/parser/testdata", 0755)
-	_ = os.WriteFile("server/internal/innertube/parser/testdata/next_response.json", nextRaw, 0644)
+	// Save fixture for parser tests (best-effort; run from repo root).
+	fixtureDir := "server/internal/innertube/parser/testdata"
+	if err := os.MkdirAll(fixtureDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: fixture dir: %v\n", err)
+	} else if err := os.WriteFile(fixtureDir+"/next_response.json", nextRaw, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: fixture write: %v\n", err)
+	}
 
 	nextPage := parser.ParseNextPage(nextRaw)
 	result := models.ProbeNextResult{

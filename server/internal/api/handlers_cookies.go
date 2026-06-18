@@ -18,6 +18,10 @@ type uploadCookiesRequest struct {
 
 // uploadYTCookies handles POST /api/v1/cookies/youtube.
 func (d *Deps) uploadYTCookies(w http.ResponseWriter, r *http.Request) {
+	if d.CookieKey == [32]byte{} {
+		jsonError(w, "cookies_disabled", http.StatusServiceUnavailable)
+		return
+	}
 	deviceID := auth.DeviceIDFromCtx(r.Context())
 
 	var req uploadCookiesRequest
@@ -50,6 +54,10 @@ type cookieStatusResponse struct {
 
 // ytCookieStatus handles GET /api/v1/cookies/youtube/status.
 func (d *Deps) ytCookieStatus(w http.ResponseWriter, r *http.Request) {
+	if d.CookieKey == [32]byte{} {
+		jsonError(w, "cookies_disabled", http.StatusServiceUnavailable)
+		return
+	}
 	var status, detail string
 	var checkedAt *time.Time
 
