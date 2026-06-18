@@ -21,7 +21,9 @@ var (
 	iframeAPIURL = "https://www.youtube.com/iframe_api"
 
 	// playerHashRe extracts the player hash from the iframe_api JS body.
-	playerHashRe = regexp.MustCompile(`/s/player/([a-f0-9]+)/`)
+	// The charset is widened to [a-zA-Z0-9_-] because real hashes are not
+	// strictly lowercase hex.
+	playerHashRe = regexp.MustCompile(`/s/player/([a-zA-Z0-9_-]+)/`)
 
 	cacheTTL      = 6 * time.Hour
 	failThreshold = 3
