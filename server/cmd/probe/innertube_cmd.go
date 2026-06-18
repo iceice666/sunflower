@@ -24,6 +24,10 @@ func runInnertube(args []string) {
 	switch args[0] {
 	case "next":
 		runNext(args[1:])
+	case "home":
+		runHome(args[1:])
+	case "search":
+		runSearch(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown innertube subcommand: %s\n", args[0])
 		os.Exit(1)
@@ -88,4 +92,62 @@ func runNext(args []string) {
 		enc.SetIndent("", "  ")
 		enc.Encode(result)
 	}
+}
+
+func runHome(_ []string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cache := sig.NewCache(http.DefaultClient)
+	if err := cache.Bootstrap(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "sig bootstrap: %v\n", err)
+		os.Exit(1)
+	}
+	client := innertube.NewClient(innertube.ClientOpts{
+		SigCache: cache,
+		Locale:   models.Locale{HL: "en", GL: "US"},
+	})
+
+	raw, err := client.Browse(ctx, "FEmusic_home", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "browse: %v\n", err)
+		os.Exit(1)
+	}
+	page := parser.ParseHomePage(raw)
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	enc.Encode(page)
+}
+
+func runSearch(args []string) {
+	fs := flag.NewFlagSet("search", flag.ExitOnError)
+	query := fs.String("query", "", "search query (required)")
+	fs.Parse(args)
+	if *query == "" {
+		fmt.Fprintln(os.Stderr, "--query is required")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cache := sig.NewCache(http.DefaultClient)
+	if err := cache.Bootstrap(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "sig bootstrap: %v\n", err)
+		os.Exit(1)
+	}
+	client := innertube.NewClient(innertube.ClientOpts{
+		SigCache: cache,
+		Locale:   models.Locale{HL: "en", GL: "US"},
+	})
+
+	raw, err := client.Search(ctx, *query)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "search: %v\n", err)
+		os.Exit(1)
+	}
+	page := parser.ParseSearchPage(raw)
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	enc.Encode(page)
 }

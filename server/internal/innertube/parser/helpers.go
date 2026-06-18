@@ -111,3 +111,13 @@ func unmarshalMap(raw []byte) map[string]any {
 	_ = json.Unmarshal(raw, &m)
 	return m
 }
+
+// arrayFirstMap returns the first element of arr as map[string]any, or nil.
+// Used when a path includes a JSON array and we want the first element.
+func arrayFirstMap(arr []any) map[string]any {
+	if len(arr) == 0 {
+		return nil
+	}
+	m, _ := arr[0].(map[string]any)
+	return m
+}
