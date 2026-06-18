@@ -11,8 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/iceice666/sunflower/server/internal/api"
 	"github.com/iceice666/sunflower/server/internal/config"
+	"github.com/iceice666/sunflower/server/internal/cookies"
 	"github.com/iceice666/sunflower/server/internal/db"
 	"github.com/iceice666/sunflower/server/internal/jobs"
 	"github.com/iceice666/sunflower/server/internal/library"
@@ -51,6 +53,14 @@ func main() {
 			log.Fatal().Msg("SUNFLOWER_COOKIE_KEY must be 64 hex chars (32 bytes)")
 		}
 		copy(cookieKey[:], b)
+	}
+
+	// Start cookie health probe (noop if CookieKey is zero).
+	if cookieKey != [32]byte{} {
+		// Use a placeholder userID — in a single-user system the first (only) user.
+		var adminUserID uuid.UUID
+		_ = pool.QueryRow(ctx, `SELECT id FROM users LIMIT 1`).Scan(&adminUserID)
+		cookies.StartRefreshJob(ctx, pool, cookieKey, adminUserID, log)
 	}
 
 	handler := api.NewRouter(api.Deps{

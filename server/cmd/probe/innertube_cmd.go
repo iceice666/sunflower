@@ -2,10 +2,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -28,6 +30,8 @@ func runInnertube(args []string) {
 		runHome(args[1:])
 	case "search":
 		runSearch(args[1:])
+	case "cookies-set":
+		runCookiesSet(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown innertube subcommand: %s\n", args[0])
 		os.Exit(1)
@@ -150,4 +154,41 @@ func runSearch(args []string) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(page)
+}
+
+func runCookiesSet(args []string) {
+	fs := flag.NewFlagSet("cookies-set", flag.ExitOnError)
+	file := fs.String("file", "", "path to Netscape-format cookie file (required)")
+	serverURL := fs.String("server", "http://localhost:8080", "sunflowerd base URL")
+	token := fs.String("token", "", "device token (required)")
+	fs.Parse(args)
+
+	if *file == "" || *token == "" {
+		fmt.Fprintln(os.Stderr, "--file and --token are required")
+		os.Exit(1)
+	}
+
+	raw, err := os.ReadFile(*file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	body, _ := json.Marshal(map[string]string{"cookies": string(raw)})
+	req, _ := http.NewRequest(http.MethodPost, *serverURL+"/api/v1/cookies/youtube", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+*token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "upload: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNoContent {
+		fmt.Println("cookies uploaded successfully")
+	} else {
+		io.Copy(os.Stderr, resp.Body)
+		os.Exit(1)
+	}
 }
