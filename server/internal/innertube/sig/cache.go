@@ -111,6 +111,26 @@ func (c *Cache) load(ctx context.Context, hash, baseJsURL string) error {
 }
 
 func (c *Cache) getEntry(ctx context.Context, playerJsURL string) (*entry, error) {
+	// When no player JS URL is provided (ANDROID_MUSIC responses don't include one),
+	// reuse the most recently bootstrapped entry rather than re-fetching iframe_api.
+	if playerJsURL == "" {
+		c.mu.RLock()
+		cur := c.current
+		e := c.entries[cur]
+		c.mu.RUnlock()
+		if cur != "" && e != nil && time.Since(e.loadedAt) < cacheTTL {
+			return e, nil
+		}
+		// No valid current entry — bootstrap once.
+		if err := c.Bootstrap(ctx); err != nil {
+			return nil, fmt.Errorf("%w: bootstrap failed: %v", ErrNoPlayerJs, err)
+		}
+		c.mu.RLock()
+		e = c.entries[c.current]
+		c.mu.RUnlock()
+		return e, nil
+	}
+
 	hash := playerJsURL
 	if m := playerHashRe.FindStringSubmatch(playerJsURL); m != nil {
 		hash = m[1]
@@ -123,16 +143,6 @@ func (c *Cache) getEntry(ctx context.Context, playerJsURL string) (*entry, error
 		return e, nil
 	}
 
-	// Not cached or stale — fetch.
-	if playerJsURL == "" {
-		if err := c.Bootstrap(ctx); err != nil {
-			return nil, fmt.Errorf("%w: bootstrap failed: %v", ErrNoPlayerJs, err)
-		}
-		c.mu.RLock()
-		e = c.entries[c.current]
-		c.mu.RUnlock()
-		return e, nil
-	}
 	if err := c.load(ctx, hash, playerJsURL); err != nil {
 		return nil, err
 	}
