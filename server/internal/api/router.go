@@ -9,6 +9,9 @@ import (
 	"github.com/iceice666/sunflower/server/internal/auth"
 	"github.com/iceice666/sunflower/server/internal/jobs"
 	"github.com/iceice666/sunflower/server/internal/library"
+	"github.com/iceice666/sunflower/server/internal/queue"
+	"github.com/iceice666/sunflower/server/internal/streamproxy"
+	"github.com/iceice666/sunflower/server/internal/streams"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 )
@@ -24,6 +27,20 @@ type Deps struct {
 	// Required by the stream and art handlers; matches config.Config.DataDir.
 	DataDir   string
 	CookieKey [32]byte // zero = cookies disabled
+
+	// M4 queue/streams dependencies. Nil disables the corresponding routes'
+	// network behavior (e.g. a nil YT client makes YouTube seeds unavailable).
+	Queue   *queue.Store
+	Streams *streams.Resolver
+	Proxy   *streamproxy.Handler
+	YT      queueAndStreamYT // InnerTube client for radio + resolve; may be nil
+}
+
+// queueAndStreamYT is the InnerTube surface the queue and stream handlers need.
+// *innertube.Client satisfies it.
+type queueAndStreamYT interface {
+	queue.NextClient
+	streams.YTResolver
 }
 
 // NewRouter builds the chi router with all M0–M2 routes and middleware.
@@ -51,7 +68,20 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/jobs/{id}", d.getJob)
 			r.Post("/cookies/youtube", d.uploadYTCookies)
 			r.Get("/cookies/youtube/status", d.ytCookieStatus)
+
+			// M4 queue + streams (require device auth).
+			r.Post("/queue/start", d.startQueue)
+			r.Get("/queue/{id}", d.getQueue)
+			r.Get("/next", d.getNext)
+			r.Post("/streams/resolve", d.resolveStream)
 		})
+
+		// Stream proxy is authorized by its short-lived HMAC token, not the
+		// device auth middleware: the OS media player / lock-screen loader may
+		// not attach Authorization headers to range sub-requests.
+		if d.Proxy != nil {
+			r.Get("/streams/proxy", d.Proxy.ServeHTTP)
+		}
 	})
 
 	return r

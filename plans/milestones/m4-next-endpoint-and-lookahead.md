@@ -87,3 +87,27 @@ client/lib/features/
 - WebSocket now-playing push (M8).
 - Queue persistence to Drift across app restarts — for M4, lookahead is
   in-memory + Drift cache for cold-start; full restore comes in M7.
+
+## Implementation status
+
+**Server half: done.** Implemented and verified (`go build`/`vet`/`test` incl.
+testcontainers integration, `gofmt`, `sqlc` all green):
+
+- `internal/queue` — session lifecycle + materialization (`session.go`), YT
+  radio expansion via `/next` continuations (`radio.go`), shuffle-liked automix
+  (`automix.go`).
+- `internal/streams` — source-dispatch resolver local|youtube|proxy
+  (`resolver.go`) and googlevideo expiry extraction (`expiry.go`).
+- `internal/streamproxy` — HMAC-SHA256 short-lived tokens (`token.go`) and a
+  Range-aware proxy with host allowlist + per-redirect SSRF re-validation
+  (`proxy.go`).
+- Handlers: `POST /queue/start`, `GET /queue/{id}`, `GET /next`,
+  `POST /streams/resolve`, `GET /streams/proxy` (token-authorized, outside the
+  device-auth group).
+- Seed kinds implemented: `song` (YT radio) and `shuffle_liked`. `album` /
+  `playlist` / `artist_radio` deferred (the album/artist browse parsers do not
+  yet return track lists).
+
+**Client half: pending follow-up** (no Flutter/Dart toolchain in this
+environment). Outstanding: lookahead cache (Drift), `PlayerException` 403
+handler → `/streams/resolve`, local-radio fallback, and the queue panel UI.

@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -15,8 +16,14 @@ import (
 	"github.com/iceice666/sunflower/server/internal/config"
 	"github.com/iceice666/sunflower/server/internal/cookies"
 	"github.com/iceice666/sunflower/server/internal/db"
+	"github.com/iceice666/sunflower/server/internal/innertube"
+	"github.com/iceice666/sunflower/server/internal/innertube/models"
+	"github.com/iceice666/sunflower/server/internal/innertube/sig"
 	"github.com/iceice666/sunflower/server/internal/jobs"
 	"github.com/iceice666/sunflower/server/internal/library"
+	"github.com/iceice666/sunflower/server/internal/queue"
+	"github.com/iceice666/sunflower/server/internal/streamproxy"
+	"github.com/iceice666/sunflower/server/internal/streams"
 	"github.com/rs/zerolog"
 )
 
@@ -59,14 +66,48 @@ func main() {
 		cookies.StartRefreshJob(ctx, pool, cookieKey, log)
 	}
 
-	handler := api.NewRouter(api.Deps{
+	// M4: InnerTube client (guest mode) for radio expansion + stream resolution.
+	// Sig bootstrap is best-effort: on failure the client is left nil and
+	// YouTube seeds report unavailable, but local library + queue still work.
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	var yt *innertube.Client
+	sigCache := sig.NewCache(httpClient)
+	if err := sigCache.Bootstrap(ctx); err != nil {
+		log.Warn().Err(err).Msg("innertube sig bootstrap failed; youtube streams disabled")
+	} else {
+		yt = innertube.NewClient(innertube.ClientOpts{
+			HTTPClient: httpClient,
+			SigCache:   sigCache,
+			Locale:     models.Locale{HL: "en", GL: "US"},
+		})
+	}
+
+	// M4: stream proxy signer. Use the configured key if present, else a random
+	// per-process key (single-instance only; tokens won't survive a restart).
+	proxyKey := loadStreamProxyKey(cfg.StreamProxyKey, log)
+	signer := streamproxy.NewSigner(proxyKey, 15*time.Minute)
+
+	const proxyPath = "/api/v1/streams/proxy"
+	resolver := &streams.Resolver{YT: yt, Signer: signer, ProxyPath: proxyPath}
+	// The proxy uses a dedicated client with no whole-request timeout (long
+	// ranged streams) and per-redirect host re-validation (SSRF hardening).
+	proxy := &streamproxy.Handler{Signer: signer, Client: streamproxy.NewClient(), Log: log}
+
+	deps := api.Deps{
 		Log:       log,
 		DB:        pool,
 		Jobs:      jobRegistry,
 		Scanner:   scanner,
 		DataDir:   cfg.DataDir,
 		CookieKey: cookieKey,
-	})
+		Queue:     queue.NewStore(pool),
+		Streams:   resolver,
+		Proxy:     proxy,
+	}
+	if yt != nil {
+		deps.YT = yt
+	}
+	handler := api.NewRouter(deps)
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
@@ -95,4 +136,23 @@ func main() {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
 	log.Info().Msg("stopped")
+}
+
+// loadStreamProxyKey returns the HMAC key for stream proxy tokens. A configured
+// hex key is preferred; otherwise a random 32-byte key is generated for this
+// process (valid only until restart and not shared across instances).
+func loadStreamProxyKey(hexKey string, log zerolog.Logger) []byte {
+	if hexKey != "" {
+		b, err := hex.DecodeString(hexKey)
+		if err != nil || len(b) < 32 {
+			log.Fatal().Msg("SUNFLOWER_STREAM_PROXY_KEY must be at least 64 hex chars (32 bytes)")
+		}
+		return b
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatal().Err(err).Msg("failed to generate stream proxy key")
+	}
+	log.Warn().Msg("SUNFLOWER_STREAM_PROXY_KEY unset; using a random per-process key")
+	return b
 }

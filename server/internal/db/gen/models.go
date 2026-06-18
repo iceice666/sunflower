@@ -30,6 +30,13 @@ type Artist struct {
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type CookieHealth struct {
+	Provider  string             `db:"provider" json:"provider"`
+	Status    string             `db:"status" json:"status"`
+	CheckedAt pgtype.Timestamptz `db:"checked_at" json:"checked_at"`
+	Detail    pgtype.Text        `db:"detail" json:"detail"`
+}
+
 type Device struct {
 	ID         pgtype.UUID        `db:"id" json:"id"`
 	UserID     pgtype.UUID        `db:"user_id" json:"user_id"`

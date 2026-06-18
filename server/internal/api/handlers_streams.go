@@ -1,14 +1,18 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/iceice666/sunflower/server/internal/db/gen"
+	"github.com/iceice666/sunflower/server/internal/queue"
+	"github.com/iceice666/sunflower/server/internal/streams"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -95,4 +99,67 @@ func (d *Deps) serveAlbumArt(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeFile(w, r, artPath)
+}
+
+// resolvedStream is the playable-stream shape shared by /next (current) and
+// /streams/resolve. stream_expires_at is null for local sources.
+type resolvedStream struct {
+	MediaID    string   `json:"media_id"`
+	Title      string   `json:"title,omitempty"`
+	Artists    []string `json:"artists,omitempty"`
+	DurationMs int      `json:"duration_ms,omitempty"`
+	Source     string   `json:"source"` // local | youtube | proxy
+	StreamURL  string   `json:"stream_url"`
+	ExpiresAt  *string  `json:"stream_expires_at"` // RFC3339, null for local
+	MimeType   string   `json:"mime_type,omitempty"`
+}
+
+func toResolvedStream(res streams.Resolved, item queue.Item) resolvedStream {
+	rs := resolvedStream{
+		MediaID:    res.MediaID,
+		Title:      item.Title,
+		Artists:    item.Artists,
+		DurationMs: item.DurationMs,
+		Source:     string(res.Source),
+		StreamURL:  res.StreamURL,
+		MimeType:   res.MimeType,
+	}
+	if !res.ExpiresAt.IsZero() {
+		s := res.ExpiresAt.UTC().Format(time.RFC3339)
+		rs.ExpiresAt = &s
+	}
+	return rs
+}
+
+// resolveStreamRequest is the POST /api/v1/streams/resolve body.
+type resolveStreamRequest struct {
+	MediaID string `json:"media_id"`
+	// Proxy forces the stream through the server proxy (the client's 403/CORS
+	// fallback). Ignored for local sources.
+	Proxy bool `json:"proxy"`
+}
+
+// resolveStream re-resolves a media_id to a fresh playable stream. The client
+// calls this on a 403 / near-expiry to recover playback without a glitch.
+//
+// POST /api/v1/streams/resolve
+func (d *Deps) resolveStream(w http.ResponseWriter, r *http.Request) {
+	var req resolveStreamRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MediaID == "" {
+		jsonError(w, "invalid_request", http.StatusBadRequest)
+		return
+	}
+
+	res, err := d.Streams.Resolve(r.Context(), req.MediaID, streams.Options{PreferProxy: req.Proxy})
+	switch {
+	case errors.Is(err, streams.ErrUnavailable):
+		jsonError(w, "unavailable", http.StatusGone)
+		return
+	case err != nil:
+		d.Log.Error().Err(err).Str("media_id", req.MediaID).Msg("resolve-stream")
+		jsonError(w, "resolve_failed", http.StatusBadGateway)
+		return
+	}
+
+	jsonOK(w, toResolvedStream(res, queue.Item{MediaID: req.MediaID}))
 }
