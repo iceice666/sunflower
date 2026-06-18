@@ -49,7 +49,7 @@ on the server.
 | M1 | complete | [`milestones/m1-auth-and-library-ingestion.md`](milestones/m1-auth-and-library-ingestion.md) | Device registers, library scan populates songs/albums/artists |
 | M2 | complete | [`milestones/m2-flutter-player-local-library.md`](milestones/m2-flutter-player-local-library.md) | Flutter app plays a local-library track end-to-end |
 | M3 | complete | [`milestones/m3-innertube-client.md`](milestones/m3-innertube-client.md) | `probe innertube next --video-id=…` returns a fresh playable URL |
-| M4 | server done; client pending | [`milestones/m4-next-endpoint-and-lookahead.md`](milestones/m4-next-endpoint-and-lookahead.md) | Client plays YT tracks with `/next` lookahead and 403 re-resolve |
+| M4 | complete | [`milestones/m4-next-endpoint-and-lookahead.md`](milestones/m4-next-endpoint-and-lookahead.md) | Client plays YT tracks with `/next` lookahead and 403 re-resolve |
 | M5 | — | [`milestones/m5-recommendation-pipeline.md`](milestones/m5-recommendation-pipeline.md) | Home feed populated; cold-start renders cached sections |
 | M6 | — | [`milestones/m6-offline-downloads.md`](milestones/m6-offline-downloads.md) | Playlist downloaded; airplane-mode playback works |
 | M7 | — | [`milestones/m7-sync-and-write-replay.md`](milestones/m7-sync-and-write-replay.md) | Offline likes/edits drain to server in clock order, idempotent |

@@ -108,6 +108,23 @@ testcontainers integration, `gofmt`, `sqlc` all green):
   `playlist` / `artist_radio` deferred (the album/artist browse parsers do not
   yet return track lists).
 
-**Client half: pending follow-up** (no Flutter/Dart toolchain in this
-environment). Outstanding: lookahead cache (Drift), `PlayerException` 403
-handler → `/streams/resolve`, local-radio fallback, and the queue panel UI.
+**Client half: done.** Implemented to spec and parse/format-verified with
+`dart format` (the Nix env has the Dart SDK but no Flutter SDK / pub.dev access,
+so `build_runner` Drift codegen and `flutter test` run in a Flutter env; the
+`database.g.dart` part is generated there via `flutter pub run build_runner build`):
+
+- `core/db/database.dart` — Drift schema: `LookaheadCache` (cold-start window)
+  and `RecentPlays` (offline-radio seed) tables with DAO methods.
+- `core/api/sunflower_api.dart` — `ResolvedStream` / `QueueItem` /
+  `NextResponse` / `QueueResponse` models matching the server JSON contract,
+  plus `startQueue` / `next` / `resolveStream` (Idempotency-Key on mutations).
+- `core/player/lookahead_loader.dart` — pages `GET /next`, keeps the buffer ≥4,
+  mirrors the window into `LookaheadCache`; bounded against spin loops.
+- `core/player/expiry_guard.dart` — 30 s-lead near-expiry detection (UTC) and
+  `/streams/resolve` transport (proxy on hard 403).
+- `core/player/local_radio.dart` — offline fallback queue from `RecentPlays`.
+- `core/player/sunflower_audio_handler.dart` — queue mode: `startQueue`, buffer
+  fill, in-place expiring-source swap with position restore, 403 recovery,
+  local-radio engage on buffer exhaustion, `upcomingQueue` projection.
+- `features/player_ui/queue_panel.dart` — upcoming-items UI.
+- `pubspec.yaml` — added `drift`, `sqlite3_flutter_libs`, `path`, `drift_dev`.
