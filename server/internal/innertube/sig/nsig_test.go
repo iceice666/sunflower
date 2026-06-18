@@ -45,11 +45,11 @@ function nfunc2(a){return a+"_ok"}
 
 func TestExtractBody(t *testing.T) {
 	tests := []struct {
-		name    string
-		js      string
-		start   int
-		want    string
-		wantOK  bool
+		name   string
+		js     string
+		start  int
+		want   string
+		wantOK bool
 	}{
 		{
 			name:   "simple function",

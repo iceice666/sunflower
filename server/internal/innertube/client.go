@@ -214,7 +214,7 @@ func parsePlayerResponseRaw(ctx context.Context, raw json.RawMessage, cache *sig
 		VideoID:     pr.VideoDetails.VideoID,
 		PlayerJsURL: pr.VideoDetails.PlayerJsUrl,
 		Stream:      best,
-		AllStreams:   streams,
+		AllStreams:  streams,
 		NsigErr:     firstNsigErr,
 	}, nil
 }

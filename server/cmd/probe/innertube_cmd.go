@@ -119,6 +119,11 @@ func runHome(_ []string) {
 		Locale:   models.Locale{HL: "en", GL: "US"},
 	})
 
+	// Guest mode (no cookies wired): the home feed degrades to generic,
+	// non-personalized content. Surface this so the output isn't mistaken
+	// for a personalized feed.
+	fmt.Fprintln(os.Stderr, "warning: no cookies configured — home feed degrades to generic content")
+
 	raw, err := client.Browse(ctx, "FEmusic_home", nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "browse: %v\n", err)

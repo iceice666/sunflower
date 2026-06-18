@@ -80,8 +80,8 @@ func RegisterDevice(ctx context.Context, pool *pgxpool.Pool, req RegisterDeviceR
 	}
 
 	return &RegisterDeviceResponse{
-		DeviceID: uuid.UUID(device.ID.Bytes).String(),
-		Token:    tokenStr,
+		DeviceID:           uuid.UUID(device.ID.Bytes).String(),
+		Token:              tokenStr,
 		ServerCapabilities: []string{"auth.v1", "library.v1"},
 	}, nil
 }

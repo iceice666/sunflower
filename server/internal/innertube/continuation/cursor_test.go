@@ -1,8 +1,8 @@
 package continuation_test
 
 import (
-	"testing"
 	"github.com/iceice666/sunflower/server/internal/innertube/continuation"
+	"testing"
 )
 
 func TestCursorIsZero(t *testing.T) {

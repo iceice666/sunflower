@@ -52,7 +52,7 @@ type PlayerResponse struct {
 	VideoID     string
 	PlayerJsURL string // absolute base.js URL; see sig.Cache.Bootstrap for source
 	Stream      StreamURL
-	AllStreams   []StreamURL
+	AllStreams  []StreamURL
 	NsigErr     error // non-nil if n-param decryption failed; stream URL may be throttled
 }
 
