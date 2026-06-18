@@ -187,6 +187,122 @@ class QueueResponse {
 }
 
 // ---------------------------------------------------------------------------
+// M5 home / recommendation models
+// ---------------------------------------------------------------------------
+
+/// One rendered recommendation item in a home section.
+class HomeItem {
+  const HomeItem({
+    required this.mediaId,
+    required this.title,
+    required this.source,
+    this.artists = const [],
+    this.albumId,
+    this.durationMs = 0,
+    this.thumbnailUrl,
+  });
+
+  final String mediaId;
+  final String title;
+  final String source;
+  final List<String> artists;
+  final String? albumId;
+  final int durationMs;
+  final String? thumbnailUrl;
+
+  factory HomeItem.fromJson(Map<String, dynamic> json) {
+    return HomeItem(
+      mediaId: json['media_id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      source: json['source'] as String? ?? '',
+      artists: (json['artists'] as List<dynamic>? ?? const []).cast<String>(),
+      albumId: json['album_id'] as String?,
+      durationMs: json['duration_ms'] as int? ?? 0,
+      thumbnailUrl: json['thumbnail_url'] as String?,
+    );
+  }
+}
+
+/// A titled row in the home feed (quick_picks, daily_discover, …).
+class HomeSection {
+  const HomeSection({
+    required this.id,
+    required this.title,
+    required this.kind,
+    required this.items,
+    this.seed,
+  });
+
+  final String id;
+  final String title;
+  final String kind;
+  final String? seed;
+  final List<HomeItem> items;
+
+  factory HomeSection.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'] as List<dynamic>? ?? const [];
+    return HomeSection(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      kind: json['kind'] as String? ?? '',
+      seed: json['seed'] as String?,
+      items: raw.cast<Map<String, dynamic>>().map(HomeItem.fromJson).toList(),
+    );
+  }
+}
+
+/// The full `/home` payload: sections, mood/genre chips, and a stale flag set
+/// when the feed was served from an expired cache (cold start).
+class HomeFeed {
+  const HomeFeed({
+    required this.sections,
+    this.chips = const [],
+    this.stale = false,
+  });
+
+  final List<HomeSection> sections;
+  final List<String> chips;
+  final bool stale;
+
+  factory HomeFeed.fromJson(Map<String, dynamic> json) {
+    final secs = json['sections'] as List<dynamic>? ?? const [];
+    return HomeFeed(
+      sections: secs
+          .cast<Map<String, dynamic>>()
+          .map(HomeSection.fromJson)
+          .toList(),
+      chips: (json['chips'] as List<dynamic>? ?? const []).cast<String>(),
+      stale: json['stale'] as bool? ?? false,
+    );
+  }
+}
+
+/// A user playlist summary (and items when fetched by id).
+class Playlist {
+  const Playlist({
+    required this.id,
+    required this.title,
+    required this.version,
+    this.items = const [],
+  });
+
+  final String id;
+  final String title;
+  final int version;
+  final List<HomeItem> items;
+
+  factory Playlist.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'] as List<dynamic>? ?? const [];
+    return Playlist(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      version: (json['version'] as num?)?.toInt() ?? 0,
+      items: raw.cast<Map<String, dynamic>>().map(HomeItem.fromJson).toList(),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // API client
 // ---------------------------------------------------------------------------
 
@@ -239,10 +355,7 @@ class SunflowerApi {
       queryParameters: {'limit': limit, 'offset': offset},
     );
     final raw = response.data?['songs'] as List<dynamic>? ?? [];
-    return raw
-        .cast<Map<String, dynamic>>()
-        .map(Song.fromJson)
-        .toList();
+    return raw.cast<Map<String, dynamic>>().map(Song.fromJson).toList();
   }
 
   /// Returns the authenticated stream URL for [mediaId].
@@ -297,6 +410,80 @@ class SunflowerApi {
       options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
     );
     return ResolvedStream.fromJson(response.data ?? const {});
+  }
+
+  // -------------------------------------------------------------------------
+  // M5 home / likes / playlists / impressions
+  // -------------------------------------------------------------------------
+
+  /// Fetches the recommendation home feed, honoring filter [prefs].
+  Future<HomeFeed> home({
+    bool hideExplicit = false,
+    bool hideVideo = false,
+    bool hideShorts = false,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/home',
+      queryParameters: {
+        'hide_explicit': hideExplicit,
+        'hide_video': hideVideo,
+        'hide_shorts': hideShorts,
+      },
+    );
+    return HomeFeed.fromJson(response.data ?? const {});
+  }
+
+  /// Toggles a like for [mediaId]. Mutating — carries an Idempotency-Key.
+  Future<bool> toggleLike(String mediaId, bool liked) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/likes',
+      data: {'media_id': mediaId, 'liked': liked},
+      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+    );
+    return response.data?['liked'] as bool? ?? liked;
+  }
+
+  /// Logs a batch of recommendation impressions (best effort).
+  Future<void> logImpressions(List<Map<String, dynamic>> impressions) async {
+    if (impressions.isEmpty) return;
+    await _dio.post<Map<String, dynamic>>(
+      '/api/v1/impressions',
+      data: {'impressions': impressions},
+    );
+  }
+
+  /// Lists the user's playlists (summaries, no items).
+  Future<List<Playlist>> listPlaylists() async {
+    final response = await _dio.get<Map<String, dynamic>>('/api/v1/playlists');
+    final raw = response.data?['playlists'] as List<dynamic>? ?? const [];
+    return raw.cast<Map<String, dynamic>>().map(Playlist.fromJson).toList();
+  }
+
+  /// Fetches a single playlist with its items.
+  Future<Playlist> getPlaylist(String id) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/playlists/$id',
+    );
+    return Playlist.fromJson(response.data ?? const {});
+  }
+
+  /// Creates a playlist and returns its summary.
+  Future<Playlist> createPlaylist(String title) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/playlists',
+      data: {'title': title},
+      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+    );
+    return Playlist.fromJson(response.data ?? const {});
+  }
+
+  /// Adds a song to a playlist.
+  Future<void> addPlaylistItem(String playlistId, String mediaId) async {
+    await _dio.post<void>(
+      '/api/v1/playlists/$playlistId/items',
+      data: {'media_id': mediaId},
+      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+    );
   }
 
   /// Authorization header map — pass to just_audio and cached_network_image.

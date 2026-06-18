@@ -22,6 +22,7 @@ import (
 	"github.com/iceice666/sunflower/server/internal/jobs"
 	"github.com/iceice666/sunflower/server/internal/library"
 	"github.com/iceice666/sunflower/server/internal/queue"
+	"github.com/iceice666/sunflower/server/internal/recs"
 	"github.com/iceice666/sunflower/server/internal/streamproxy"
 	"github.com/iceice666/sunflower/server/internal/streams"
 	"github.com/rs/zerolog"
@@ -107,6 +108,14 @@ func main() {
 	if yt != nil {
 		deps.YT = yt
 	}
+
+	// M5: recommendation engine. yt may be nil (guest/bootstrap-failed) — remote
+	// sections then degrade to empty; local-first Quick Picks still work.
+	recsOpts := recs.Options{DB: pool, Log: log}
+	if yt != nil {
+		recsOpts.YT = yt
+	}
+	deps.Recs = recs.NewEngine(recsOpts)
 	handler := api.NewRouter(deps)
 
 	srv := &http.Server{

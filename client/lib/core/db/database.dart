@@ -56,11 +56,26 @@ class RecentPlays extends Table {
   Set<Column> get primaryKey => {mediaId};
 }
 
+/// Cold-start cache of the rendered Home feed (M5). One row holds the whole
+/// `/home` JSON payload so a launch with the server unreachable can render
+/// yesterday's sections with a "stale" indicator. Single logical row keyed by
+/// the filters hash (so a prefs change doesn't show the wrong cached feed).
+class HomeCache extends Table {
+  TextColumn get cacheKey => text()();
+
+  /// The full `/home` response JSON (sections + chips), stored verbatim.
+  TextColumn get payloadJson => text()();
+  DateTimeColumn get cachedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {cacheKey};
+}
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
 
-@DriftDatabase(tables: [LookaheadCache, RecentPlays])
+@DriftDatabase(tables: [LookaheadCache, RecentPlays, HomeCache])
 class SunflowerDatabase extends _$SunflowerDatabase {
   SunflowerDatabase() : super(_openConnection());
 
@@ -113,6 +128,23 @@ class SunflowerDatabase extends _$SunflowerDatabase {
           ])
           ..limit(limit))
         .get();
+  }
+
+  // --- HomeCache ------------------------------------------------------------
+
+  /// Stores the rendered Home payload JSON for [cacheKey] (overwrites).
+  Future<void> putHome(String cacheKey, String payloadJson) async {
+    await into(homeCache).insertOnConflictUpdate(
+      HomeCacheCompanion.insert(cacheKey: cacheKey, payloadJson: payloadJson),
+    );
+  }
+
+  /// Returns the cached Home payload for [cacheKey], or null on a miss.
+  Future<HomeCacheData?> getHome(String cacheKey) {
+    return (select(homeCache)
+          ..where((t) => t.cacheKey.equals(cacheKey))
+          ..limit(1))
+        .getSingleOrNull();
   }
 }
 

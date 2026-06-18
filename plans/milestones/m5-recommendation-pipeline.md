@@ -106,3 +106,45 @@ client/lib/features/library/
 - Offline downloads of recommended tracks (M6).
 - Cross-device impression / like sync semantics (M7).
 - Lyrics, Discord scrobble — see [`../risks.md`](../risks.md) out-of-scope.
+
+## Implementation status
+
+**Server half: done.** Verified (`go build`/`vet`/`test` incl. a testcontainers
+integration test `internal/api/integration_m5_test.go`, `gofmt`, `sqlc` all green):
+
+- `internal/recs` — candidate pipeline (`engine.go` with a `buildBudget` total
+  deadline + bounded `errgroup` fan-out capped at 5, 8 s/call), composable
+  `filters.go`, the documented `ranking.go` weight formula
+  (0.35/0.20/0.15/0.15/0.10/0.05) with greedy diversity spread, sub-scorers
+  (`affinity`/`seed_strength`/`recency`/`novelty`/`diversity`), `cache.go`
+  (rec_cache 30 min TTL keyed by user + filters hash, stale-on-expiry for cold
+  start), and section builders (`quick_picks` local-first, `daily_discover`
+  liked-seed fan-out, `similar_artist`, `youtube_home` + chips,
+  `community_playlists`).
+- `internal/db/query/recs.sql` (+ generated layer) — most-played songs/artists,
+  forgotten favorites, recent impressions, idempotent like upsert
+  (last-write-wins via `GREATEST`), playlist CRUD, rec_cache get/upsert.
+- Handlers + routes: `GET /home`, `POST /likes`, `POST /impressions`, full
+  `/playlists` CRUD with ownership checks; engine wired in `cmd/sunflowerd`.
+- Unit tests: ranking (vary-one-signal ordering, weights sum, sub-scorer
+  bounds), filters, cache key derivation, fan-out merge/dedup.
+
+**Client half: done.** Implemented to spec, parse/format-verified with
+`dart format` (no Flutter SDK here → `build_runner`/`flutter test` run in a
+Flutter env; see M4 note):
+
+- `core/db/database.dart` — `HomeCache` table + DAOs; `core/db/database_provider.dart`.
+- `core/api/sunflower_api.dart` — `HomeFeed`/`HomeSection`/`HomeItem`/`Playlist`
+  models + `home`/`toggleLike`/`logImpressions`/playlist methods.
+- `features/home/` — `home_controller.dart` (fetch + HomeCache cold-start
+  fallback with stale flag), `home_screen.dart` (pull-to-refresh, stale banner,
+  tap-to-queue for YT items, impression logging), `section_widget.dart`,
+  `chip_bar.dart`.
+- `features/library/` — `playlists_screen.dart`, `playlist_detail_screen.dart`.
+- `app.dart` — bottom-nav `MainShell` (Home / Songs / Playlists).
+
+Self-reviewed (bundled reviewer + oracle agents both hit an environment/model
+error before yielding; their read scope matched this review). Fixes applied: a
+`BuildHome` total-deadline guard against the server write timeout, and a
+YouTube-only guard on home tap-to-queue (local items have no radio seed kind
+yet).

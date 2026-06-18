@@ -10,6 +10,7 @@ import (
 	"github.com/iceice666/sunflower/server/internal/jobs"
 	"github.com/iceice666/sunflower/server/internal/library"
 	"github.com/iceice666/sunflower/server/internal/queue"
+	"github.com/iceice666/sunflower/server/internal/recs"
 	"github.com/iceice666/sunflower/server/internal/streamproxy"
 	"github.com/iceice666/sunflower/server/internal/streams"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,6 +35,10 @@ type Deps struct {
 	Streams *streams.Resolver
 	Proxy   *streamproxy.Handler
 	YT      queueAndStreamYT // InnerTube client for radio + resolve; may be nil
+
+	// M5 recommendation engine. Nil disables /home, /likes, /playlists,
+	// /impressions (they 503).
+	Recs *recs.Engine
 }
 
 // queueAndStreamYT is the InnerTube surface the queue and stream handlers need.
@@ -74,6 +79,18 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/queue/{id}", d.getQueue)
 			r.Get("/next", d.getNext)
 			r.Post("/streams/resolve", d.resolveStream)
+
+			// M5 recommendations, likes, playlists, impressions.
+			r.Get("/home", d.getHome)
+			r.Post("/likes", d.postLike)
+			r.Post("/impressions", d.postImpressions)
+			r.Get("/playlists", d.listPlaylists)
+			r.Post("/playlists", d.createPlaylist)
+			r.Get("/playlists/{id}", d.getPlaylist)
+			r.Patch("/playlists/{id}", d.updatePlaylist)
+			r.Delete("/playlists/{id}", d.deletePlaylist)
+			r.Post("/playlists/{id}/items", d.addPlaylistItem)
+			r.Delete("/playlists/{id}/items/{media_id}", d.removePlaylistItem)
 		})
 
 		// Stream proxy is authorized by its short-lived HMAC token, not the
