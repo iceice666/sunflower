@@ -1,7 +1,7 @@
 # M3 InnerTube Client — Design Spec
 
 **Date:** 2026-06-18
-**Status:** approved
+**Status:** approved (v3 — second reviewer pass applied)
 **Demo target:** `probe innertube next --video-id=<id>` returns a fresh, playable stream URL without any external service.
 
 ---
@@ -26,6 +26,7 @@ server/internal/innertube/
     base_js.go              fetch + cache base.js by player-JS-ID hash
     transform.go            sig-cipher op list (reverse/splice/swap) for WEB context
     nsig.go                 n-param decryption via embedded goja JS engine
+    testdata/               frozen base.js snippets + (n_in, n_out) pairs for unit tests
   payloads/
     player.go               /youtubei/v1/player request body
     next.go                 /youtubei/v1/next
@@ -39,12 +40,17 @@ server/internal/innertube/
     artist_page.go
     album_page.go
     playlist_page.go
-    testdata/               fixture JSON captured from live calls
+    search_page.go          SearchPage with song/album/artist results
+    testdata/               fixture JSON captured from live calls, one file per surface
   continuation/
     cursor.go               opaque []byte token, round-trip only
 server/internal/cookies/
-  store.go                  secretbox encrypt/decrypt
+  store.go                  secretbox encrypt/decrypt, reads two-column schema
   refresh_job.go            hourly health-probe call
+server/internal/api/
+  handlers_cookies.go       POST /api/v1/cookies/youtube + GET /api/v1/cookies/youtube/status
+server/db/migrations/
+  0006_cookie_health.sql    adds cookie_health table (single row per provider)
 server/cmd/probe/
   main.go
   innertube_cmd.go          subcommands: next, home, search, cookies-set
@@ -56,11 +62,11 @@ server/cmd/probe/
 2. `context.go` — ANDROID_MUSIC context builder
 3. `payloads/player.go` — POST body for `/player`
 4. `client.go` — bare HTTP client, no cookies yet
-5. `sig/base_js.go` + `sig/nsig.go` — n-param decryption
-6. Wire `probe innertube next` → make real YT call → save response as `testdata/player_with_sig.json`
+5. `sig/base_js.go` + `sig/nsig.go` — Bootstrap (iframe_api), n-param decryption; add `goja` dep
+6. Wire `probe innertube next` → make real YT call → save response as `testdata/player_response.json`; capture base.js nsig fixture
 7. `parser/next_page.go` + `parser/yt_item.go` — parse captured fixture; **demo target met**
-8. Expand: remaining payloads + parsers with fixtures from real calls
-9. `cookies/store.go` + `refresh_job.go` + `probe cookies-set` subcommand
+8. Expansion pass (in order): `payloads/next.go`, `payloads/browse.go`, `payloads/search.go`; then `parser/home_page.go`, `parser/related_page.go`, `parser/artist_page.go`, `parser/album_page.go`, `parser/playlist_page.go`, `parser/search_page.go`; plus `probe home` and `probe search` subcommands; `sig/transform.go` (WEB cipher fallback)
+9. `cookies/store.go` + `0006_cookie_health.sql` migration + `handlers_cookies.go` + `refresh_job.go` + `probe cookies-set`
 
 ---
 
@@ -87,12 +93,44 @@ type SongItem struct {
     ThumbnailURL string
 }
 
-// AlbumItem, ArtistItem, PlaylistItem follow the same optional-field pattern.
+type AlbumItem struct {
+    BrowseID     string
+    Title        string
+    Artists      []string
+    Year         string
+    ThumbnailURL string
+}
+
+type ArtistItem struct {
+    BrowseID     string
+    Name         string
+    ThumbnailURL string
+}
+
+type PlaylistItem struct {
+    BrowseID     string
+    Title        string
+    ThumbnailURL string
+}
 
 type PlayerResponse struct {
-    VideoID   string
-    Stream    StreamURL   // best audio format after n-param decode
-    AllStream []StreamURL // all formats; caller selects quality
+    VideoID     string
+    PlayerJsURL string     // absolute base.js URL; see §4b for source
+    Stream      StreamURL  // best audio format after n-param decode
+    AllStreams   []StreamURL
+}
+
+// HomePage is populated by ParseHomePage (expansion pass).
+// Minimal definition here; field list is finalised during the expansion pass
+// once live fixtures are captured.
+type HomePage struct {
+    Sections []HomeSection
+    Chips    []string // mood/genre filter chips; empty in guest mode
+}
+
+type HomeSection struct {
+    Title string
+    Items []any // SongItem | AlbumItem | PlaylistItem
 }
 
 type NextPage struct {
@@ -100,9 +138,33 @@ type NextPage struct {
     Related      []SongItem
     Continuation Cursor // zero → no more pages
 }
+
+type SearchPage struct {
+    Songs    []SongItem
+    Albums   []AlbumItem
+    Artists  []ArtistItem
+    Continuation Cursor
+}
 ```
 
-Zero values everywhere — no pointer fields, no error returns from parsers.
+**Locating base.js (critical path for n-param decryption):**
+
+ANDROID_MUSIC player responses do not reliably contain a `jsUrl` field. The
+base.js URL is therefore sourced via a separate lightweight bootstrap step:
+
+1. On first call (or after cache expiry), `sig.Cache.Bootstrap(ctx)` fetches
+   `https://www.youtube.com/iframe_api`, follows the redirect to a URL of the
+   form `https://www.youtube.com/s/player/<hash>/www-widgetapi.vflset/www-widgetapi.js`,
+   and extracts `<hash>` to construct the canonical base.js URL:
+   `https://www.youtube.com/s/player/<hash>/player_ias.vflset/en_US/base.js`
+2. This base.js URL is cached for 6 hours. The `PlayerResponse.PlayerJsURL`
+   field is populated by `sig.Cache` during `Client.Player` if a newer hash is
+   observed in the player response; otherwise it holds the bootstrapped URL.
+3. `DecodeN` always receives the explicit `playerJsURL` from `PlayerResponse`;
+   there is no derivation from URL query parameters.
+
+If `Bootstrap` fails (network error), `sig.Cache` returns `ErrNoPlayerJs` and
+the caller should surface a degraded-mode warning.
 
 ---
 
@@ -111,6 +173,10 @@ Zero values everywhere — no pointer fields, no error returns from parsers.
 ```go
 // client.go
 
+// WEB_REMIX is used for surfaces that require the full YT Music web experience
+// (e.g. browse endpoints for artist/album pages). ANDROID_MUSIC is used for
+// player and next — it returns plain stream URLs (no signatureCipher). The
+// Client chooses context per-method; callers do not select it directly.
 type Client struct {
     http       *http.Client
     sig        *sig.Cache
@@ -141,17 +207,18 @@ Two separate sub-problems:
 
 ### 4a. Sig cipher (`transform.go`)
 
-Applies when a WEB context response returns `signatureCipher` instead of a
-plain `url`. ANDROID_MUSIC returns plain URLs, so this is a WEB-fallback path.
+Applies when a WEB_REMIX context response returns `signatureCipher` instead of
+a plain `url`. ANDROID_MUSIC returns plain URLs, so this path is only exercised
+by WEB_REMIX browse/search surfaces (expansion pass, step 8).
 
-- Fetch `base.js` from `https://www.youtube.com/s/player/<player_js_id>/…/base.js`
+- Fetch `base.js` using the URL from `PlayerResponse.PlayerJsURL`
 - Regex-extract the sig transform function; parse its body into `[]Op`
 - Three op kinds: `Reverse`, `Splice(n)`, `Swap(n)`
 - Apply ops to the ciphered sig string in sequence
 
 ```go
 type Op struct { Kind opKind; Arg int }
-func Apply(ops []Op, sig string) string // pure function
+func Apply(ops []Op, sig string) string // pure function, no I/O
 ```
 
 ### 4b. N-param decryption (`nsig.go`)
@@ -161,27 +228,46 @@ if `n` is not replaced with the decoded value. The decode logic is an obfuscated
 JS function in `base.js` that rotates frequently.
 
 **Implementation: `goja` JS engine.** Extract the JS function text from
-`base.js` by regex, compile it once per base.js version, execute it with
-`goja.RunString`. This is robust against function-body changes; only the
-extraction regex needs updating if YT changes the function name.
+`base.js` by regex, compile it once per base.js version with `goja.Compile`,
+call it per URL with a `goja.Runtime`. This is robust against function-body
+changes; only the extraction regex needs updating if YT renames the function.
+
+Add the dependency from `server/`:
+```
+go get github.com/dop251/goja@latest
+```
+Pin the resulting pseudo-version in `go.mod`. `goja` is pure Go, no CGo.
 
 ```go
-// sig.Cache holds parsed ops + compiled goja program per base.js hash.
+// sig.Cache holds parsed ops + compiled goja program per player-JS-ID.
 type Cache struct { mu sync.RWMutex; entries map[string]*entry }
 
-func (c *Cache) DecodeN(ctx context.Context, rawURL string) (string, error)
-func (c *Cache) ApplySig(ctx context.Context, cipher string) (string, error)
+// Bootstrap fetches https://www.youtube.com/iframe_api, extracts the current
+// player hash, and pre-warms the base.js cache. Call once at startup; the
+// cache refreshes automatically on TTL expiry or 403 burst.
+func (c *Cache) Bootstrap(ctx context.Context) error
+
+// DecodeN replaces the ?n= query param in rawURL with the decoded value.
+// playerJsURL is passed explicitly from PlayerResponse.PlayerJsURL;
+// if empty, the most recently bootstrapped base.js entry is used.
+func (c *Cache) DecodeN(ctx context.Context, rawURL, playerJsURL string) (string, error)
+func (c *Cache) ApplySig(ctx context.Context, cipher, playerJsURL string) (string, error)
 ```
 
-Both methods fetch and parse `base.js` lazily on first call, then cache by the
-player-JS-ID embedded in the URL. A new player-JS-ID in any response triggers a
-background re-fetch.
+`playerJsURL` is always passed explicitly (sourced from `PlayerResponse.PlayerJsURL`
+or the bootstrapped URL). There is no derivation from stream URL query parameters.
 
 ### 403 sustained-burst handling
 
-The `Cache` tracks consecutive 403s per base.js hash. After 3 failures in a 60s
-window it evicts the entry and re-fetches `base.js` on the next call. If 403s
-persist after re-fetch, it returns `ErrSigInvalidated` so the caller can alert.
+The `Cache` tracks consecutive 403s per player-JS-ID. After 3 in a 60s window
+it evicts the entry and re-fetches `base.js` on the next call. If 403s persist
+after re-fetch, it returns `ErrSigInvalidated` so the caller can alert.
+
+### File naming
+
+The implementation file is `sig/nsig.go` (not `cipher.go`). `cipher.go` was
+a placeholder name in the milestone; `nsig.go` is the canonical name used
+throughout this spec.
 
 ---
 
@@ -194,6 +280,7 @@ persist after re-fetch, it returns `ErrSigInvalidated` so the caller can alert.
 func ParsePlayerResponse(raw json.RawMessage) models.PlayerResponse
 func ParseNextPage(raw json.RawMessage) models.NextPage
 func ParseHomePage(raw json.RawMessage) models.HomePage
+func ParseSearchPage(raw json.RawMessage) models.SearchPage
 // … etc.
 ```
 
@@ -209,9 +296,6 @@ func getString(m map[string]any, path ...string) string
 func getArray(m map[string]any, path ...string) []any
 func getInt(m map[string]any, path ...string) int
 ```
-
-This makes the zero-on-missing guarantee automatic with no nil checks scattered
-through parser code.
 
 ### Fixtures
 
@@ -237,52 +321,115 @@ a non-zero `Cursor` into the POST body's `continuation` field.
 
 ## 7. Cookie store
 
-```go
-// cookies/store.go
-// Key is [32]byte from SUNFLOWER_COOKIE_KEY (hex-decoded).
-// Nonce is random 24 bytes prepended to ciphertext.
-func Store(ctx context.Context, db *pgxpool.Pool, key [32]byte, provider string, raw []byte) error
-func Load(ctx context.Context, db *pgxpool.Pool, key [32]byte, provider string) ([]byte, error)
-```
+### Encryption (`cookies/store.go`)
 
 Uses `golang.org/x/crypto/nacl/secretbox` — same `crypto_secretbox_xsalsa20poly1305`
-primitive as libsodium, pure Go, no CGo.
+primitive as libsodium, pure Go, no CGo. The existing `encrypted_cookies` table
+(migration `0004_sync.sql`) has two separate columns: `ciphertext bytea` and
+`nonce bytea`. The implementation must write them separately:
 
-`refresh_job.go` runs hourly: calls `Client.Next` against a known-stable video
-ID with the stored cookies, writes `status = "ok"|"degraded"` to a
-`cookie_health` table row. `GET /api/v1/cookies/youtube/status` reads that row.
-A new migration (`0006_cookie_health.sql`) adds this table — single row keyed by
-`provider`, upserted on each probe run.
+```go
+// Store encrypts raw with secretbox, writes ciphertext and nonce as separate columns.
+func Store(ctx context.Context, db *pgxpool.Pool, key [32]byte, userID uuid.UUID, provider string, raw []byte) error
+// Load reads ciphertext+nonce, decrypts, returns plaintext.
+func Load(ctx context.Context, db *pgxpool.Pool, key [32]byte, userID uuid.UUID, provider string) ([]byte, error)
+```
+
+Nonce is random 24 bytes, stored in the `nonce` column. The ciphertext column
+holds only the secretbox output (no nonce prefix). Tampered ciphertext returns
+`ErrDecryptFailed`; missing row returns `ErrNotFound`.
+
+### `cookie_health` table (migration `0006_cookie_health.sql`)
+
+```sql
+CREATE TABLE cookie_health (
+    provider     text        NOT NULL PRIMARY KEY,
+    status       text        NOT NULL DEFAULT 'unknown', -- 'ok' | 'degraded' | 'unknown'
+    checked_at   timestamptz,
+    detail       text        -- last error message if degraded
+);
+```
+
+Single row per provider, upserted on each probe run.
+
+### Health probe (`cookies/refresh_job.go`)
+
+Runs hourly: calls `Client.Next` with the stored cookies against a
+known-stable video ID (`dQw4w9WgXcQ`), upserts `cookie_health` with
+`status='ok'` or `status='degraded'` + error detail.
+
+### API endpoints (`internal/api/handlers_cookies.go`)
+
+**Upload cookies:**
+```
+POST /api/v1/cookies/youtube
+Authorization: Bearer <device-token>
+Content-Type: application/json
+{ "cookies": "<Netscape-format cookie file contents as a string>" }
+
+→ 204 No Content   (success; server never echoes cookie data back)
+→ 400 { "error": "invalid_format" }
+→ 401 { "error": "unauthorized" }
+```
+
+**Status:**
+```
+GET /api/v1/cookies/youtube/status
+Authorization: Bearer <device-token>
+
+→ 200 { "status": "ok"|"degraded"|"unknown", "checked_at": "<ISO8601>|null", "detail": "<error string>|null" }
+```
+
+Both routes are protected by the existing auth middleware. Registration in
+`router.go` under the authenticated group.
 
 ---
 
-## 8. Error handling summary
+## 8. Probe CLI (`cmd/probe/innertube_cmd.go`)
+
+Subcommands and output flags:
+
+```
+probe innertube next --video-id=<id> [--cookies=<path>] [-o json|url]
+probe innertube home [--cookies=<path>]
+probe innertube search --query=<q> [--cookies=<path>]
+probe innertube cookies-set --file=<netscape-cookie-file>
+```
+
+`-o url` prints only the resolved stream URL (enables the `curl "$(probe …)"` pattern from the demo). `-o json` (default) prints the full typed struct as JSON.
+
+`probe innertube home` is part of the expansion pass (build order step 8).
+
+---
+
+## 9. Error handling summary
 
 | Tier | Behaviour |
 |---|---|
 | Network / non-2xx | Wrapped error returned to caller; client retries once on 5xx |
 | 403 sustained burst | Evict sig cache entry, re-fetch base.js; `ErrSigInvalidated` if persists |
 | Parser missing field | Zero value returned; unknown renderer kind logged at debug, skipped |
-| Cookie decrypt failure | Error returned; health probe marks status "degraded" |
+| Cookie decrypt failure | `ErrDecryptFailed` returned; health probe marks status "degraded" |
+| Cookie missing | `ErrNotFound`; client falls back to guest mode |
 
 ---
 
-## 9. Testing
+## 10. Testing
 
 | Layer | Method |
 |---|---|
-| `sig/transform.go` | Unit tests: frozen `(ops, input) → expected` pairs, no network |
-| `sig/nsig.go` | Unit tests: frozen base.js snippet + known `n → decoded_n` pairs |
-| `parser/*.go` | Table-driven tests against `testdata/` fixtures; normal + missing-field cases per surface |
-| `cookies/store.go` | Unit test: encrypt → decrypt round-trip; tampered ciphertext errors |
+| `sig/transform.go` | Unit tests: frozen `(ops, input) → expected` pairs; fixtures in `sig/testdata/` |
+| `sig/nsig.go` | Unit tests: frozen base.js snippet + known `(n_in, n_out)` pairs; fixtures in `sig/testdata/` |
+| `parser/*.go` | Table-driven tests against `parser/testdata/` fixtures; normal + missing-field cases per surface |
+| `cookies/store.go` | Unit test: encrypt → decrypt round-trip; tampered ciphertext returns `ErrDecryptFailed` |
 | `probe innertube next` | Manual end-to-end only (requires live YT); not in CI |
 
-No test containers needed for M3. Cookie DB interaction is covered by M1's
-existing integration test harness when the cookie endpoint is wired in.
+No test containers needed for M3. Cookie DB interaction is covered by the
+integration test harness introduced in M1 when the cookie endpoint is wired in.
 
 ---
 
-## 10. Out of scope for M3
+## 11. Out of scope for M3
 
 - Personalized home/explore surface assembly (M5)
 - Stream proxy fallback (M4)
