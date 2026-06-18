@@ -36,3 +36,21 @@ func TestNextPayload_WithContinuation(t *testing.T) {
 		t.Errorf("continuation = %v, want tok", p["continuation"])
 	}
 }
+
+func TestBrowsePayload(t *testing.T) {
+	p := payloads.Browse("FEmusic_home", nil, models.Locale{HL: "en", GL: "US"})
+	if p["browseId"] != "FEmusic_home" {
+		t.Errorf("browseId = %v", p["browseId"])
+	}
+	ctx := p["context"].(map[string]any)["client"].(map[string]any)
+	if ctx["clientName"] != "WEB_REMIX" {
+		t.Errorf("context should use WEB_REMIX, got %v", ctx["clientName"])
+	}
+}
+
+func TestSearchPayload(t *testing.T) {
+	p := payloads.Search("Beatles", models.Locale{HL: "en", GL: "US"})
+	if p["query"] != "Beatles" {
+		t.Errorf("query = %v", p["query"])
+	}
+}
