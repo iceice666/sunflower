@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/dop251/goja"
 )
@@ -27,9 +28,10 @@ type nsigEntry struct {
 	funcName string
 }
 
-// extractBody returns the balanced brace-delimited body starting at position
-// start in js, where js[start] == '{'. It skips string literals to avoid
-// counting braces inside them.
+// extractBody returns the function body starting at position start in js,
+// where js[start] == '{'. It counts braces, skipping string content.
+// Known limitation: JS regex literals (e.g. /pat}tern/) are not detected;
+// in practice nsig functions use string ops, not regex literals with '}' inside.
 func extractBody(js string, start int) (string, bool) {
 	depth := 0
 	inStr := byte(0) // 0 = not in string; '"', '\'', '`' = inside that string
@@ -86,16 +88,26 @@ func extractNsig(js string) (*nsigEntry, error) {
 
 	var funcName string
 	if am != nil {
-		// The array contains function names; use the first element.
-		funcName = am[1]
+		// Use the first element only (array may have comma-separated names).
+		elem := strings.SplitN(am[1], ",", 2)[0]
+		funcName = strings.TrimSpace(elem)
 	} else {
 		funcName = arrayName
 	}
 
 	// Find the function start position using a regex, then extract the body
 	// with brace-counting so deeply nested functions are handled correctly.
-	funcStartRe := regexp.MustCompile(`(?:var |,)\s*` + regexp.QuoteMeta(funcName) + `\s*=\s*(function\([^)]*\)\s*)\{`)
-	loc := funcStartRe.FindStringSubmatchIndex(js)
+
+	// Try expression form: var NAME=function(...){  or  ,NAME=function(...){
+	funcExprRe := regexp.MustCompile(`(?:var |,)\s*` + regexp.QuoteMeta(funcName) + `\s*=\s*(function(?:\s+[a-zA-Z0-9$_]*)?\([^)]*\)\s*)\{`)
+	loc := funcExprRe.FindStringSubmatchIndex(js)
+
+	// If not found, try declaration form: function NAME(...){
+	if loc == nil {
+		funcDeclRe := regexp.MustCompile(`(function\s+` + regexp.QuoteMeta(funcName) + `\s*\([^)]*\)\s*)\{`)
+		loc = funcDeclRe.FindStringSubmatchIndex(js)
+	}
+
 	if loc == nil {
 		return nil, fmt.Errorf("nsig: function body not found for %q", funcName)
 	}

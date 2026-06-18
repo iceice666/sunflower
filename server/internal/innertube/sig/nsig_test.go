@@ -2,6 +2,47 @@ package sig
 
 import "testing"
 
+const syntheticBaseJS = `
+var abc=function(a){a.get("n"))&&(b=xyz[0](a.get("n")));};
+var xyz=[nfunc];
+var nfunc=function(a){if(a.length){return a.split("").reverse().join("")}return a};
+`
+
+func TestExtractNsig(t *testing.T) {
+	e, err := extractNsig(syntheticBaseJS)
+	if err != nil {
+		t.Fatalf("extractNsig: %v", err)
+	}
+	got, err := e.decode("hello")
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := "olleh"
+	if got != want {
+		t.Errorf("decode(%q) = %q, want %q", "hello", got, want)
+	}
+}
+
+func TestExtractNsigDeclaration(t *testing.T) {
+	// Test function declaration form (not expression)
+	const declJS = `
+var abc=function(a){a.get("n"))&&(b=xyz[0](a.get("n")));};
+var xyz=[nfunc2];
+function nfunc2(a){return a+"_ok"}
+`
+	e, err := extractNsig(declJS)
+	if err != nil {
+		t.Fatalf("extractNsig(decl): %v", err)
+	}
+	got, err := e.decode("test")
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got != "test_ok" {
+		t.Errorf("decode = %q, want %q", got, "test_ok")
+	}
+}
+
 func TestExtractBody(t *testing.T) {
 	tests := []struct {
 		name    string
