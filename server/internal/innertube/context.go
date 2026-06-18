@@ -7,10 +7,13 @@ const (
 	androidMusicClientVersion = "7.27.52"
 	androidMusicClientID      = "21"
 	androidMusicAPIKey        = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+	androidMusicUserAgent     = "com.google.android.apps.youtube.music/" + androidMusicClientVersion + " (Linux; U; Android 11) gzip"
 
 	webRemixClientName    = "WEB_REMIX"
 	webRemixClientVersion = "1.20230501.01.00"
+	webRemixClientID      = "67"
 	webRemixAPIKey        = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-NKNELL6Cg"
+	webRemixUserAgent     = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
 // BuildAndroidMusicContext returns the base POST body context for ANDROID_MUSIC
@@ -23,7 +26,7 @@ func BuildAndroidMusicContext(locale models.Locale) map[string]any {
 				"clientName":        androidMusicClientName,
 				"clientVersion":     androidMusicClientVersion,
 				"androidSdkVersion": 30,
-				"userAgent":         "com.google.android.apps.youtube.music/" + androidMusicClientVersion + " (Linux; U; Android 11) gzip",
+				"userAgent":         androidMusicUserAgent,
 				"hl":                locale.HL,
 				"gl":                locale.GL,
 				"utcOffsetMinutes":  0,

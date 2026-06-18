@@ -107,9 +107,15 @@ func (c *Client) post(ctx context.Context, path, apiKey string, payload map[stri
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "com.google.android.apps.youtube.music/7.27.52 (Linux; U; Android 11) gzip")
-	req.Header.Set("X-YouTube-Client-Name", androidMusicClientID)
-	req.Header.Set("X-YouTube-Client-Version", androidMusicClientVersion)
+	if apiKey == webRemixAPIKey {
+		req.Header.Set("User-Agent", webRemixUserAgent)
+		req.Header.Set("X-YouTube-Client-Name", webRemixClientID)
+		req.Header.Set("X-YouTube-Client-Version", webRemixClientVersion)
+	} else {
+		req.Header.Set("User-Agent", androidMusicUserAgent)
+		req.Header.Set("X-YouTube-Client-Name", androidMusicClientID)
+		req.Header.Set("X-YouTube-Client-Version", androidMusicClientVersion)
+	}
 
 	if c.cookies != nil {
 		for _, ck := range c.cookies() {

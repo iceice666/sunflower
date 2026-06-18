@@ -4,6 +4,10 @@ package cookies
 import (
 	"context"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,7 +52,6 @@ func runProbe(ctx context.Context, db *pgxpool.Pool, key [32]byte, log zerolog.L
 
 	jar := parseCookieJar(raw)
 	if jar == nil {
-		// Cookie jar could not be parsed; we cannot validate the cookies.
 		upsertHealth(ctx, db, "degraded", "cookie jar parse failed; cannot validate cookies", log)
 		return
 	}
@@ -94,11 +97,53 @@ func nullIfEmpty(s string) interface{} {
 }
 
 // parseCookieJar parses Netscape-format cookie bytes into a CookieJar.
-// Returns nil when the input cannot be parsed.
+// Returns nil when the input is empty or contains no parseable cookies.
+// Netscape format per line: domain\tincludeSubdomains\tpath\tsecure\texpiry\tname\tvalue
 func parseCookieJar(raw []byte) http.CookieJar {
-	// Minimal Netscape parser — real implementation parses lines of the form:
-	// <domain>\t<flag>\t<path>\t<secure>\t<expiry>\t<name>\t<value>
-	// Not yet implemented; returns nil.
-	_ = raw
-	return nil
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil
+	}
+
+	byDomain := make(map[string][]*http.Cookie)
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 7)
+		if len(parts) < 7 {
+			continue
+		}
+		domain := parts[0]
+		path := parts[2]
+		secure := parts[3] == "TRUE"
+		expiry, _ := strconv.ParseInt(parts[4], 10, 64)
+		name := parts[5]
+		value := parts[6]
+
+		c := &http.Cookie{
+			Name:   name,
+			Value:  value,
+			Path:   path,
+			Secure: secure,
+		}
+		if expiry > 0 {
+			c.Expires = time.Unix(expiry, 0)
+		}
+
+		d := strings.TrimPrefix(domain, ".")
+		byDomain[d] = append(byDomain[d], c)
+	}
+
+	if len(byDomain) == 0 {
+		return nil
+	}
+
+	for domain, cookies := range byDomain {
+		u := &url.URL{Scheme: "https", Host: domain}
+		jar.SetCookies(u, cookies)
+	}
+
+	return jar
 }

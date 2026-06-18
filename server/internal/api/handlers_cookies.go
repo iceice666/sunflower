@@ -58,8 +58,9 @@ func (d *Deps) ytCookieStatus(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "cookies_disabled", http.StatusServiceUnavailable)
 		return
 	}
-	var status, detail string
+	var status string
 	var checkedAt *time.Time
+	var detail *string
 
 	err := d.DB.QueryRow(r.Context(),
 		`SELECT status, checked_at, detail FROM cookie_health WHERE provider='youtube'`,
@@ -75,9 +76,7 @@ func (d *Deps) ytCookieStatus(w http.ResponseWriter, r *http.Request) {
 		s := checkedAt.Format(time.RFC3339)
 		resp.CheckedAt = &s
 	}
-	if detail != "" {
-		resp.Detail = &detail
-	}
+	resp.Detail = detail
 	jsonOK(w, resp)
 }
 

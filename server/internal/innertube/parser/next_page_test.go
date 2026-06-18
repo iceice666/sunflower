@@ -12,12 +12,10 @@ func TestParseNextPage_NormalShape(t *testing.T) {
 	if err != nil {
 		t.Skipf("fixture not yet captured: %v", err)
 	}
+	// Current is populated by the Client layer from /player, not by this parser.
 	page := parser.ParseNextPage(raw)
-	if page.Current.VideoID == "" {
-		t.Error("Current.VideoID should not be empty")
-	}
-	// Related items are optional; just verify no panic.
-	t.Logf("related items: %d", len(page.Related))
+	// Must not panic; related items should be present in a live fixture.
+	t.Logf("related items: %d, continuation zero: %v", len(page.Related), page.Continuation.IsZero())
 }
 
 func TestParseNextPage_NoContinuation(t *testing.T) {
