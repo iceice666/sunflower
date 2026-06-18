@@ -114,6 +114,44 @@ class DownloadedTracks extends Table {
   Set<Column> get primaryKey => {mediaId};
 }
 
+/// Buffered offline mutation awaiting replay to the server (M7 write-replay).
+/// Every mutating API call is enqueued here first; a drainer replays them in
+/// [clientClock] order with exponential backoff. Idempotency is guaranteed by
+/// [idempotencyKey] (UUIDv7), which the server dedupes.
+///
+/// status: pending | inflight | confirmed | failed
+/// kind:   like | unlike | playlist_create | playlist_add | playlist_remove |
+///         playlist_rename | playlist_delete | event | download_register |
+///         download_remove
+class PendingMutations extends Table {
+  /// UUIDv7 — also the Idempotency-Key. Monotonic, so ordering by it == client
+  /// clock order.
+  TextColumn get idempotencyKey => text()();
+  TextColumn get kind => text()();
+  TextColumn get method => text()(); // POST | PATCH | DELETE
+  TextColumn get path => text()();
+
+  /// JSON request body (empty for DELETEs).
+  TextColumn get bodyJson => text().withDefault(const Constant(''))();
+  TextColumn get status => text().withDefault(const Constant('pending'))();
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+
+  /// Monotonic client clock; replay order. Lower = older.
+  IntColumn get clientClock => integer()();
+
+  /// When the next replay attempt is due (ms since epoch); backoff schedule.
+  IntColumn get nextAttemptAt => integer().withDefault(const Constant(0))();
+
+  /// Priority for eviction: higher survives. likes(2) > most(1) > impression(0).
+  IntColumn get priority => integer().withDefault(const Constant(1))();
+  TextColumn get error => text().nullable()();
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {idempotencyKey};
+}
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
@@ -125,6 +163,7 @@ class DownloadedTracks extends Table {
     HomeCache,
     DownloadJobs,
     DownloadedTracks,
+    PendingMutations,
   ],
 )
 class SunflowerDatabase extends _$SunflowerDatabase {
@@ -281,6 +320,93 @@ class SunflowerDatabase extends _$SunflowerDatabase {
   Future<void> removeDownloadedTrack(String mediaId) async {
     await (delete(downloadedTracks)..where((t) => t.mediaId.equals(mediaId)))
         .go();
+  }
+
+  // --- PendingMutations (M7 write-replay) -----------------------------------
+
+  /// Enqueues a mutation. Keyed on idempotency key; re-enqueue is a no-op
+  /// update.
+  Future<void> enqueueMutation(PendingMutationsCompanion m) async {
+    await into(pendingMutations).insertOnConflictUpdate(m);
+  }
+
+  /// Returns mutations due for replay (status pending/failed, next attempt due),
+  /// in client-clock order (oldest first).
+  Future<List<PendingMutation>> dueMutations(int nowMs) {
+    return (select(pendingMutations)
+          ..where((t) =>
+              t.status.isIn(['pending', 'failed']) &
+              t.nextAttemptAt.isSmallerOrEqualValue(nowMs))
+          ..orderBy([(t) => OrderingTerm(expression: t.clientClock)]))
+        .get();
+  }
+
+  /// Count of not-yet-confirmed mutations (the "N pending" indicator).
+  Stream<int> watchPendingCount() {
+    final q = selectOnly(pendingMutations)
+      ..addColumns([pendingMutations.idempotencyKey.count()])
+      ..where(pendingMutations.status.isNotIn(['confirmed']));
+    return q
+        .map((row) => row.read(pendingMutations.idempotencyKey.count()) ?? 0)
+        .watchSingle();
+  }
+
+  /// Marks a mutation confirmed (server accepted it).
+  Future<void> confirmMutation(String key) async {
+    await (update(pendingMutations)
+          ..where((t) => t.idempotencyKey.equals(key)))
+        .write(const PendingMutationsCompanion(status: Value('confirmed')));
+  }
+
+  /// Records a failed attempt with the next backoff time.
+  Future<void> reschedule(
+    String key, {
+    required int attempts,
+    required int nextAttemptAt,
+    String? error,
+  }) async {
+    await (update(pendingMutations)
+          ..where((t) => t.idempotencyKey.equals(key)))
+        .write(PendingMutationsCompanion(
+      status: const Value('failed'),
+      attempts: Value(attempts),
+      nextAttemptAt: Value(nextAttemptAt),
+      error: Value(error),
+    ));
+  }
+
+  /// Deletes confirmed mutations (post-drain cleanup).
+  Future<void> purgeConfirmed() async {
+    await (delete(pendingMutations)
+          ..where((t) => t.status.equals('confirmed')))
+        .go();
+  }
+
+  /// Total buffered (unconfirmed) mutation count, for the overflow cap check.
+  Future<int> pendingCount() async {
+    final q = selectOnly(pendingMutations)
+      ..addColumns([pendingMutations.idempotencyKey.count()])
+      ..where(pendingMutations.status.isNotIn(['confirmed']));
+    final row = await q.getSingle();
+    return row.read(pendingMutations.idempotencyKey.count()) ?? 0;
+  }
+
+  /// Evicts the lowest-priority, oldest non-confirmed mutation (buffer cap
+  /// overflow). Returns the evicted key, or null if nothing was evictable.
+  Future<String?> evictOldestLowPriority() async {
+    final candidate = await (select(pendingMutations)
+          ..where((t) => t.status.isNotIn(['confirmed', 'inflight']))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.priority),
+            (t) => OrderingTerm(expression: t.clientClock),
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+    if (candidate == null) return null;
+    await (delete(pendingMutations)
+          ..where((t) => t.idempotencyKey.equals(candidate.idempotencyKey)))
+        .go();
+    return candidate.idempotencyKey;
   }
 }
 

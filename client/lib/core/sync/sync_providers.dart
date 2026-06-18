@@ -1,0 +1,45 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../api/api_client.dart';
+import '../auth/token_store.dart';
+import '../db/database_provider.dart';
+import 'replay_buffer.dart';
+
+/// A Dio configured for the replay buffer: base URL + bearer token from stored
+/// credentials. Separate from SunflowerApi's Dio so the buffer can attach its
+/// own Idempotency-Key header per request.
+final _replayDioProvider = Provider<Dio>((ref) {
+  final baseUrl = ref.watch(serverUrlProvider).valueOrNull ?? '';
+  final token = ref.watch(tokenProvider).valueOrNull ?? '';
+  final dio = Dio(BaseOptions(
+    baseUrl: baseUrl,
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 30),
+  ));
+  if (token.isNotEmpty) {
+    dio.options.headers['Authorization'] = 'Bearer $token';
+  }
+  return dio;
+});
+
+/// The singleton write-replay buffer. Started on first read.
+final replayBufferProvider = Provider<ReplayBuffer>((ref) {
+  final buffer = ReplayBuffer(
+    dio: ref.watch(_replayDioProvider),
+    db: ref.watch(databaseProvider),
+  );
+  buffer.start();
+  ref.onDispose(buffer.dispose);
+  return buffer;
+});
+
+/// The buffered mutation API the UI uses for all writes.
+final bufferedApiProvider = Provider<BufferedApiClient>((ref) {
+  return BufferedApiClient(ref.watch(replayBufferProvider));
+});
+
+/// Live count of unconfirmed pending mutations.
+final pendingCountProvider = StreamProvider<int>((ref) {
+  return ref.watch(replayBufferProvider).watchPendingCount();
+});

@@ -64,39 +64,48 @@ func NewRouter(d Deps) http.Handler {
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(d.DB))
-			r.Post("/library/scan", d.startScan)
+
+			// M7 idempotency middleware for mutating routes. Applied per-route
+			// via .With so it never wraps GETs. A nil DB (unit tests for
+			// /healthz) leaves idem nil → .With(nil-safe passthrough).
+			idem := newIdempotency(d)
+
 			r.Get("/library/songs", d.listSongs)
 			r.Get("/library/albums", d.listAlbums)
 			r.Get("/library/artists", d.listArtists)
 			r.Get("/library/songs/{media_id}/stream", d.streamSong)
 			r.Get("/library/albums/{album_media_id}/art", d.serveAlbumArt)
 			r.Get("/jobs/{id}", d.getJob)
-			r.Post("/cookies/youtube", d.uploadYTCookies)
 			r.Get("/cookies/youtube/status", d.ytCookieStatus)
+			r.With(idem).Post("/library/scan", d.startScan)
+			r.With(idem).Post("/cookies/youtube", d.uploadYTCookies)
 
 			// M4 queue + streams (require device auth).
-			r.Post("/queue/start", d.startQueue)
+			r.With(idem).Post("/queue/start", d.startQueue)
 			r.Get("/queue/{id}", d.getQueue)
 			r.Get("/next", d.getNext)
-			r.Post("/streams/resolve", d.resolveStream)
+			r.With(idem).Post("/streams/resolve", d.resolveStream)
 
 			// M5 recommendations, likes, playlists, impressions.
 			r.Get("/home", d.getHome)
-			r.Post("/likes", d.postLike)
-			r.Post("/impressions", d.postImpressions)
+			r.With(idem).Post("/likes", d.postLike)
+			r.With(idem).Post("/impressions", d.postImpressions)
 			r.Get("/playlists", d.listPlaylists)
-			r.Post("/playlists", d.createPlaylist)
+			r.With(idem).Post("/playlists", d.createPlaylist)
 			r.Get("/playlists/{id}", d.getPlaylist)
-			r.Patch("/playlists/{id}", d.updatePlaylist)
-			r.Delete("/playlists/{id}", d.deletePlaylist)
-			r.Post("/playlists/{id}/items", d.addPlaylistItem)
-			r.Delete("/playlists/{id}/items/{media_id}", d.removePlaylistItem)
+			r.With(idem).Patch("/playlists/{id}", d.updatePlaylist)
+			r.With(idem).Delete("/playlists/{id}", d.deletePlaylist)
+			r.With(idem).Post("/playlists/{id}/items", d.addPlaylistItem)
+			r.With(idem).Delete("/playlists/{id}/items/{media_id}", d.removePlaylistItem)
 
 			// M6 offline downloads (per-device registry + local-song hash).
 			r.Get("/devices/{id}/downloads", d.listDownloads)
-			r.Post("/devices/{id}/downloads", d.registerDownload)
-			r.Delete("/devices/{id}/downloads/{media_id}", d.deleteDownload)
+			r.With(idem).Post("/devices/{id}/downloads", d.registerDownload)
+			r.With(idem).Delete("/devices/{id}/downloads/{media_id}", d.deleteDownload)
 			r.Get("/library/songs/{media_id}/hash", d.songHash)
+
+			// M7 batched play events (idempotent).
+			r.With(idem).Post("/events", d.postEvents)
 		})
 
 		// Stream proxy is authorized by its short-lived HMAC token, not the

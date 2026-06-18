@@ -25,6 +25,7 @@ import (
 	"github.com/iceice666/sunflower/server/internal/recs"
 	"github.com/iceice666/sunflower/server/internal/streamproxy"
 	"github.com/iceice666/sunflower/server/internal/streams"
+	syncpkg "github.com/iceice666/sunflower/server/internal/sync"
 	"github.com/rs/zerolog"
 )
 
@@ -66,6 +67,9 @@ func main() {
 	if cookieKey != [32]byte{} {
 		cookies.StartRefreshJob(ctx, pool, cookieKey, log)
 	}
+
+	// M7: idempotency-log GC (hourly; removes rows older than 24h).
+	syncpkg.StartGC(ctx, pool, log)
 
 	// M4: InnerTube client (guest mode) for radio expansion + stream resolution.
 	// Sig bootstrap is best-effort: on failure the client is left nil and

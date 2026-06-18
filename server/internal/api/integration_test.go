@@ -437,6 +437,34 @@ func doJSON(t *testing.T, srv *httptest.Server, method, path string, body any, t
 	return resp
 }
 
+// doJSONWithHeaders is doJSON plus extra request headers (e.g. Idempotency-Key).
+func doJSONWithHeaders(t *testing.T, srv *httptest.Server, method, path string, body any, token string, headers map[string]string) *http.Response {
+	t.Helper()
+	var r io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		r = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, srv.URL+path, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
 // mustDecode decodes JSON from r into v, closing r when done.
 func mustDecode(t *testing.T, r io.ReadCloser, v any) {
 	t.Helper()

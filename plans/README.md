@@ -52,7 +52,7 @@ on the server.
 | M4 | complete | [`milestones/m4-next-endpoint-and-lookahead.md`](milestones/m4-next-endpoint-and-lookahead.md) | Client plays YT tracks with `/next` lookahead and 403 re-resolve |
 | M5 | complete | [`milestones/m5-recommendation-pipeline.md`](milestones/m5-recommendation-pipeline.md) | Home feed populated; cold-start renders cached sections |
 | M6 | complete | [`milestones/m6-offline-downloads.md`](milestones/m6-offline-downloads.md) | Playlist downloaded; airplane-mode playback works |
-| M7 | — | [`milestones/m7-sync-and-write-replay.md`](milestones/m7-sync-and-write-replay.md) | Offline likes/edits drain to server in clock order, idempotent |
+| M7 | complete | [`milestones/m7-sync-and-write-replay.md`](milestones/m7-sync-and-write-replay.md) | Offline likes/edits drain to server in clock order, idempotent |
 | M8 | — | [`milestones/m8-websocket-and-polish.md`](milestones/m8-websocket-and-polish.md) | Live now-playing push; optional crossfade |
 
 Order rationale: InnerTube (M3) must precede recs (M5) because recs depend on

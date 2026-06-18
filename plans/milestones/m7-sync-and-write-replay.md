@@ -90,3 +90,43 @@ client/lib/features/settings/
 - Real-time push of remote mutations TO the client — for now, the client
   pulls (`If-None-Match`) on refresh / app resume; live push is M8 for
   now-playing only.
+
+## Implementation status
+
+**Server half: done.** Verified (`go build`/`vet`/`test` incl. a testcontainers
+integration test `internal/api/integration_m7_test.go`, `gofmt`, `sqlc` green):
+
+- `internal/sync` — `idempotency.go` (middleware: read `Idempotency-Key`, replay
+  a stable response on a known key without re-running the handler, record key +
+  response hash + 24 h expiry on first 2xx), `gc.go` (hourly purge of expired
+  rows + `RunGC` for tests), `conflict.go` (last-write-wins helper; likes also
+  enforce it in SQL via `GREATEST`).
+- `internal/events` — `scrobble_window.go` (Metrolist-style threshold: ≥30 s or
+  ≥50% of duration).
+- `internal/api` — `handlers_events.go` (`POST /events` batch, scrobble-filtered
+  inserts), `middleware_idempotency.go` (nil-safe wiring), `.With(idem)` applied
+  to every mutating route (`/likes`, `/playlists/*`, `/events`, `/queue/start`,
+  `/streams/resolve`, `/cookies/youtube`, `/devices/{id}/downloads`).
+- `db/query/sync.sql` (+ generated) — `FindIdempotencyLog`,
+  `InsertIdempotencyLog`, `GCIdempotencyLog`, `InsertPlayEvent`.
+- GC started in `cmd/sunflowerd`. Tests: idempotent replay (no double-apply),
+  scrobble window, conflict resolver, GC removes expired rows.
+
+**Client half: done.** Implemented to spec, parse/format-verified with
+`dart format` (no Flutter SDK here → `build_runner`/`flutter test` run in a
+Flutter env; see M4 note):
+
+- `core/db/database.dart` — `PendingMutations` table (status state machine,
+  client clock, priority) + DAOs (enqueue, due-in-order, confirm, reschedule,
+  evict-oldest-low-priority, watch count).
+- `core/sync/` — `idempotency_key.dart` (UUIDv7), `retry_policy.dart`
+  (5 s→30 s→5 min→30 min→2 h cap), `eviction.dart` (10 000 cap, likes > default
+  > impressions), `pending_mutation.dart`, `replay_buffer.dart` (enqueue with
+  overflow eviction, drain in client-clock order, idempotent retry with backoff,
+  overflow-drop counter), `sync_providers.dart`.
+- `core/api/api_client.dart` — buffered mutation facade (every write → buffer
+  first).
+- `features/settings/sync_status_widget.dart` — "N pending" + drops + retry-now;
+  surfaced on the home screen.
+- Tests: `test/replay_buffer_test.dart` (backoff schedule, eviction priority,
+  drain order, idempotent re-replay no-op, reschedule-then-retry).

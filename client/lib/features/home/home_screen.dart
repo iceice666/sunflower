@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/sunflower_api.dart';
 import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
-import '../player_ui/mini_player.dart';
+import '../settings/sync_status_widget.dart';
 import 'chip_bar.dart';
 import 'home_controller.dart';
 import 'section_widget.dart';
@@ -51,6 +51,7 @@ class _FeedBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ListView(
       children: [
+        const SyncStatusWidget(),
         if (feed.stale) const _StaleBanner(),
         ChipBar(chips: feed.chips),
         for (final section in feed.sections)
