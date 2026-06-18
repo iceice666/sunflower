@@ -1,8 +1,8 @@
 package models
 
 import (
-	"time"
 	"github.com/iceice666/sunflower/server/internal/innertube/continuation"
+	"time"
 )
 
 type Locale struct {
@@ -52,7 +52,7 @@ type PlayerResponse struct {
 	VideoID     string
 	PlayerJsURL string // absolute base.js URL; see sig.Cache.Bootstrap for source
 	Stream      StreamURL
-	AllStreams   []StreamURL
+	AllStreams  []StreamURL
 }
 
 type NextPage struct {
@@ -80,9 +80,9 @@ type SearchPage struct {
 
 // ProbeNextResult is the JSON output of `probe innertube next`.
 type ProbeNextResult struct {
-	CurrentURL   string                `json:"current_url"`
-	ExpiresAt    time.Time             `json:"expires_at"`
-	Itag         int                   `json:"itag"`
-	NextItems    []SongItem            `json:"next_items"`
-	Continuation continuation.Cursor   `json:"continuation,omitempty"`
+	CurrentURL   string              `json:"current_url"`
+	ExpiresAt    time.Time           `json:"expires_at"`
+	Itag         int                 `json:"itag"`
+	NextItems    []SongItem          `json:"next_items"`
+	Continuation continuation.Cursor `json:"continuation,omitempty"`
 }
