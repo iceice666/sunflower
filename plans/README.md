@@ -53,7 +53,7 @@ on the server.
 | M5 | complete | [`milestones/m5-recommendation-pipeline.md`](milestones/m5-recommendation-pipeline.md) | Home feed populated; cold-start renders cached sections |
 | M6 | complete | [`milestones/m6-offline-downloads.md`](milestones/m6-offline-downloads.md) | Playlist downloaded; airplane-mode playback works |
 | M7 | complete | [`milestones/m7-sync-and-write-replay.md`](milestones/m7-sync-and-write-replay.md) | Offline likes/edits drain to server in clock order, idempotent |
-| M8 | — | [`milestones/m8-websocket-and-polish.md`](milestones/m8-websocket-and-polish.md) | Live now-playing push; optional crossfade |
+| M8 | complete | [`milestones/m8-websocket-and-polish.md`](milestones/m8-websocket-and-polish.md) | Live now-playing push; optional crossfade |
 
 Order rationale: InnerTube (M3) must precede recs (M5) because recs depend on
 it. Offline (M6) and full sync (M7) come last because they need the rest of

@@ -13,6 +13,7 @@ import (
 	"github.com/iceice666/sunflower/server/internal/recs"
 	"github.com/iceice666/sunflower/server/internal/streamproxy"
 	"github.com/iceice666/sunflower/server/internal/streams"
+	"github.com/iceice666/sunflower/server/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 )
@@ -39,6 +40,9 @@ type Deps struct {
 	// M5 recommendation engine. Nil disables /home, /likes, /playlists,
 	// /impressions (they 503).
 	Recs *recs.Engine
+
+	// M8 now-playing WebSocket hub. Nil disables /ws/now-playing and /admin.
+	Hub *ws.Hub
 }
 
 // queueAndStreamYT is the InnerTube surface the queue and stream handlers need.
@@ -106,6 +110,11 @@ func NewRouter(d Deps) http.Handler {
 
 			// M7 batched play events (idempotent).
 			r.With(idem).Post("/events", d.postEvents)
+
+			// M8 now-playing WebSocket + admin dashboard.
+			r.Get("/ws/now-playing", d.wsNowPlaying)
+			r.Post("/ws/command", d.wsCommand)
+			r.Get("/admin", d.adminDashboard)
 		})
 
 		// Stream proxy is authorized by its short-lived HMAC token, not the

@@ -40,6 +40,14 @@ func Middleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 			hdr := r.Header.Get("Authorization")
 			token, ok := strings.CutPrefix(hdr, "Bearer ")
 			if !ok || token == "" {
+				// WebSocket upgrades (and OS loaders) can't always set an
+				// Authorization header; accept a ?token= query param as a
+				// fallback for those clients.
+				if qt := r.URL.Query().Get("token"); qt != "" {
+					token, ok = qt, true
+				}
+			}
+			if !ok || token == "" {
 				http.Error(w, `{"error":"missing_token"}`, http.StatusUnauthorized)
 				return
 			}

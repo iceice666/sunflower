@@ -73,6 +73,44 @@ client/lib/features/settings/
 - Lyrics / EQ / Discord scrobble — all explicitly out of v1 per
   [`../risks.md`](../risks.md).
 
+## Implementation status
+
+**Server half: done.** Verified (`go build`/`vet`/`test`, `gofmt`, `sqlc` green):
+
+- `internal/ws` — `protocol.go` (subprotocol `sunflower.now-playing.v1`; tick /
+  transition / state / command shapes), `hub.go` (per-device latest state,
+  broadcast to observers, command routing, `/admin` snapshot), `conn.go`
+  (gorilla upgrade, ping/pong heartbeat, buffered non-blocking send, late-joiner
+  seeding).
+- `internal/api` — `handlers_ws.go`: `GET /ws/now-playing` upgrade,
+  `POST /ws/command` (controller → device), `GET /admin` (now-playing per device
+  + cookie status). Hub wired in `cmd/sunflowerd`.
+- `internal/auth` — middleware now also accepts a `?token=` query param so the
+  WebSocket upgrade (which can't always set an Authorization header)
+  authenticates.
+- Tests: protocol round-trip + unknown-field tolerance; a gorilla-client
+  integration test (connect player + observer, tick broadcast, snapshot, pause
+  command delivery, subprotocol negotiation).
+- Added dependency: `github.com/gorilla/websocket`.
+
+**Client half: done.** Implemented to spec, parse/format-verified with
+`dart format` (no Flutter SDK here → `build_runner`/`flutter test` run in a
+Flutter env; see M4 note):
+
+- `core/ws/` — `now_playing_socket.dart` (persistent socket, reconnect backoff
+  5 s→30 s→5 min cap, token-in-query auth), `tick_emitter.dart` (~1 Hz while
+  playing, silent when paused, immediate transition/state frames),
+  `command_handler.dart` (pause/play/skip → AudioHandler), `ws_providers.dart`.
+- `core/player/crossfade_player.dart` — optional volume-ramp crossfade helper.
+- `features/settings/` — `crossfade_setting.dart` (toggle + duration slider,
+  persisted), `settings_screen.dart` (hosts sync status + crossfade and
+  activates the socket).
+- `app.dart` — Settings nav tab; `MainShell` watches `nowPlayingProvider` so the
+  socket is live across the authed session.
+- Added dependency: `web_socket_channel`.
+
+Self-reviewed (review agents unavailable due to an environment/model error).
+
 ## After M8
 
 Project is feature-complete for v1. Suggested follow-ups (not in this plan):

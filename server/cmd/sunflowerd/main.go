@@ -26,6 +26,7 @@ import (
 	"github.com/iceice666/sunflower/server/internal/streamproxy"
 	"github.com/iceice666/sunflower/server/internal/streams"
 	syncpkg "github.com/iceice666/sunflower/server/internal/sync"
+	"github.com/iceice666/sunflower/server/internal/ws"
 	"github.com/rs/zerolog"
 )
 
@@ -120,6 +121,9 @@ func main() {
 		recsOpts.YT = yt
 	}
 	deps.Recs = recs.NewEngine(recsOpts)
+
+	// M8: now-playing WebSocket hub.
+	deps.Hub = ws.NewHub(log)
 	handler := api.NewRouter(deps)
 
 	srv := &http.Server{
