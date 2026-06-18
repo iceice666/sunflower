@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/iceice666/sunflower/server/internal/innertube/continuation"
 	"github.com/iceice666/sunflower/server/internal/innertube/models"
@@ -152,7 +153,8 @@ func (c *Client) post(ctx context.Context, path, apiKey string, payload map[stri
 func parsePlayerResponseRaw(ctx context.Context, raw json.RawMessage, cache *sig.Cache) (models.PlayerResponse, error) {
 	var pr struct {
 		VideoDetails struct {
-			VideoID string `json:"videoId"`
+			VideoID     string `json:"videoId"`
+			PlayerJsUrl string `json:"playerJsUrl"` // add this
 		} `json:"videoDetails"`
 		StreamingData struct {
 			AdaptiveFormats []struct {
@@ -172,14 +174,14 @@ func parsePlayerResponseRaw(ctx context.Context, raw json.RawMessage, cache *sig
 	var streams []models.StreamURL
 	for _, f := range pr.StreamingData.AdaptiveFormats {
 		// Only audio formats.
-		if len(f.MimeType) > 5 && f.MimeType[:5] != "audio" {
+		if !strings.HasPrefix(f.MimeType, "audio/") {
 			continue
 		}
 		rawURL := f.URL
 		if rawURL == "" {
 			continue // signatureCipher path not yet supported (Task 11)
 		}
-		decoded, err := cache.DecodeN(ctx, rawURL, "")
+		decoded, err := cache.DecodeN(ctx, rawURL, pr.VideoDetails.PlayerJsUrl)
 		if err != nil {
 			decoded = rawURL // best-effort: use undecoded URL
 		}
@@ -200,8 +202,9 @@ func parsePlayerResponseRaw(ctx context.Context, raw json.RawMessage, cache *sig
 	}
 
 	return models.PlayerResponse{
-		VideoID:    pr.VideoDetails.VideoID,
-		Stream:     best,
-		AllStreams: streams,
+		VideoID:     pr.VideoDetails.VideoID,
+		PlayerJsURL: pr.VideoDetails.PlayerJsUrl,
+		Stream:      best,
+		AllStreams:   streams,
 	}, nil
 }

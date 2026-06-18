@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/iceice666/sunflower/server/internal/innertube"
@@ -17,7 +18,10 @@ func TestClientPlayer_MockServer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Minimal player response: one audio format with a plain URL.
 		json.NewEncoder(w).Encode(map[string]any{
-			"videoDetails": map[string]any{"videoId": "dQw4w9WgXcQ"},
+			"videoDetails": map[string]any{
+				"videoId":     "dQw4w9WgXcQ",
+				"playerJsUrl": "/s/player/__test__/player_ias.vflset/en_US/base.js",
+			},
 			"streamingData": map[string]any{
 				"formats": []any{},
 				"adaptiveFormats": []any{
@@ -25,7 +29,7 @@ func TestClientPlayer_MockServer(t *testing.T) {
 						"itag":     251,
 						"mimeType": "audio/webm; codecs=\"opus\"",
 						"bitrate":  129000,
-						"url":      "https://example.com/stream?n=test",
+						"url":      "https://example.com/stream?n=testtoken&itag=251",
 					},
 				},
 			},
@@ -52,5 +56,9 @@ func TestClientPlayer_MockServer(t *testing.T) {
 	}
 	if resp.Stream.Itag != 251 {
 		t.Errorf("Stream.Itag = %d, want 251", resp.Stream.Itag)
+	}
+	// n-param is identity-decoded (nsig returns input unchanged), so URL should still contain n=testtoken
+	if !strings.Contains(resp.Stream.URL, "n=testtoken") {
+		t.Errorf("Stream.URL = %q, expected to contain n=testtoken", resp.Stream.URL)
 	}
 }
