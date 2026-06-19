@@ -16,12 +16,13 @@ renders correctly, and leave behind regression protection so it stays that way.
 | Thing | State | Implication |
 |---|---|---|
 | Go toolchain | in `nix develop` shell | server runs locally |
-| Flutter SDK | **absent** (not on PATH, not in flake) | **blocker — Phase 0** |
+| Flutter SDK | in `nix develop` via `flake.nix` (`flutter` 3.41.9 / Dart 3.11.5) | Phase 0 SDK blocker cleared |
+| macOS native assets | Flutter wrapped to use host Xcode `/usr/bin/xcrun` + SDK | fixes `objective_c`/`-isysroot` hook failures |
 | Android | `~/Library/Android/sdk`, `adb`+`emulator`, AVD `Pixel_10` | live verify = Android |
 | iOS | no `simctl` (CLT only, no full Xcode) | iOS verify **deferred** |
 | CI | none (`.github/workflows` absent) | add in Phase 5 |
-| Client tests | 1 widget test, 0 goldens | build harness from scratch |
-| Generated code | Drift/mockito codegen not run here | `build_runner` in Phase 0 |
+| Client tests | 1 widget test, 0 goldens; `flutter test` now runs | TBD: fix client compile/test failures before goldens |
+| Generated code | `flutter pub run build_runner build` works in-env | commit policy for generated files still TBD |
 
 ## Strategy — two layers (hybrid)
 
@@ -52,13 +53,23 @@ Baseline per-screen state set: **loading / empty / populated / error / offline**
 
 ## Phases
 
-### Phase 0 — Toolchain & reproducible build  *(blocking)*
-- Add `flutter` to `flake.nix` devShell (reproducible; matches repo ethos).
-  Pin a version satisfying `sdk: '>=3.5.0 <4.0.0'` and the locked deps.
-- `flutter pub get`; `dart run build_runner build --delete-conflicting-outputs`
-  (Drift, mockito, json codegen).
-- Green-light gate: `flutter analyze` clean + existing `songs_screen_test.dart`
-  passes; `Pixel_10` boots via `emulator -avd Pixel_10`.
+### Phase 0 — Toolchain & reproducible build
+- `flutter` is available in the `flake.nix` devShell. The pinned nixpkgs
+  package provides Flutter 3.41.9 and Dart 3.11.5, satisfying
+  `sdk: '>=3.5.0 <4.0.0'`.
+- macOS Flutter commands are wrapped to use the host Xcode toolchain for native
+  asset hooks. Without this, nix's `xcbuild` `xcrun` shim can pass
+  `error: unable to find sdk: 'macosx'` as `-isysroot` during `objective_c`
+  builds.
+- `flutter pub get` succeeds; use `flutter pub run build_runner build` for
+  Drift/mockito/json codegen. `dart run build_runner build` cannot resolve
+  Flutter SDK packages such as `flutter_test`.
+- Remaining TBDs before Phase 1:
+  - implement or replace missing `LocalRadio` referenced by
+    `core/player/sunflower_audio_handler.dart`;
+  - fix `MiniPlayer` resolution in `features/home/home_screen.dart`;
+  - fix `ReplayBuffer` test/database lifecycle and retry-count failures;
+  - boot `Pixel_10` via `emulator -avd Pixel_10` and capture first render.
 
 ### Phase 1 — Golden harness
 - Adopt a golden lib (recommend **alchemist** or `golden_toolkit`) for

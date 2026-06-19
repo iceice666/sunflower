@@ -81,6 +81,25 @@
           '';
         };
 
+        # macOS native-asset hooks (e.g. objective_c, pulled transitively) shell
+        # out to clang + xcrun. nixpkgs' darwin stdenv points DEVELOPER_DIR at a
+        # bare apple-sdk and puts the xcbuild `xcrun` shim first on PATH; that
+        # shim returns "error: unable to find sdk: 'macosx'" inside the hook
+        # subprocess, which is then passed verbatim as -isysroot and the build
+        # fails. Wrap `flutter` so its child hooks use the host Xcode toolchain
+        # (Apple xcrun + clang + real macOS SDK). Scoped to flutter only — the
+        # Go/cgo half keeps the nix toolchain untouched.
+        flutterWrapped =
+          if pkgs.stdenv.isDarwin then
+            pkgs.writeShellScriptBin "flutter" ''
+              unset DEVELOPER_DIR SDKROOT
+              export PATH="/usr/bin:$PATH"
+              sdk="$(/usr/bin/xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+              [ -n "$sdk" ] && export SDKROOT="$sdk"
+              exec ${pkgs.flutter}/bin/flutter "$@"
+            ''
+          else pkgs.flutter;
+
       in
       {
         # Development shell — `nix develop`
@@ -93,10 +112,14 @@
             pkgs.gnumake
             pkgs.gopls
             pkgs.delve
+            flutterWrapped # `flutter` wrapped for host Xcode toolchain (see above)
+            pkgs.flutter   # bundles Dart 3.11.5 (satisfies sdk '>=3.5.0 <4.0.0')
+            pkgs.jdk17     # Android Gradle builds + emulator launch
           ];
 
           env = {
             GOTOOLCHAIN = "local";
+            JAVA_HOME   = "${pkgs.jdk17.home}";
           };
 
           shellHook = ''
@@ -108,6 +131,17 @@
             echo "  make run      — run sunflowerd"
             echo "  make migrate  — apply migrations"
             echo "  make test     — run tests"
+
+            # Flutter / Android: use the system Android SDK (not nix-managed).
+            export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"
+            export ANDROID_HOME="$ANDROID_SDK_ROOT"
+            export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+            echo "  flutter pub get        — fetch client deps"
+            echo "  flutter analyze        — static check client"
+            echo "  emulator -avd Pixel_10 — boot Android emulator"
+            if [ ! -d "$ANDROID_SDK_ROOT" ]; then
+              echo "  ! ANDROID_SDK_ROOT not found at $ANDROID_SDK_ROOT"
+            fi
           '';
         };
 
