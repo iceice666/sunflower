@@ -6,96 +6,96 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 )
 
 // StartRefreshJob runs the cookie health probe hourly in a background goroutine.
-// It stops when ctx is cancelled. The probe looks up the first registered user at
-// each tick so it works correctly on fresh installs where no user exists at startup.
-func StartRefreshJob(ctx context.Context, db *pgxpool.Pool, key [32]byte, log zerolog.Logger) {
+// It stops when ctx is cancelled. Cookies come from the shared Provider, so the
+// probe validates whatever source the live client uses (encrypted store or file).
+func StartRefreshJob(ctx context.Context, db *pgxpool.Pool, p *Provider, log zerolog.Logger) {
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 		// Run once immediately on startup.
-		runProbe(ctx, db, key, log)
+		runProbe(ctx, db, p, log)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				runProbe(ctx, db, key, log)
+				runProbe(ctx, db, p, log)
 			}
 		}
 	}()
 }
 
-func runProbe(ctx context.Context, db *pgxpool.Pool, key [32]byte, log zerolog.Logger) {
-	// Look up the first registered user at each tick. On a fresh install there
-	// may be no users yet; in that case skip silently.
-	var userID uuid.UUID
-	if err := db.QueryRow(ctx, `SELECT id FROM users LIMIT 1`).Scan(&userID); err != nil {
-		log.Debug().Msg("cookie probe: no users registered yet, skipping")
+func runProbe(ctx context.Context, db *pgxpool.Pool, p *Provider, log zerolog.Logger) {
+	cks := p.Cookies()
+	if len(cks) == 0 {
+		upsertHealth(ctx, db, "unknown", "no cookies configured", log)
 		return
 	}
-
-	raw, err := Load(ctx, db, key, userID, "youtube")
-	if err != nil {
-		upsertHealth(ctx, db, "degraded", "no cookies stored: "+err.Error(), log)
-		return
-	}
-
-	jar := parseCookieJar(raw)
-	if jar == nil {
-		upsertHealth(ctx, db, "degraded", "cookie jar parse failed; cannot validate cookies", log)
-		return
-	}
-
-	httpClient := &http.Client{Timeout: 15 * time.Second, Jar: jar}
 
 	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// POST with a minimal ANDROID_MUSIC player body. A 200 with cookies attached
-	// confirms cookies are accepted; 401/403 means expired/invalid.
+	// WEB_REMIX is the only client that honours login cookies (ANDROID clients
+	// ignore them and always return LOGIN_REQUIRED). A playable response with
+	// the cookies attached confirms they are accepted; LOGIN_REQUIRED or
+	// 401/403 means they are missing or expired.
 	body, _ := json.Marshal(map[string]any{
 		"context": map[string]any{
 			"client": map[string]any{
-				"clientName":    "ANDROID_MUSIC",
-				"clientVersion": "7.27.52",
+				"clientName":    "WEB_REMIX",
+				"clientVersion": "1.20230501.01.00",
 				"hl":            "en",
 				"gl":            "US",
 			},
 		},
 		"videoId": "dQw4w9WgXcQ",
-		"params":  "CgIQBg==",
 	})
 	req, _ := http.NewRequestWithContext(probeCtx, http.MethodPost,
-		"https://music.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+		"https://music.youtube.com/youtubei/v1/player?key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-NKNELL6Cg",
 		bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	for _, ck := range cks {
+		req.AddCookie(ck)
+	}
+
+	httpClient := &http.Client{Timeout: 15 * time.Second}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		upsertHealth(ctx, db, "degraded", err.Error(), log)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
-	switch resp.StatusCode {
-	case http.StatusOK:
-		upsertHealth(ctx, db, "ok", "", log)
-	case http.StatusUnauthorized, http.StatusForbidden:
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		upsertHealth(ctx, db, "degraded", "cookies rejected: "+resp.Status, log)
-	default:
-		upsertHealth(ctx, db, "degraded", "probe status: "+resp.Status, log)
+		return
 	}
+	if resp.StatusCode != http.StatusOK {
+		upsertHealth(ctx, db, "degraded", "probe status: "+resp.Status, log)
+		return
+	}
+
+	var pr struct {
+		PlayabilityStatus struct {
+			Status string `json:"status"`
+		} `json:"playabilityStatus"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
+		upsertHealth(ctx, db, "degraded", "decode player response: "+err.Error(), log)
+		return
+	}
+	if pr.PlayabilityStatus.Status != "OK" {
+		upsertHealth(ctx, db, "degraded", "playability: "+pr.PlayabilityStatus.Status, log)
+		return
+	}
+	upsertHealth(ctx, db, "ok", "", log)
 }
 
 func upsertHealth(ctx context.Context, db *pgxpool.Pool, status, detail string, log zerolog.Logger) {
@@ -115,56 +115,4 @@ func nullIfEmpty(s string) interface{} {
 		return nil
 	}
 	return s
-}
-
-// parseCookieJar parses Netscape-format cookie bytes into a CookieJar.
-// Returns nil when the input is empty or contains no parseable cookies.
-// Netscape format per line: domain\tincludeSubdomains\tpath\tsecure\texpiry\tname\tvalue
-func parseCookieJar(raw []byte) http.CookieJar {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil
-	}
-
-	byDomain := make(map[string][]*http.Cookie)
-	for _, line := range strings.Split(string(raw), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "\t", 7)
-		if len(parts) < 7 {
-			continue
-		}
-		domain := parts[0]
-		path := parts[2]
-		secure := parts[3] == "TRUE"
-		expiry, _ := strconv.ParseInt(parts[4], 10, 64)
-		name := parts[5]
-		value := parts[6]
-
-		c := &http.Cookie{
-			Name:   name,
-			Value:  value,
-			Path:   path,
-			Secure: secure,
-		}
-		if expiry > 0 {
-			c.Expires = time.Unix(expiry, 0)
-		}
-
-		d := strings.TrimPrefix(domain, ".")
-		byDomain[d] = append(byDomain[d], c)
-	}
-
-	if len(byDomain) == 0 {
-		return nil
-	}
-
-	for domain, cookies := range byDomain {
-		u := &url.URL{Scheme: "https", Host: domain}
-		jar.SetCookies(u, cookies)
-	}
-
-	return jar
 }

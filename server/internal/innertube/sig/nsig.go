@@ -1,6 +1,7 @@
 package sig
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -8,6 +9,11 @@ import (
 
 	"github.com/dop251/goja"
 )
+
+// ErrNsigUnavailable is returned by the n-param decoder when no descrambler
+// could be extracted from base.js. The stream URL is still playable, just
+// throttled. Callers treat it as a best-effort warning, not a hard failure.
+var ErrNsigUnavailable = errors.New("nsig: descrambler unavailable; stream may be throttled")
 
 var (
 	// nsigNameRes is a priority list of patterns to extract the nsig function name
@@ -153,6 +159,9 @@ func parseAndReplaceN(rawURL string, nsig *nsigEntry) (string, error) {
 	n := q.Get("n")
 	if n == "" {
 		return rawURL, nil // no n param, nothing to do
+	}
+	if nsig == nil {
+		return rawURL, ErrNsigUnavailable
 	}
 	decoded, err := nsig.decode(n)
 	if err != nil {

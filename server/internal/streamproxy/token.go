@@ -37,9 +37,17 @@ func NewSigner(key []byte, ttl time.Duration) *Signer {
 	return &Signer{key: key, ttl: ttl, now: time.Now}
 }
 
-// Sign returns a token authorizing the proxy to fetch target until ttl elapses.
+// Sign returns a token authorizing the proxy to fetch target until the signer's
+// configured ttl elapses.
 func (s *Signer) Sign(target string) string {
-	payload := tokenPayload{URL: target, Exp: s.now().Add(s.ttl).Unix()}
+	return s.SignUntil(target, s.now().Add(s.ttl))
+}
+
+// SignUntil returns a token authorizing the proxy to fetch target until exp.
+// Callers align the token lifetime with an upstream URL's own expiry so a single
+// token covers a whole listening session instead of dying after the default ttl.
+func (s *Signer) SignUntil(target string, exp time.Time) string {
+	payload := tokenPayload{URL: target, Exp: exp.Unix()}
 	raw, _ := json.Marshal(payload)
 	body := base64.RawURLEncoding.EncodeToString(raw)
 	return body + "." + s.mac(body)

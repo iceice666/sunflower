@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/iceice666/sunflower/server/internal/cookies"
 	"github.com/iceice666/sunflower/server/internal/innertube"
 	"github.com/iceice666/sunflower/server/internal/innertube/models"
 	"github.com/iceice666/sunflower/server/internal/innertube/parser"
@@ -43,6 +44,7 @@ func runNext(args []string) {
 	videoID := fs.String("video-id", "", "YouTube video ID (required)")
 	output := fs.String("o", "json", "output format: json|url")
 	dumpRaw := fs.String("dump-raw", "", "write raw /next JSON to this file (e.g. for fixture capture)")
+	cookieFile := fs.String("cookie-file", "", "path to YT cookie jar (labeled export / Cookie header / Netscape cookies.txt)")
 	fs.Parse(args)
 
 	if *videoID == "" {
@@ -59,10 +61,25 @@ func runNext(args []string) {
 		os.Exit(1)
 	}
 
-	client := innertube.NewClient(innertube.ClientOpts{
+	opts := innertube.ClientOpts{
 		SigCache: cache,
 		Locale:   models.Locale{HL: "en", GL: "US"},
-	})
+	}
+	if *cookieFile != "" {
+		raw, err := os.ReadFile(*cookieFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read cookie file: %v\n", err)
+			os.Exit(1)
+		}
+		cks := cookies.ParseCookies(raw)
+		if len(cks) == 0 {
+			fmt.Fprintln(os.Stderr, "warning: no cookies parsed from --cookie-file")
+		} else {
+			fmt.Fprintf(os.Stderr, "loaded %d cookies from %s\n", len(cks), *cookieFile)
+		}
+		opts.Cookies = func() []*http.Cookie { return cks }
+	}
+	client := innertube.NewClient(opts)
 
 	playerResp, err := client.Player(ctx, *videoID)
 	if err != nil {

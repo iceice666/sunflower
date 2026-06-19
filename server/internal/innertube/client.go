@@ -58,10 +58,10 @@ func NewClient(opts ClientOpts) *Client {
 
 // Player calls /youtubei/v1/player and returns a parsed PlayerResponse.
 func (c *Client) Player(ctx context.Context, videoID string) (models.PlayerResponse, error) {
-	body := BuildAndroidMusicContext(c.locale)
+	body := BuildAndroidVRContext(c.locale)
 	body["videoId"] = videoID
 	body["params"] = "CgIQBg==" // audio-only formats
-	raw, err := c.post(ctx, "/youtubei/v1/player", AndroidMusicAPIKey(), body)
+	raw, err := c.post(ctx, "/youtubei/v1/player", androidVRProfile, body)
 	if err != nil {
 		return models.PlayerResponse{}, err
 	}
@@ -75,7 +75,7 @@ func (c *Client) Next(ctx context.Context, videoID string, cont continuation.Cur
 	if !cont.IsZero() {
 		body["continuation"] = string(cont)
 	}
-	return c.post(ctx, "/youtubei/v1/next", AndroidMusicAPIKey(), body)
+	return c.post(ctx, "/youtubei/v1/next", androidMusicProfile, body)
 }
 
 // Browse calls /youtubei/v1/browse with WEB_REMIX context.
@@ -85,37 +85,31 @@ func (c *Client) Browse(ctx context.Context, browseID string, cont continuation.
 	if !cont.IsZero() {
 		body["continuation"] = string(cont)
 	}
-	return c.post(ctx, "/youtubei/v1/browse", WebRemixAPIKey(), body)
+	return c.post(ctx, "/youtubei/v1/browse", webRemixProfile, body)
 }
 
 // Search calls /youtubei/v1/search with WEB_REMIX context.
 func (c *Client) Search(ctx context.Context, query string) (json.RawMessage, error) {
 	body := BuildWebRemixContext(c.locale)
 	body["query"] = query
-	return c.post(ctx, "/youtubei/v1/search", WebRemixAPIKey(), body)
+	return c.post(ctx, "/youtubei/v1/search", webRemixProfile, body)
 }
 
-func (c *Client) post(ctx context.Context, path, apiKey string, payload map[string]any) (json.RawMessage, error) {
+func (c *Client) post(ctx context.Context, path string, prof clientProfile, payload map[string]any) (json.RawMessage, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("innertube post: marshal: %w", err)
 	}
 
-	url := c.baseURL + path + "?key=" + apiKey
+	url := c.baseURL + path + "?key=" + prof.apiKey
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(encoded))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if apiKey == webRemixAPIKey {
-		req.Header.Set("User-Agent", webRemixUserAgent)
-		req.Header.Set("X-YouTube-Client-Name", webRemixClientID)
-		req.Header.Set("X-YouTube-Client-Version", webRemixClientVersion)
-	} else {
-		req.Header.Set("User-Agent", androidMusicUserAgent)
-		req.Header.Set("X-YouTube-Client-Name", androidMusicClientID)
-		req.Header.Set("X-YouTube-Client-Version", androidMusicClientVersion)
-	}
+	req.Header.Set("User-Agent", prof.userAgent)
+	req.Header.Set("X-YouTube-Client-Name", prof.clientNameID)
+	req.Header.Set("X-YouTube-Client-Version", prof.clientVersion)
 
 	if c.cookies != nil {
 		for _, ck := range c.cookies() {

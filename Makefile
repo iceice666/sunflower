@@ -51,7 +51,7 @@ migrate-status:
 # ── Server ───────────────────────────────────────────────────────────────────
 
 run:
-	cd server && go run ./cmd/sunflowerd
+	cd server && SUNFLOWER_YT_COOKIE_FILE="$${SUNFLOWER_YT_COOKIE_FILE:-$(CURDIR)/.env.innertube_cookie}" go run ./cmd/sunflowerd
 
 # ── Code generation ──────────────────────────────────────────────────────────
 

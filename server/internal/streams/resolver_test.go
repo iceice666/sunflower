@@ -87,6 +87,35 @@ func TestResolveYouTubePreferProxy(t *testing.T) {
 	}
 }
 
+func TestResolveYouTubeProxyPolicy(t *testing.T) {
+	// Server-wide ProxyYouTube routes streams through the proxy even when the
+	// caller does not set PreferProxy.
+	url := "https://r1.googlevideo.com/videoplayback?expire=999999999999"
+	signer := streamproxy.NewSigner([]byte("k"), time.Minute)
+	r := &Resolver{
+		YT:           fakeYT{resp: models.PlayerResponse{Stream: models.StreamURL{URL: url}}},
+		Signer:       signer,
+		ProxyPath:    "/api/v1/streams/proxy",
+		ProxyYouTube: true,
+	}
+
+	got, err := r.Resolve(context.Background(), "yt:abc123", Options{})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Source != SourceProxy {
+		t.Fatalf("Source = %q, want %q", got.Source, SourceProxy)
+	}
+	tok := strings.TrimPrefix(got.StreamURL, "/api/v1/streams/proxy?token=")
+	target, err := signer.Verify(tok)
+	if err != nil {
+		t.Fatalf("Verify proxy token: %v", err)
+	}
+	if target != url {
+		t.Fatalf("proxied target = %q, want %q", target, url)
+	}
+}
+
 func TestResolveYouTubeUnavailable(t *testing.T) {
 	// Player returns an empty stream URL → ErrUnavailable.
 	r := &Resolver{YT: fakeYT{resp: models.PlayerResponse{}}}

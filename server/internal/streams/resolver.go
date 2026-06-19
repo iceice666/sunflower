@@ -44,9 +44,9 @@ type YTResolver interface {
 
 // Options tunes a single Resolve call.
 type Options struct {
-	// PreferProxy routes a YouTube stream through the server proxy instead of
-	// handing the client a direct googlevideo URL. Used as the 403/CORS
-	// fallback. Ignored when no proxy Signer is configured.
+	// PreferProxy forces a YouTube stream through the server proxy for this one
+	// call (the 403/CORS re-resolve path), regardless of the server-wide
+	// ProxyYouTube policy. Ignored when no proxy Signer is configured.
 	PreferProxy bool
 }
 
@@ -57,6 +57,11 @@ type Resolver struct {
 	// ProxyPath is the server path that serves proxied streams, e.g.
 	// "/api/v1/streams/proxy". The token is appended as a query parameter.
 	ProxyPath string
+	// ProxyYouTube, when true, routes every YouTube stream through the server
+	// proxy by default. Set this when streams are resolved with login cookies:
+	// the resulting googlevideo URLs are bound to the resolving session/IP and
+	// 403 when fetched directly by a client on a different network.
+	ProxyYouTube bool
 }
 
 // Resolve turns a media_id ("<source>:<external_id>") into a playable stream.
@@ -105,8 +110,17 @@ func (r *Resolver) resolveYouTube(ctx context.Context, mediaID, videoID string, 
 		Loudness:  pr.Stream.Loudness,
 	}
 
-	if opts.PreferProxy && r.Signer != nil {
-		token := r.Signer.Sign(pr.Stream.URL)
+	if (opts.PreferProxy || r.ProxyYouTube) && r.Signer != nil {
+		// Align the token's lifetime with the upstream URL's expiry so one token
+		// covers the whole track; when the URL dies the token dies with it and
+		// the client re-resolves. Falls back to the signer's default ttl when the
+		// URL carries no parseable expiry.
+		var token string
+		if res.ExpiresAt.IsZero() {
+			token = r.Signer.Sign(pr.Stream.URL)
+		} else {
+			token = r.Signer.SignUntil(pr.Stream.URL, res.ExpiresAt)
+		}
 		res.Source = SourceProxy
 		res.StreamURL = r.ProxyPath + "?token=" + token
 	}

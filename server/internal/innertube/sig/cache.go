@@ -22,8 +22,9 @@ var (
 
 	// playerHashRe extracts the player hash from the iframe_api JS body.
 	// The charset is widened to [a-zA-Z0-9_-] because real hashes are not
-	// strictly lowercase hex.
-	playerHashRe = regexp.MustCompile(`/s/player/([a-zA-Z0-9_-]+)/`)
+	// strictly lowercase hex. Slashes carry an optional leading backslash:
+	// the iframe_api body JSON-escapes them as `\/s\/player\/<hash>\/…`.
+	playerHashRe = regexp.MustCompile(`\\?/s\\?/player\\?/([a-zA-Z0-9_-]+)\\?/`)
 
 	cacheTTL      = 6 * time.Hour
 	failThreshold = 3
@@ -99,10 +100,12 @@ func (c *Cache) load(ctx context.Context, hash, baseJsURL string) error {
 	if err != nil {
 		return fmt.Errorf("sig load base.js read: %w", err)
 	}
-	nsig, err := extractNsig(string(js))
-	if err != nil {
-		return fmt.Errorf("sig load %s: %w", hash, err)
-	}
+	// nsig descrambling is throttle-mitigation only: ANDROID_MUSIC stream URLs
+	// are directly playable, merely rate-limited until the n-param is decoded.
+	// Its extraction pattern drifts with every base.js revision, so a failure
+	// here must NOT disable YouTube — cache the entry with a nil nsig and fall
+	// back to the raw (throttled) URL. Per-request NsigErr still surfaces it.
+	nsig, _ := extractNsig(string(js))
 	c.mu.Lock()
 	c.entries[hash] = &entry{nsig: nsig, loadedAt: time.Now()}
 	c.current = hash
@@ -193,7 +196,7 @@ func (c *Cache) DecodeNRaw(ctx context.Context, token string) (string, error) {
 	c.mu.RLock()
 	e, ok := c.entries[c.current]
 	c.mu.RUnlock()
-	if !ok {
+	if !ok || e.nsig == nil {
 		return "", ErrNoPlayerJs
 	}
 	return e.nsig.decode(token)

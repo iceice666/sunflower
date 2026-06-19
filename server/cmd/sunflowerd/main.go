@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -64,9 +65,14 @@ func main() {
 		copy(cookieKey[:], b)
 	}
 
-	// Start cookie health probe (noop if CookieKey is zero).
-	if cookieKey != [32]byte{} {
-		cookies.StartRefreshJob(ctx, pool, cookieKey, log)
+	// Cookie provider: encrypted store (API-uploaded) with a cookie-file
+	// fallback for self-host bootstrap. Cookies() returns nil = guest mode.
+	cookieProvider := cookies.NewProvider(pool, cookieKey, cfg.CookieFile)
+
+	// Start cookie health probe when a cookie source is configured.
+	cookiesConfigured := cookieKey != [32]byte{} || cfg.CookieFile != ""
+	if cookiesConfigured {
+		cookies.StartRefreshJob(ctx, pool, cookieProvider, log)
 	}
 
 	// M7: idempotency-log GC (hourly; removes rows older than 24h).
@@ -85,6 +91,7 @@ func main() {
 			HTTPClient: httpClient,
 			SigCache:   sigCache,
 			Locale:     models.Locale{HL: "en", GL: "US"},
+			Cookies:    cookieProvider.Cookies,
 		})
 	}
 
@@ -95,6 +102,10 @@ func main() {
 
 	const proxyPath = "/api/v1/streams/proxy"
 	resolver := &streams.Resolver{YT: yt, Signer: signer, ProxyPath: proxyPath}
+	resolver.ProxyYouTube = shouldProxyYouTube(cfg.StreamProxyMode, cookiesConfigured)
+	if resolver.ProxyYouTube {
+		log.Info().Msg("serving youtube audio through the server proxy")
+	}
 	// The proxy uses a dedicated client with no whole-request timeout (long
 	// ranged streams) and per-redirect host re-validation (SSRF hardening).
 	proxy := &streamproxy.Handler{Signer: signer, Client: streamproxy.NewClient(), Log: log}
@@ -172,4 +183,20 @@ func loadStreamProxyKey(hexKey string, log zerolog.Logger) []byte {
 	}
 	log.Warn().Msg("SUNFLOWER_STREAM_PROXY_KEY unset; using a random per-process key")
 	return b
+}
+
+// shouldProxyYouTube resolves the SUNFLOWER_STREAM_PROXY policy. "always" and
+// "never" are explicit; "auto" (the default) proxies only when cookies are
+// configured, because cookie-resolved googlevideo URLs are bound to the
+// resolving session/IP and 403 when a client on another network fetches them
+// directly.
+func shouldProxyYouTube(mode string, cookiesConfigured bool) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "always":
+		return true
+	case "never":
+		return false
+	default:
+		return cookiesConfigured
+	}
 }

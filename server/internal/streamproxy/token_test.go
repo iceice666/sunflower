@@ -49,6 +49,25 @@ func TestVerifyRejectsExpired(t *testing.T) {
 	}
 }
 
+func TestSignUntilAlignsExpiry(t *testing.T) {
+	now := time.Now()
+	s := NewSigner([]byte("key"), time.Minute) // default ttl is 1m
+	s.now = func() time.Time { return now }
+
+	// A token signed to live well past the default ttl stays valid past it.
+	tok := s.SignUntil("https://x.googlevideo.com/a", now.Add(time.Hour))
+	s.now = func() time.Time { return now.Add(30 * time.Minute) }
+	if _, err := s.Verify(tok); err != nil {
+		t.Fatalf("token should outlive default ttl: %v", err)
+	}
+
+	// Past its own expiry it is rejected.
+	s.now = func() time.Time { return now.Add(2 * time.Hour) }
+	if _, err := s.Verify(tok); err != ErrInvalidToken {
+		t.Fatalf("expected ErrInvalidToken past expiry, got %v", err)
+	}
+}
+
 func TestVerifyRejectsMalformed(t *testing.T) {
 	s := NewSigner([]byte("key"), time.Minute)
 	for _, tok := range []string{"", "nodot", ".", "a.", ".b", "not.base64!!"} {
