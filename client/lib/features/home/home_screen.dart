@@ -5,6 +5,7 @@ import '../../core/api/sunflower_api.dart';
 import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
 import '../settings/sync_status_widget.dart';
+import '../player_ui/mini_player.dart';
 import 'chip_bar.dart';
 import 'home_controller.dart';
 import 'section_widget.dart';

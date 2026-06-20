@@ -42,9 +42,8 @@ class DownloadButton extends ConsumerWidget {
     }
 
     if (job != null && job.status == 'running') {
-      final progress = job.totalBytes > 0
-          ? job.receivedBytes / job.totalBytes
-          : null;
+      final progress =
+          job.totalBytes > 0 ? job.receivedBytes / job.totalBytes : null;
       return SizedBox(
         width: 24,
         height: 24,

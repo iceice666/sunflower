@@ -1,0 +1,167 @@
+name: client-verify
+
+on:
+  pull_request:
+    paths:
+      - 'client/**'
+      - '.github/workflows/client-verify.yml'
+  schedule:
+    # Nightly at 02:00 UTC — Android emulator smoke only
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      run_smoke:
+        description: 'Run Android emulator smoke (nightly job)'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Cancel superseded PR runs; keep nightly runs independent.
+concurrency:
+  group: client-verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FLUTTER_VERSION: '3.41.9'
+  JAVA_VERSION: '17'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 1 — Golden tests (every PR, Linux, no emulator)
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  golden-tests:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    name: Flutter golden tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Run build_runner (codegen — Drift, mockito)
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Run golden tests
+        run: flutter test test/goldens/ --reporter=expanded
+
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures-${{ github.sha }}
+          path: client/test/goldens/failures/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 2 — Android emulator smoke (nightly + manual dispatch)
+# Runs visual_smoke_test.dart against a live AVD; uploads screenshots.
+# ─────────────────────────────────────────────────────────────────────────────
+  android-smoke:
+    if: >
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_smoke == 'true')
+    name: Android emulator smoke (nightly)
+    runs-on: macos-14       # Apple-silicon macOS — fastest KVM-equivalent for Android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache-dependency-path: server/go.sum
+
+      - name: Install server tools
+        run: |
+          brew install postgresql@16
+          go install github.com/pressly/goose/v3/cmd/goose@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Start Postgres
+        run: |
+          export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+          initdb -D "$RUNNER_TEMP/pgdata" --username=postgres --auth=trust
+          pg_ctl -D "$RUNNER_TEMP/pgdata" -o "-k $RUNNER_TEMP -p 5432" -l "$RUNNER_TEMP/postgres.log" start
+          createdb -h "$RUNNER_TEMP" -p 5432 -U postgres sunflower
+          echo "DATABASE_URL=postgres://postgres@localhost:5432/sunflower?sslmode=disable" >> "$GITHUB_ENV"
+          echo "/opt/homebrew/opt/postgresql@16/bin" >> "$GITHUB_PATH"
+
+      - name: Start sunflowerd
+        run: |
+          mkdir -p "$RUNNER_TEMP/sunflower-data"
+          (cd server && DATA_DIR="$RUNNER_TEMP/sunflower-data" go run ./cmd/sunflowerd) &
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8080/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Flutter pub get
+        working-directory: client
+        run: flutter pub get
+
+      - name: Run build_runner
+        working-directory: client
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Build Android debug APK (pre-warm Gradle cache)
+        working-directory: client
+        run: flutter build apk --debug
+
+      - name: Android emulator smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          profile: pixel_6
+          target: google_apis
+          avd-name: Pixel_6_API33
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            make seed-demo
+            cd client
+            set -a
+            . ../.seed-env
+            set +a
+            EMULATOR_URL="${SUNFLOWER_DEMO_URL//localhost/10.0.2.2}"
+            EMULATOR_URL="${EMULATOR_URL//127.0.0.1/10.0.2.2}"
+            flutter drive \
+              --driver=test_driver/integration_test.dart \
+              --target=integration_test/visual_smoke_test.dart \
+              --dart-define=SUNFLOWER_DEMO_URL="$EMULATOR_URL" \
+              --dart-define=SUNFLOWER_DEMO_TOKEN="$SUNFLOWER_DEMO_TOKEN"
+
+      - name: Upload smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots-${{ github.run_id }}
+          path: client/build/smoke-artifacts/
+          retention-days: 30

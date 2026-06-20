@@ -1,4 +1,3 @@
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,6 +21,7 @@ class MiniPlayer extends ConsumerWidget {
     final handler = ref.read(audioHandlerProvider);
 
     return GestureDetector(
+      key: const Key('mini_player'),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const NowPlayingScreen()),
       ),

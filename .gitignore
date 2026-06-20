@@ -15,4 +15,20 @@ server/sunflowerd
 *.swp
 *.swo
 
+# Demo seed credentials (contains device token — never commit)
+.seed-env
+
+# Android smoke-test screenshot pull
+client/build/smoke-artifacts/
 /.env.innertube_cookie
+/client/.flutter-plugins-dependencies
+/client/.dart_tool
+/client/build
+
+# Flutter local host-generated files
+/client/android/local.properties
+/client/ios/Flutter/Generated.xcconfig
+/client/ios/Flutter/flutter_export_environment.sh
+/client/ios/Flutter/ephemeral/
+/client/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+

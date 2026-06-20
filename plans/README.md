@@ -54,10 +54,30 @@ on the server.
 | M6 | complete | [`milestones/m6-offline-downloads.md`](milestones/m6-offline-downloads.md) | Playlist downloaded; airplane-mode playback works |
 | M7 | complete | [`milestones/m7-sync-and-write-replay.md`](milestones/m7-sync-and-write-replay.md) | Offline likes/edits drain to server in clock order, idempotent |
 | M8 | complete | [`milestones/m8-websocket-and-polish.md`](milestones/m8-websocket-and-polish.md) | Live now-playing push; optional crossfade |
+| — | **visually verified** | [`client-verification-report.md`](client-verification-report.md) | 22 goldens (PR) + 10 smoke artifacts (nightly Android) cover M1–M8 |
 
 Order rationale: InnerTube (M3) must precede recs (M5) because recs depend on
 it. Offline (M6) and full sync (M7) come last because they need the rest of
 the system stable to be tested honestly.
+
+## V1 client — visual verification
+
+M0–M8 server-side acceptance criteria were verified at implementation time (`go build` /
+`go test` / `gofmt` / `sqlc` all green). The Flutter client was subsequently brought up
+to the same standard:
+
+- **22 golden-test baselines** (`client/test/goldens/goldens/snapshots/`) cover every screen and
+  key state from the [verification matrix](post-v1-visual-verification.md). Pixel-diff
+  regression runs on every PR via the `golden-tests` job in
+  `.github/workflows/client-verify.yml`.
+- **10 Android emulator smoke artifacts** (`client/build/smoke-artifacts/t0N_*`)
+  walk the full M1–M8 demo flow on a live AVD nightly. Captured screenshots are
+  uploaded as CI artifacts and map 1-to-1 to milestone acceptance criteria in
+  [`client-verification-report.md`](client-verification-report.md).
+
+**The V1 Flutter client is visually verified.** Deferred items (iOS simulator, YT-cookie
+home feed, two-device WS concurrency in CI) are documented in the report's coverage-gaps
+table and are out of scope for V1.
 
 ## "Slim client" — honest framing
 

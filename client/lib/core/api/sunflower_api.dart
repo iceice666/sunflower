@@ -146,10 +146,8 @@ class NextResponse {
       queueId: json['queue_id'] as String? ?? '',
       position: json['position'] as int? ?? 0,
       current: cur == null ? null : ResolvedStream.fromJson(cur),
-      lookahead: look
-          .cast<Map<String, dynamic>>()
-          .map(QueueItem.fromJson)
-          .toList(),
+      lookahead:
+          look.cast<Map<String, dynamic>>().map(QueueItem.fromJson).toList(),
       hasMore: json['has_more'] as bool? ?? false,
     );
   }
@@ -178,10 +176,8 @@ class QueueResponse {
       seedKind: json['seed_kind'] as String? ?? '',
       title: json['title'] as String? ?? '',
       version: (json['version'] as num?)?.toInt() ?? 0,
-      items: items
-          .cast<Map<String, dynamic>>()
-          .map(QueueItem.fromJson)
-          .toList(),
+      items:
+          items.cast<Map<String, dynamic>>().map(QueueItem.fromJson).toList(),
     );
   }
 }
@@ -267,10 +263,8 @@ class HomeFeed {
   factory HomeFeed.fromJson(Map<String, dynamic> json) {
     final secs = json['sections'] as List<dynamic>? ?? const [];
     return HomeFeed(
-      sections: secs
-          .cast<Map<String, dynamic>>()
-          .map(HomeSection.fromJson)
-          .toList(),
+      sections:
+          secs.cast<Map<String, dynamic>>().map(HomeSection.fromJson).toList(),
       chips: (json['chips'] as List<dynamic>? ?? const []).cast<String>(),
       stale: json['stale'] as bool? ?? false,
     );

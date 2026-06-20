@@ -7,7 +7,6 @@ import 'package:drift/drift.dart' show Value;
 import '../db/database.dart';
 import 'eviction.dart';
 import 'idempotency_key.dart';
-import 'pending_mutation.dart';
 import 'retry_policy.dart';
 
 /// The write-replay buffer (M7). Every mutating API call is enqueued here first,
@@ -86,7 +85,7 @@ class ReplayBuffer {
       ),
     );
     // Try to drain promptly (online path); failures reschedule with backoff.
-    unawaited(drain());
+    await drain();
     return key;
   }
 

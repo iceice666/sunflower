@@ -10,8 +10,8 @@ import 'package:sunflower/core/sync/retry_policy.dart';
 class _RecordingInterceptor extends Interceptor {
   final List<String> keys = [];
   final List<String> paths = [];
-  int failFirstN;
-  _RecordingInterceptor({this.failFirstN = 0});
+  int failFirstN = 0;
+  _RecordingInterceptor();
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -46,8 +46,10 @@ void main() {
 
   group('Eviction', () {
     test('priority ordering: like > default > impression', () {
-      expect(Eviction.priorityFor('like'), greaterThan(Eviction.priorityFor('playlist_add')));
-      expect(Eviction.priorityFor('playlist_add'), greaterThan(Eviction.priorityFor('event')));
+      expect(Eviction.priorityFor('like'),
+          greaterThan(Eviction.priorityFor('playlist_add')));
+      expect(Eviction.priorityFor('playlist_add'),
+          greaterThan(Eviction.priorityFor('event')));
     });
   });
 
@@ -60,8 +62,7 @@ void main() {
     setUp(() {
       db = SunflowerDatabase.forTesting(NativeDatabase.memory());
       rec = _RecordingInterceptor();
-      dio = Dio(BaseOptions(baseUrl: 'http://test'))
-        ..interceptors.add(rec);
+      dio = Dio(BaseOptions(baseUrl: 'http://test'))..interceptors.add(rec);
     });
 
     tearDown(() async => db.close());
@@ -74,9 +75,12 @@ void main() {
 
     test('drains queued mutations in client-clock order', () async {
       final buffer = buildBuffer();
-      await buffer.enqueue(kind: 'like', method: 'POST', path: '/a', body: {'i': 1});
-      await buffer.enqueue(kind: 'like', method: 'POST', path: '/b', body: {'i': 2});
-      await buffer.enqueue(kind: 'like', method: 'POST', path: '/c', body: {'i': 3});
+      await buffer
+          .enqueue(kind: 'like', method: 'POST', path: '/a', body: {'i': 1});
+      await buffer
+          .enqueue(kind: 'like', method: 'POST', path: '/b', body: {'i': 2});
+      await buffer
+          .enqueue(kind: 'like', method: 'POST', path: '/c', body: {'i': 3});
       await buffer.drain();
 
       expect(rec.paths, ['/a', '/b', '/c']);
@@ -84,7 +88,8 @@ void main() {
       expect(await db.pendingCount(), 0);
     });
 
-    test('re-draining confirmed mutations does not re-send (idempotent)', () async {
+    test('re-draining confirmed mutations does not re-send (idempotent)',
+        () async {
       final buffer = buildBuffer();
       await buffer.enqueue(kind: 'like', method: 'POST', path: '/a');
       await buffer.drain();

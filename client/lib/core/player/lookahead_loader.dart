@@ -23,9 +23,9 @@ class LookaheadLoader {
     required SunflowerApi api,
     required SunflowerDatabase db,
     required String queueId,
-  }) : _api = api,
-       _db = db,
-       _queueId = queueId;
+  })  : _api = api,
+        _db = db,
+        _queueId = queueId;
 
   final SunflowerApi _api;
   final SunflowerDatabase _db;

@@ -5,10 +5,10 @@ import '../../core/api/sunflower_api.dart';
 import '../../core/downloads/downloads_providers.dart';
 import '../../core/player/capabilities.dart';
 
-final _playlistDetailProvider = FutureProvider.autoDispose
-    .family<Playlist, String>((ref, id) async {
-      return ref.watch(sunflowerApiProvider).getPlaylist(id);
-    });
+final _playlistDetailProvider =
+    FutureProvider.autoDispose.family<Playlist, String>((ref, id) async {
+  return ref.watch(sunflowerApiProvider).getPlaylist(id);
+});
 
 /// Shows a playlist's tracks (M5). Tapping a track is a future tap-to-play hook
 /// (queue start by media id, like the home feed).

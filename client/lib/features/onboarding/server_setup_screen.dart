@@ -94,8 +94,8 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Text(
                       _error!,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error),
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ),
                 FilledButton(

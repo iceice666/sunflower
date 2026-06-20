@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
-import '../../core/db/database.dart';
 import '../../core/db/database_provider.dart';
 
 /// Filter preferences for the home feed, wired from the settings screen.
@@ -57,27 +56,27 @@ final homeFeedProvider = FutureProvider.autoDispose<HomeFeed>((ref) async {
 
 /// Serializes a HomeFeed back to the wire JSON shape for caching.
 Map<String, dynamic> _feedToJson(HomeFeed feed) => {
-  'sections': [
-    for (final s in feed.sections)
-      {
-        'id': s.id,
-        'title': s.title,
-        'kind': s.kind,
-        if (s.seed != null) 'seed': s.seed,
-        'items': [
-          for (final it in s.items)
-            {
-              'media_id': it.mediaId,
-              'title': it.title,
-              'source': it.source,
-              'artists': it.artists,
-              if (it.albumId != null) 'album_id': it.albumId,
-              'duration_ms': it.durationMs,
-              if (it.thumbnailUrl != null) 'thumbnail_url': it.thumbnailUrl,
-            },
-        ],
-      },
-  ],
-  'chips': feed.chips,
-  'stale': feed.stale,
-};
+      'sections': [
+        for (final s in feed.sections)
+          {
+            'id': s.id,
+            'title': s.title,
+            'kind': s.kind,
+            if (s.seed != null) 'seed': s.seed,
+            'items': [
+              for (final it in s.items)
+                {
+                  'media_id': it.mediaId,
+                  'title': it.title,
+                  'source': it.source,
+                  'artists': it.artists,
+                  if (it.albumId != null) 'album_id': it.albumId,
+                  'duration_ms': it.durationMs,
+                  if (it.thumbnailUrl != null) 'thumbnail_url': it.thumbnailUrl,
+                },
+            ],
+          },
+      ],
+      'chips': feed.chips,
+      'stale': feed.stale,
+    };

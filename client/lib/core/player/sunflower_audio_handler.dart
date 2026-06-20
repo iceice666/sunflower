@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/sunflower_api.dart';
 import '../db/database.dart';
 import 'expiry_guard.dart';
+import 'local_radio.dart';
 import 'lookahead_loader.dart';
 import 'source_resolver.dart';
 
@@ -39,7 +40,6 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   late ConcatenatingAudioSource _playlist;
   List<Song> _songs = [];
   Map<String, String> _authHeaders = {};
-  String Function(String mediaId)? _streamUrlBuilder;
 
   // --- M4 queue mode --------------------------------------------------------
   // Set when playback is driven by a server queue (YouTube radio / mixed
@@ -70,7 +70,6 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   ) async {
     _songs = songs;
     _authHeaders = authHeaders;
-    _streamUrlBuilder = streamUrlBuilder;
 
     final sources = songs.map((s) {
       return AudioSource.uri(
@@ -111,8 +110,15 @@ class SunflowerAudioHandler extends BaseAudioHandler {
 
     final current = await _loader!.start(position);
     if (current == null) {
-      // Queue empty/unreachable on cold start → try local radio immediately.
+      // Queue empty/unreachable on cold start → initialize an empty playlist,
+      // fill it from local radio, then start playback. If local radio is also
+      // empty (fresh install with no history), there is nothing to play.
+      _playlist = ConcatenatingAudioSource(children: []);
       await _engageLocalRadio();
+      if (_playlist.length > 0) {
+        await _player.setAudioSource(_playlist, initialIndex: 0);
+        await play();
+      }
       return;
     }
 
@@ -253,9 +259,8 @@ class SunflowerAudioHandler extends BaseAudioHandler {
           source: Value(s.source),
           // Only cache replayable (local) URLs; YT URLs expire and are useless
           // offline.
-          streamUrl: s.source == 'local'
-              ? Value(s.streamUrl)
-              : const Value(null),
+          streamUrl:
+              s.source == 'local' ? Value(s.streamUrl) : const Value(null),
           durationMs: Value(s.durationMs),
         ),
       );
@@ -443,9 +448,8 @@ class SunflowerAudioHandler extends BaseAudioHandler {
       id: it.mediaId,
       title: it.title.isEmpty ? it.mediaId : it.title,
       artist: it.artists.isEmpty ? null : it.artists.join(', '),
-      duration: it.durationMs > 0
-          ? Duration(milliseconds: it.durationMs)
-          : null,
+      duration:
+          it.durationMs > 0 ? Duration(milliseconds: it.durationMs) : null,
     );
   }
 }

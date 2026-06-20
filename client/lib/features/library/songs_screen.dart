@@ -4,9 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
 import '../../core/player/player_bootstrap.dart';
-import '../../core/player/sunflower_audio_handler.dart';
 import '../player_ui/mini_player.dart';
-import '../player_ui/now_playing_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Data providers
@@ -33,9 +31,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
   List<Song> _filter(List<Song> songs) {
     if (_query.isEmpty) return songs;
     final q = _query.toLowerCase();
-    return songs
-        .where((s) => s.title.toLowerCase().contains(q))
-        .toList();
+    return songs.where((s) => s.title.toLowerCase().contains(q)).toList();
   }
 
   Future<void> _play(List<Song> allSongs, int index) async {
@@ -103,8 +99,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                   ),
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

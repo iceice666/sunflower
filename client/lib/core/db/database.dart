@@ -83,16 +83,14 @@ class DownloadJobs extends Table {
   /// The remote URL to fetch (server stream URL for local songs; resolved YT
   /// URL for remote, best-effort).
   TextColumn get sourceUrl => text()();
-  TextColumn get status =>
-      text().withDefault(const Constant('pending'))();
+  TextColumn get status => text().withDefault(const Constant('pending'))();
   IntColumn get totalBytes => integer().withDefault(const Constant(0))();
   IntColumn get receivedBytes => integer().withDefault(const Constant(0))();
 
   /// Optional playlist this job was enqueued for (per-playlist downloads).
   TextColumn get playlistId => text().nullable()();
   TextColumn get error => text().nullable()();
-  DateTimeColumn get updatedAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
   Set<Column> get primaryKey => {mediaId};
@@ -145,8 +143,7 @@ class PendingMutations extends Table {
   /// Priority for eviction: higher survives. likes(2) > most(1) > impression(0).
   IntColumn get priority => integer().withDefault(const Constant(1))();
   TextColumn get error => text().nullable()();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
   Set<Column> get primaryKey => {idempotencyKey};
@@ -185,7 +182,8 @@ class SunflowerDatabase extends _$SunflowerDatabase {
     await transaction(() async {
       await (delete(
         lookaheadCache,
-      )..where((t) => t.queueId.equals(queueId))).go();
+      )..where((t) => t.queueId.equals(queueId)))
+          .go();
       await batch((b) => b.insertAll(lookaheadCache, items));
     });
   }
@@ -212,9 +210,9 @@ class SunflowerDatabase extends _$SunflowerDatabase {
     return (select(recentPlays)
           ..orderBy([
             (t) => OrderingTerm(
-              expression: t.lastPlayedAt,
-              mode: OrderingMode.desc,
-            ),
+                  expression: t.lastPlayedAt,
+                  mode: OrderingMode.desc,
+                ),
           ])
           ..limit(limit))
         .get();
@@ -297,7 +295,8 @@ class SunflowerDatabase extends _$SunflowerDatabase {
     await transaction(() async {
       await into(downloadedTracks).insertOnConflictUpdate(track);
       final mediaId = track.mediaId.value;
-      await (update(downloadJobs)..where((t) => t.mediaId.equals(mediaId))).write(
+      await (update(downloadJobs)..where((t) => t.mediaId.equals(mediaId)))
+          .write(
         const DownloadJobsCompanion(status: Value('completed')),
       );
     });
@@ -353,8 +352,7 @@ class SunflowerDatabase extends _$SunflowerDatabase {
 
   /// Marks a mutation confirmed (server accepted it).
   Future<void> confirmMutation(String key) async {
-    await (update(pendingMutations)
-          ..where((t) => t.idempotencyKey.equals(key)))
+    await (update(pendingMutations)..where((t) => t.idempotencyKey.equals(key)))
         .write(const PendingMutationsCompanion(status: Value('confirmed')));
   }
 
@@ -365,8 +363,7 @@ class SunflowerDatabase extends _$SunflowerDatabase {
     required int nextAttemptAt,
     String? error,
   }) async {
-    await (update(pendingMutations)
-          ..where((t) => t.idempotencyKey.equals(key)))
+    await (update(pendingMutations)..where((t) => t.idempotencyKey.equals(key)))
         .write(PendingMutationsCompanion(
       status: const Value('failed'),
       attempts: Value(attempts),
@@ -377,8 +374,7 @@ class SunflowerDatabase extends _$SunflowerDatabase {
 
   /// Deletes confirmed mutations (post-drain cleanup).
   Future<void> purgeConfirmed() async {
-    await (delete(pendingMutations)
-          ..where((t) => t.status.equals('confirmed')))
+    await (delete(pendingMutations)..where((t) => t.status.equals('confirmed')))
         .go();
   }
 

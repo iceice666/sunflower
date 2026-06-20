@@ -15,8 +15,8 @@ const kExpiryLeadTime = Duration(seconds: 30);
 ///                  calls [resolve] with `proxy: true` to force the fallback.
 class ExpiryGuard {
   ExpiryGuard({required SunflowerApi api, DateTime Function()? now})
-    : _api = api,
-      _now = now ?? DateTime.now;
+      : _api = api,
+        _now = now ?? DateTime.now;
 
   final SunflowerApi _api;
   final DateTime Function() _now;
