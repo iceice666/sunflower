@@ -71,7 +71,7 @@ jobs:
   android-smoke:
     if: >
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.run_smoke == 'true')
+      (github.event_name == 'workflow_dispatch' && inputs.run_smoke)
     name: Android emulator smoke (nightly)
     runs-on: macos-14       # Apple-silicon macOS — fastest KVM-equivalent for Android
 
