@@ -39,10 +39,13 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
     Playlist? playlist,
     HomeFeed? feed,
     this.feedError,
+    SearchResults? searchResults,
+    this.searchError,
   })  : songs = songs ?? Fixtures.songs,
         playlists = playlists ?? Fixtures.playlists,
         playlist = playlist ?? Fixtures.playlistWithItems('pl-001'),
-        feed = feed ?? Fixtures.homeFeed;
+        feed = feed ?? Fixtures.homeFeed,
+        searchResults = searchResults ?? Fixtures.searchResults;
 
   /// Loading state: every async call returns a Completer that never resolves.
   FakeSunflowerApi.loading()
@@ -51,7 +54,9 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
         playlists = null,
         playlist = null,
         feed = null,
-        feedError = null;
+        feedError = null,
+        searchResults = null,
+        searchError = null;
 
   final List<Song>? songs;
   final Object? songsError;
@@ -59,6 +64,8 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
   final Playlist? playlist;
   final HomeFeed? feed;
   final Object? feedError;
+  final SearchResults? searchResults;
+  final Object? searchError;
 
   // ─── Library ─────────────────────────────────────────────────────────────
 
@@ -80,6 +87,18 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
     if (feedError != null) return Future.error(feedError!);
     final f = feed;
     return f != null ? Future.value(f) : Completer<HomeFeed>().future;
+  }
+
+  @override
+  Future<SearchResults> search(String query, {int limit = 20}) {
+    if (searchError != null) {
+      return Future<SearchResults>.delayed(
+        const Duration(milliseconds: 50),
+        () => throw searchError!,
+      );
+    }
+    final r = searchResults;
+    return r != null ? Future.value(r) : Completer<SearchResults>().future;
   }
 
   // ─── Playlists ───────────────────────────────────────────────────────────

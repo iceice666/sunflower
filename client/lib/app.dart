@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/token_store.dart';
+import 'core/ui/sunflower_theme.dart';
 import 'core/ws/ws_providers.dart';
-import 'features/downloads_ui/downloads_screen.dart';
 import 'features/home/home_screen.dart';
-import 'features/library/playlists_screen.dart';
-import 'features/library/songs_screen.dart';
+import 'features/library/library_screen.dart';
 import 'features/onboarding/server_setup_screen.dart';
-import 'features/settings/settings_screen.dart';
+import 'features/player_ui/mini_player.dart';
+import 'features/search/search_screen.dart';
 
 class SunflowerApp extends ConsumerWidget {
   const SunflowerApp({super.key});
@@ -19,20 +19,8 @@ class SunflowerApp extends ConsumerWidget {
 
     return MaterialApp(
       title: 'Sunflower',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFFB300), // sunflower yellow
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFFB300),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: sunflowerTheme(),
+      darkTheme: sunflowerTheme(),
       themeMode: ThemeMode.dark,
       home: tokenAsync.when(
         data: (token) =>
@@ -45,9 +33,7 @@ class SunflowerApp extends ConsumerWidget {
   }
 }
 
-/// Bottom-navigation shell for the authenticated app: Home (recommendations),
-/// Songs (local library), and Playlists. Added in M5 when the home feed gave the
-/// app more than one primary surface.
+/// Bottom-navigation shell for the authenticated app.
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
@@ -60,10 +46,8 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   static const _tabs = [
     HomeScreen(),
-    SongsScreen(),
-    PlaylistsScreen(),
-    DownloadsScreen(),
-    SettingsScreen(),
+    SearchScreen(),
+    LibraryScreen(),
   ];
 
   @override
@@ -74,34 +58,30 @@ class _MainShellState extends ConsumerState<MainShell> {
 
     return Scaffold(
       body: IndexedStack(index: _index, children: _tabs),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.library_music_outlined),
-            selectedIcon: Icon(Icons.library_music),
-            label: 'Songs',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.queue_music_outlined),
-            selectedIcon: Icon(Icons.queue_music),
-            label: 'Playlists',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.download_outlined),
-            selectedIcon: Icon(Icons.download),
-            label: 'Downloads',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const MiniPlayer(),
+          NavigationBar(
+            selectedIndex: _index,
+            onDestinationSelected: (i) => setState(() => _index = i),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.search),
+                selectedIcon: Icon(Icons.manage_search),
+                label: 'Search',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.library_music_outlined),
+                selectedIcon: Icon(Icons.library_music),
+                label: 'Library',
+              ),
+            ],
           ),
         ],
       ),

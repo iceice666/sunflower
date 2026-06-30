@@ -23,7 +23,7 @@ class ChipBar extends StatelessWidget {
           final chip = chips[i];
           return ActionChip(
             label: Text(chip),
-            onPressed: onTap == null ? null : () => onTap!(chip),
+            onPressed: () => onTap?.call(chip),
           );
         },
       ),

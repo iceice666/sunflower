@@ -3,8 +3,13 @@
 // Baseline: flutter test --update-goldens test/goldens/library_golden_test.dart
 // Compare:  flutter test test/goldens/library_golden_test.dart
 
+import 'package:flutter_test/flutter_test.dart';
+import 'package:golden_toolkit/golden_toolkit.dart'
+    show testGoldens, screenMatchesGolden;
+
 import 'package:sunflower/core/api/sunflower_api.dart'
     show sunflowerApiProvider;
+import 'package:sunflower/features/library/library_screen.dart';
 import 'package:sunflower/features/library/playlist_detail_screen.dart';
 import 'package:sunflower/features/library/playlists_screen.dart';
 import 'package:sunflower/features/library/songs_screen.dart';
@@ -12,6 +17,23 @@ import 'package:sunflower/features/library/songs_screen.dart';
 import 'helpers/golden_harness.dart';
 
 void main() {
+  // ══════════════════════════════════════════════════════════════════════════
+  // Library shell — segmented Songs / Playlists / Downloads
+  // ══════════════════════════════════════════════════════════════════════════
+
+  testGoldens('library screen — segmented shell', (tester) async {
+    await pumpGolden(tester, const LibraryScreen());
+    await screenMatchesGolden(tester, 'snapshots/library/library_songs');
+
+    await tester.tap(find.text('Playlists'));
+    await tester.pump(const Duration(milliseconds: 250));
+    await screenMatchesGolden(tester, 'snapshots/library/library_playlists');
+
+    await tester.tap(find.text('Downloads'));
+    await tester.pump(const Duration(milliseconds: 250));
+    await screenMatchesGolden(tester, 'snapshots/library/library_downloads');
+  });
+
   // ══════════════════════════════════════════════════════════════════════════
   // Songs screen — populated / empty / error
   // ══════════════════════════════════════════════════════════════════════════

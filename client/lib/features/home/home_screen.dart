@@ -4,11 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/sunflower_api.dart';
 import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
+import '../../core/ui/empty_state.dart';
+import '../../core/ui/section_rail.dart';
+import '../../core/ui/status_banner.dart';
 import '../settings/sync_status_widget.dart';
-import '../player_ui/mini_player.dart';
 import 'chip_bar.dart';
 import 'home_controller.dart';
-import 'section_widget.dart';
 
 /// The Home tab: recommendation sections with pull-to-refresh and a cold-start
 /// "stale" banner. Tapping a tile starts a server queue seeded by that item and
@@ -21,23 +22,27 @@ class HomeScreen extends ConsumerWidget {
     final feedAsync = ref.watch(homeFeedProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Home')),
-      body: Column(
-        children: [
-          Expanded(
-            child: feedAsync.when(
-              data: (feed) => RefreshIndicator(
-                onRefresh: () async => ref.refresh(homeFeedProvider.future),
-                child: _FeedBody(feed: feed),
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => _ErrorView(
-                onRetry: () => ref.refresh(homeFeedProvider.future),
-              ),
-            ),
+      appBar: AppBar(
+        title: const Text(
+          'Sunflower',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Icon(Icons.graphic_eq),
           ),
-          const MiniPlayer(),
         ],
+      ),
+      body: feedAsync.when(
+        data: (feed) => RefreshIndicator(
+          onRefresh: () async => ref.refresh(homeFeedProvider.future),
+          child: _FeedBody(feed: feed),
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => _ErrorView(
+          onRetry: () => ref.refresh(homeFeedProvider.future),
+        ),
       ),
     );
   }
@@ -56,7 +61,7 @@ class _FeedBody extends ConsumerWidget {
         if (feed.stale) const _StaleBanner(),
         ChipBar(chips: feed.chips),
         for (final section in feed.sections)
-          SectionWidget(
+          SectionRail(
             section: section,
             onTap: (sec, item, index) => _onTap(ref, sec, item, index),
           ),
@@ -88,13 +93,23 @@ class _FeedBody extends ConsumerWidget {
       ]),
     );
 
-    // Start a server queue seeded by the tapped item, then play in queue mode.
-    // The server's queue/start "song" seed expands a YouTube video into radio;
-    // local-library items have no radio seed kind yet (album/artist/local seeds
-    // are deferred — see M4 status), so we only auto-queue YouTube items here.
     if (!item.mediaId.startsWith('yt:')) {
+      final song = Song(
+        mediaId: item.mediaId,
+        sourceType: item.source,
+        title: item.title,
+        artistName: item.artists.join(', '),
+        albumTitle: '',
+        hasArt: false,
+        albumId: item.albumId,
+        durationMs: item.durationMs,
+      );
+      await handler.loadPlaylist([song], 0, api.streamUrl, api.authHeaders);
       return;
     }
+
+    // Start a server queue seeded by the tapped YouTube item, then play in
+    // queue mode.
     final queue = await api.startQueue(seedKind: 'song', seedId: item.mediaId);
     await handler.startQueue(
       api: api,
@@ -115,22 +130,9 @@ class _StaleBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        children: [
-          const Icon(Icons.cloud_off, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              "Showing saved recommendations — couldn't reach the server.",
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ),
+    return const StatusBanner(
+      icon: Icons.cloud_off,
+      text: "Showing saved recommendations — couldn't reach the server.",
     );
   }
 }
@@ -142,14 +144,13 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Could not load recommendations.'),
-          const SizedBox(height: 8),
-          FilledButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
+    return EmptyState(
+      icon: Icons.cloud_off,
+      title: 'Could not load recommendations',
+      message: 'Check your server connection, then try again.',
+      action: FilledButton(
+        onPressed: onRetry,
+        child: const Text('Retry'),
       ),
     );
   }

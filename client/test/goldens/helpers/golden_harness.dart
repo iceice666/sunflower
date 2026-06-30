@@ -77,7 +77,6 @@
 // ---------------------------------------------------------------------------
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
@@ -88,8 +87,12 @@ import 'package:golden_toolkit/golden_toolkit.dart';
 
 import 'package:sunflower/core/api/sunflower_api.dart';
 import 'package:sunflower/core/auth/token_store.dart';
+import 'package:sunflower/core/db/database.dart' show DownloadJob;
+import 'package:sunflower/core/downloads/downloads_providers.dart'
+    show downloadJobsProvider;
 import 'package:sunflower/core/player/player_bootstrap.dart';
 import 'package:sunflower/core/sync/sync_providers.dart';
+import 'package:sunflower/core/ui/sunflower_theme.dart';
 import 'package:sunflower/core/ws/ws_providers.dart';
 
 import '../fakes/fakes.dart';
@@ -118,13 +121,7 @@ bool _goldenComparatorInstalled = false;
 
 // ─── App theme ───────────────────────────────────────────────────────────────
 
-ThemeData _sunflowerDarkTheme() => ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFFFB300),
-        brightness: Brightness.dark,
-      ),
-      useMaterial3: true,
-    );
+ThemeData _sunflowerDarkTheme() => sunflowerTheme();
 
 // ─── Base provider overrides ─────────────────────────────────────────────────
 //
@@ -165,6 +162,9 @@ List<Override> _baseOverrides() => [
       // Sync / write-replay: pending = 0, mutations are no-ops.
       pendingCountProvider.overrideWith((ref) => Stream.value(0)),
       bufferedApiProvider.overrideWithValue(FakeBufferedApi()),
+      downloadJobsProvider.overrideWith(
+        (ref) => Stream.value(const <DownloadJob>[]),
+      ),
     ];
 
 // ─── Core pump helper ────────────────────────────────────────────────────────

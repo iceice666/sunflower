@@ -63,6 +63,29 @@ void main() {
       playbackStateProvider.overrideWith(
         (ref) => Stream.value(Fixtures.playbackStatePaused),
       ),
+      audioHandlerProvider.overrideWithValue(
+        FakeAudioHandler(
+          queue: [
+            (queueIndex: 1, item: Fixtures.mediaItem),
+            (
+              queueIndex: 2,
+              item: MediaItem(
+                id: 'local:ddeeff',
+                title: 'Autumn Drift',
+                artist: 'Maeve',
+              ),
+            ),
+            (
+              queueIndex: 3,
+              item: MediaItem(
+                id: 'local:112233',
+                title: 'Neon Pulse',
+                artist: 'Volta',
+              ),
+            ),
+          ],
+        ),
+      ),
     ],
   );
 

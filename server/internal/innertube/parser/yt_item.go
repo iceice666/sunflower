@@ -64,55 +64,11 @@ func parseResponsiveListSong(m map[string]any) models.SongItem {
 			"watchEndpoint", "videoId")
 	}
 
-	// flexColumns[0] holds title; flexColumns[1] holds secondary info (artist, album).
-	var title string
-	var artists []string
-	flexCols := getArray(m, "flexColumns")
-	if len(flexCols) > 0 {
-		if col0, ok := flexCols[0].(map[string]any); ok {
-			colRenderer := getMap(col0, "musicResponsiveListItemFlexColumnRenderer")
-			if colRenderer != nil {
-				title = firstRunText(colRenderer, "text")
-			}
-		}
-	}
-	if len(flexCols) > 1 {
-		if col1, ok := flexCols[1].(map[string]any); ok {
-			colRenderer := getMap(col1, "musicResponsiveListItemFlexColumnRenderer")
-			if colRenderer != nil {
-				for _, run := range getArray(colRenderer, "text", "runs") {
-					r, ok := run.(map[string]any)
-					if !ok {
-						continue
-					}
-					ep := getMap(r, "navigationEndpoint", "browseEndpoint")
-					if ep == nil {
-						continue
-					}
-					pageType := getString(ep, "browseEndpointContextSupportedConfigs",
-						"browseEndpointContextMusicConfig", "pageType")
-					if pageType == "MUSIC_PAGE_TYPE_ARTIST" {
-						artists = append(artists, getString(r, "text"))
-					}
-				}
-			}
-		}
-	}
-
-	// Thumbnail lives under musicThumbnailRenderer for this renderer.
-	thumbnail := ""
-	thumbs := getArray(m, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")
-	if len(thumbs) > 0 {
-		if t, ok := thumbs[len(thumbs)-1].(map[string]any); ok {
-			thumbnail = getString(t, "url")
-		}
-	}
-
 	return models.SongItem{
 		VideoID:      videoID,
-		Title:        title,
-		Artists:      artists,
-		ThumbnailURL: thumbnail,
+		Title:        responsiveTitle(m),
+		Artists:      responsiveArtists(m),
+		ThumbnailURL: responsiveThumbnail(m),
 	}
 }
 
@@ -121,8 +77,10 @@ func parseAlbumItem(m map[string]any) models.AlbumItem {
 		return models.AlbumItem{}
 	}
 	return models.AlbumItem{
-		BrowseID: getString(m, "navigationEndpoint", "browseEndpoint", "browseId"),
-		Title:    firstRunText(m, "title"),
+		BrowseID:     getString(m, "navigationEndpoint", "browseEndpoint", "browseId"),
+		Title:        firstNonEmpty(firstRunText(m, "title"), responsiveTitle(m)),
+		Artists:      responsiveArtists(m),
+		ThumbnailURL: responsiveThumbnail(m),
 	}
 }
 
@@ -131,7 +89,76 @@ func parseArtistItem(m map[string]any) models.ArtistItem {
 		return models.ArtistItem{}
 	}
 	return models.ArtistItem{
-		BrowseID: getString(m, "navigationEndpoint", "browseEndpoint", "browseId"),
-		Name:     firstRunText(m, "title"),
+		BrowseID:     getString(m, "navigationEndpoint", "browseEndpoint", "browseId"),
+		Name:         firstNonEmpty(firstRunText(m, "title"), responsiveTitle(m)),
+		ThumbnailURL: responsiveThumbnail(m),
 	}
+}
+
+func responsiveTitle(m map[string]any) string {
+	flexCols := getArray(m, "flexColumns")
+	if len(flexCols) == 0 {
+		return ""
+	}
+	col0, ok := flexCols[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	colRenderer := getMap(col0, "musicResponsiveListItemFlexColumnRenderer")
+	if colRenderer == nil {
+		return ""
+	}
+	return firstRunText(colRenderer, "text")
+}
+
+func responsiveArtists(m map[string]any) []string {
+	var artists []string
+	flexCols := getArray(m, "flexColumns")
+	if len(flexCols) < 2 {
+		return artists
+	}
+	col1, ok := flexCols[1].(map[string]any)
+	if !ok {
+		return artists
+	}
+	colRenderer := getMap(col1, "musicResponsiveListItemFlexColumnRenderer")
+	if colRenderer == nil {
+		return artists
+	}
+	for _, run := range getArray(colRenderer, "text", "runs") {
+		r, ok := run.(map[string]any)
+		if !ok {
+			continue
+		}
+		ep := getMap(r, "navigationEndpoint", "browseEndpoint")
+		if ep == nil {
+			continue
+		}
+		pageType := getString(ep, "browseEndpointContextSupportedConfigs",
+			"browseEndpointContextMusicConfig", "pageType")
+		if pageType == "MUSIC_PAGE_TYPE_ARTIST" {
+			artists = append(artists, getString(r, "text"))
+		}
+	}
+	return artists
+}
+
+func responsiveThumbnail(m map[string]any) string {
+	thumbs := getArray(m, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")
+	if len(thumbs) == 0 {
+		return ""
+	}
+	if t, ok := thumbs[len(thumbs)-1].(map[string]any); ok {
+		return getString(t, "url")
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

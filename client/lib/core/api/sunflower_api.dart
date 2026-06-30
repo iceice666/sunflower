@@ -271,6 +271,120 @@ class HomeFeed {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Search models
+// ---------------------------------------------------------------------------
+
+class SearchResults {
+  const SearchResults({
+    required this.query,
+    this.songs = const [],
+    this.albums = const [],
+    this.artists = const [],
+    this.continuation,
+  });
+
+  final String query;
+  final List<SearchSong> songs;
+  final List<SearchAlbum> albums;
+  final List<SearchArtist> artists;
+  final String? continuation;
+
+  bool get isEmpty => songs.isEmpty && albums.isEmpty && artists.isEmpty;
+
+  factory SearchResults.fromJson(Map<String, dynamic> json) {
+    final songs = json['songs'] as List<dynamic>? ?? const [];
+    final albums = json['albums'] as List<dynamic>? ?? const [];
+    final artists = json['artists'] as List<dynamic>? ?? const [];
+    return SearchResults(
+      query: json['query'] as String? ?? '',
+      songs:
+          songs.cast<Map<String, dynamic>>().map(SearchSong.fromJson).toList(),
+      albums: albums
+          .cast<Map<String, dynamic>>()
+          .map(SearchAlbum.fromJson)
+          .toList(),
+      artists: artists
+          .cast<Map<String, dynamic>>()
+          .map(SearchArtist.fromJson)
+          .toList(),
+      continuation: json['continuation'] as String?,
+    );
+  }
+}
+
+class SearchSong {
+  const SearchSong({
+    required this.mediaId,
+    required this.source,
+    required this.title,
+    this.artists = const [],
+    this.thumbnailUrl,
+    this.durationMs = 0,
+  });
+
+  final String mediaId;
+  final String source;
+  final String title;
+  final List<String> artists;
+  final String? thumbnailUrl;
+  final int durationMs;
+
+  factory SearchSong.fromJson(Map<String, dynamic> json) {
+    return SearchSong(
+      mediaId: json['media_id'] as String? ?? '',
+      source: json['source'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      artists: (json['artists'] as List<dynamic>? ?? const []).cast<String>(),
+      thumbnailUrl: json['thumbnail_url'] as String?,
+      durationMs: json['duration_ms'] as int? ?? 0,
+    );
+  }
+}
+
+class SearchAlbum {
+  const SearchAlbum({
+    required this.browseId,
+    required this.title,
+    this.artists = const [],
+    this.thumbnailUrl,
+  });
+
+  final String browseId;
+  final String title;
+  final List<String> artists;
+  final String? thumbnailUrl;
+
+  factory SearchAlbum.fromJson(Map<String, dynamic> json) {
+    return SearchAlbum(
+      browseId: json['browse_id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      artists: (json['artists'] as List<dynamic>? ?? const []).cast<String>(),
+      thumbnailUrl: json['thumbnail_url'] as String?,
+    );
+  }
+}
+
+class SearchArtist {
+  const SearchArtist({
+    required this.browseId,
+    required this.name,
+    this.thumbnailUrl,
+  });
+
+  final String browseId;
+  final String name;
+  final String? thumbnailUrl;
+
+  factory SearchArtist.fromJson(Map<String, dynamic> json) {
+    return SearchArtist(
+      browseId: json['browse_id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      thumbnailUrl: json['thumbnail_url'] as String?,
+    );
+  }
+}
+
 /// A user playlist summary (and items when fetched by id).
 class Playlist {
   const Playlist({
@@ -442,6 +556,15 @@ class SunflowerApi {
       },
     );
     return HomeFeed.fromJson(response.data ?? const {});
+  }
+
+  /// Searches YouTube Music through the authenticated server.
+  Future<SearchResults> search(String query, {int limit = 20}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/search',
+      queryParameters: {'q': query, 'limit': limit},
+    );
+    return SearchResults.fromJson(response.data ?? const {});
   }
 
   /// Toggles a like for [mediaId]. Mutating — carries an Idempotency-Key.

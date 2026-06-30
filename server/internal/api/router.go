@@ -92,6 +92,7 @@ func NewRouter(d Deps) http.Handler {
 
 			// M5 recommendations, likes, playlists, impressions.
 			r.Get("/home", d.getHome)
+			r.Get("/search", d.search)
 			r.With(idem).Post("/likes", d.postLike)
 			r.With(idem).Post("/impressions", d.postImpressions)
 			r.Get("/playlists", d.listPlaylists)

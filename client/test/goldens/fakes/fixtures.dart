@@ -91,6 +91,41 @@ abstract final class Fixtures {
         durationMs: 200000,
       );
 
+  // ─── Search ──────────────────────────────────────────────────────────────
+
+  static const SearchResults searchResults = SearchResults(
+    query: 'sun',
+    songs: [
+      SearchSong(
+        mediaId: 'yt:yt001',
+        source: 'yt',
+        title: 'Sunflower Fields (Live)',
+        artists: ['Helios'],
+        durationMs: 212000,
+      ),
+      SearchSong(
+        mediaId: 'yt:yt002',
+        source: 'yt',
+        title: 'Neon Sun',
+        artists: ['Volta'],
+        durationMs: 198000,
+      ),
+    ],
+    albums: [
+      SearchAlbum(
+        browseId: 'MPREb_album001',
+        title: 'Golden Hour',
+        artists: ['Helios'],
+      ),
+    ],
+    artists: [
+      SearchArtist(
+        browseId: 'UC_artist001',
+        name: 'Helios',
+      ),
+    ],
+  );
+
   // ─── Stale home feed (cold start) ────────────────────────────────────────
 
   static HomeFeed get staleFeed => HomeFeed(

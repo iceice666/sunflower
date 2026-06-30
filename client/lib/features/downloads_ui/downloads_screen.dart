@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
 import '../../core/downloads/downloads_providers.dart';
+import '../../core/ui/empty_state.dart';
 
 /// Lists active and completed downloads (M6). Active jobs show progress and a
 /// cancel action; completed jobs show a remove action.
@@ -15,24 +16,44 @@ class DownloadsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Downloads')),
-      body: jobsAsync.when(
-        data: (jobs) {
-          if (jobs.isEmpty) {
-            return const Center(child: Text('No downloads'));
-          }
-          final active = jobs.where((j) => j.status != 'completed').toList();
-          final done = jobs.where((j) => j.status == 'completed').toList();
-          return ListView(
-            children: [
-              if (active.isNotEmpty) const _Header('Active'),
-              for (final j in active) _ActiveTile(job: j),
-              if (done.isNotEmpty) const _Header('Downloaded'),
-              for (final j in done) _DoneTile(job: j),
-            ],
+      body: DownloadsPane(jobsAsync: jobsAsync),
+    );
+  }
+}
+
+class DownloadsPane extends ConsumerWidget {
+  const DownloadsPane({super.key, this.jobsAsync});
+
+  final AsyncValue<List<DownloadJob>>? jobsAsync;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<DownloadJob>> async =
+        jobsAsync ?? ref.watch(downloadJobsProvider);
+    return async.when(
+      data: (jobs) {
+        if (jobs.isEmpty) {
+          return const EmptyState(
+            icon: Icons.download_outlined,
+            title: 'No downloads',
+            message: 'Downloaded tracks and playlists will appear here.',
           );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => const Center(child: Text('Could not load downloads')),
+        }
+        final active = jobs.where((j) => j.status != 'completed').toList();
+        final done = jobs.where((j) => j.status == 'completed').toList();
+        return ListView(
+          children: [
+            if (active.isNotEmpty) const _Header('Active'),
+            for (final j in active) _ActiveTile(job: j),
+            if (done.isNotEmpty) const _Header('Downloaded'),
+            for (final j in done) _DoneTile(job: j),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => const EmptyState(
+        icon: Icons.error_outline,
+        title: 'Could not load downloads',
       ),
     );
   }

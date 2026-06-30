@@ -56,9 +56,15 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Icon(
+                  Icons.local_florist,
+                  size: 52,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
                 const Text(
-                  '🌻 Sunflower',
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                  'Sunflower',
+                  style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),

@@ -140,7 +140,8 @@ Future<void> main() async {
 
       // ── t02  Library / Songs ─────────────────────────────────────────────────
 
-      await _tapNav(tester, 'Songs');
+      await _tapNav(tester, 'Library');
+      await _tapText(tester, 'Songs');
       await _stabilize(tester, seconds: 5);
       await _shot(tester, 't02_library_songs');
 
@@ -164,9 +165,9 @@ Future<void> main() async {
         await tester.tap(miniPlayerFinder);
         await _stabilize(tester, seconds: 2);
         await _shot(tester, 't04_now_playing');
-        final back = find.byType(BackButton);
-        if (back.evaluate().isNotEmpty) {
-          await tester.tap(back);
+        final close = find.byType(CloseButton);
+        if (close.evaluate().isNotEmpty) {
+          await tester.tap(close);
           await tester.pump();
         }
       } else {
@@ -182,13 +183,15 @@ Future<void> main() async {
 
       // ── t06  Playlists ───────────────────────────────────────────────────────
 
-      await _tapNav(tester, 'Playlists');
+      await _tapNav(tester, 'Library');
+      await _tapText(tester, 'Playlists');
       await _stabilize(tester, seconds: 3);
       await _shot(tester, 't06_playlists');
 
       // ── t07  Downloads ───────────────────────────────────────────────────────
 
-      await _tapNav(tester, 'Downloads');
+      await _tapNav(tester, 'Library');
+      await _tapText(tester, 'Downloads');
       await _stabilize(tester, seconds: 3);
       await _shot(tester, 't07_downloads');
 
@@ -197,7 +200,11 @@ Future<void> main() async {
       // when drained.  Either state is valid; the screenshot proves the widget
       // lifecycle is active and rendering.
 
-      await _tapNav(tester, 'Settings');
+      await _tapNav(tester, 'Library');
+      final settings = find.byIcon(Icons.settings_outlined);
+      if (settings.evaluate().isNotEmpty) {
+        await tester.tap(settings.first);
+      }
       await _stabilize(tester, seconds: 3);
       await _shot(tester, 't08_settings_sync');
 
@@ -236,6 +243,10 @@ Future<void> _stabilize(WidgetTester tester, {int seconds = 3}) async {
 
 /// Tap a NavigationBar destination by its label text.
 Future<void> _tapNav(WidgetTester tester, String label) async {
+  await _tapText(tester, label);
+}
+
+Future<void> _tapText(WidgetTester tester, String label) async {
   final dest = find.text(label);
   if (dest.evaluate().isNotEmpty) {
     await tester.tap(dest.first);

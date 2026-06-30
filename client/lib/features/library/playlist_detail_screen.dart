@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/sunflower_api.dart';
 import '../../core/downloads/downloads_providers.dart';
 import '../../core/player/capabilities.dart';
+import '../../core/ui/empty_state.dart';
+import '../../core/ui/track_row.dart';
 
 final _playlistDetailProvider =
     FutureProvider.autoDispose.family<Playlist, String>((ref, id) async {
@@ -45,32 +47,29 @@ class PlaylistDetailScreen extends ConsumerWidget {
       body: detailAsync.when(
         data: (pl) {
           if (pl.items.isEmpty) {
-            return const Center(child: Text('This playlist is empty'));
+            return const EmptyState(
+              icon: Icons.queue_music_outlined,
+              title: 'This playlist is empty',
+            );
           }
           return ListView.builder(
             itemCount: pl.items.length,
             itemBuilder: (context, i) {
               final item = pl.items[i];
-              return ListTile(
-                leading: const Icon(Icons.music_note),
-                title: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: item.artists.isEmpty
-                    ? null
-                    : Text(
-                        item.artists.join(', '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              return TrackRow(
+                mediaId: item.mediaId,
+                title: item.title,
+                subtitle: item.artists.join(', '),
+                thumbnailUrl: item.thumbnailUrl,
               );
             },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => const Center(child: Text('Could not load playlist')),
+        error: (e, _) => const EmptyState(
+          icon: Icons.error_outline,
+          title: 'Could not load playlist',
+        ),
       ),
     );
   }
