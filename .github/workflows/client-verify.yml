@@ -159,19 +159,7 @@ jobs:
           avd-name: Pixel_6_API33_X64
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: |
-            make seed-demo
-            cd client
-            set -a
-            . ../.seed-env
-            set +a
-            EMULATOR_URL="${SUNFLOWER_DEMO_URL//localhost/10.0.2.2}"
-            EMULATOR_URL="${EMULATOR_URL//127.0.0.1/10.0.2.2}"
-            flutter drive \
-              --driver=test_driver/integration_test.dart \
-              --target=integration_test/visual_smoke_test.dart \
-              --dart-define=SUNFLOWER_DEMO_URL="$EMULATOR_URL" \
-              --dart-define=SUNFLOWER_DEMO_TOKEN="$SUNFLOWER_DEMO_TOKEN"
+          script: make seed-demo && make smoke-android
 
       - name: Upload smoke screenshots
         if: always()
