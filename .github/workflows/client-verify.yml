@@ -26,13 +26,13 @@ env:
   JAVA_VERSION: '17'
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 1 — Golden tests (every PR, Linux, no emulator)
+# Job 1 — Golden tests (every PR, macOS, no emulator)
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
   golden-tests:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     name: Flutter golden tests
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     defaults:
       run:
         working-directory: client
