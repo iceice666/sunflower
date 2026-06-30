@@ -28,14 +28,14 @@ on the server.
 | Sync | Server is source of truth; client buffers writes offline and replays; now-playing pushed via WebSocket; rest is polling |
 | Recommendations | Mirror Metrolist's InnerTube-derived fan-out server-side (no ML) |
 | Offline | Explicit per-track / per-playlist downloads with local cache + DB |
-| Auth | Single-user, long-lived opaque device tokens (no refresh) |
+| Auth | Single-user admin account; devices get long-lived opaque tokens only through admin-generated pairing codes (M9) |
 
 ## How to read this folder
 
 - [`architecture.md`](architecture.md) — static reference: component map, wire
   protocol shapes, Postgres schema, server-internal designs, client-internal
   designs. Read this once; refer back during every milestone.
-- [`milestones/`](milestones/) — one file per build phase (M0–M8). Each has a
+- [`milestones/`](milestones/) — one file per build phase (M0–M10). Each has a
   demo target, scope, file-level acceptance criteria, and verification steps.
   Work them in order — later milestones assume earlier ones are stable.
 - [`risks.md`](risks.md) — top risks with mitigations, plus what is explicitly
@@ -54,11 +54,32 @@ on the server.
 | M6 | complete | [`milestones/m6-offline-downloads.md`](milestones/m6-offline-downloads.md) | Playlist downloaded; airplane-mode playback works |
 | M7 | complete | [`milestones/m7-sync-and-write-replay.md`](milestones/m7-sync-and-write-replay.md) | Offline likes/edits drain to server in clock order, idempotent |
 | M8 | complete | [`milestones/m8-websocket-and-polish.md`](milestones/m8-websocket-and-polish.md) | Live now-playing push; optional crossfade |
+| M9 | planned | [`milestones/m9-secure-enrollment.md`](milestones/m9-secure-enrollment.md) | Public device registration is locked behind owner setup, admin login, and one-time pairing codes |
+| M10 | planned | [`milestones/m10-admin-dashboard.md`](milestones/m10-admin-dashboard.md) | Browser admin dashboard manages pairing, devices, scans, cookies, and now-playing control |
 | — | **visually verified** | [`client-verification-report.md`](client-verification-report.md) | 22 goldens (PR) + 10 smoke artifacts (nightly Android) cover M1–M8 |
 
 Order rationale: InnerTube (M3) must precede recs (M5) because recs depend on
-it. Offline (M6) and full sync (M7) come last because they need the rest of
-the system stable to be tested honestly.
+it. Offline (M6) and full sync (M7) come late because they need the rest of
+the system stable to be tested honestly. M9 and M10 are post-v1 hardening and
+operations milestones: M9 fixes enrollment/auth boundaries first, then M10
+builds the admin dashboard on those boundaries.
+
+## Post-v1 hardening direction
+
+M0-M8 prove the music system. M9-M10 make it safe and operable:
+
+- **M9 Secure Enrollment** replaces open device self-registration with owner
+  setup, admin sessions, one-time pairing codes, device revocation, rate
+  limiting, and audit events.
+- **M10 Admin Dashboard** turns the M8 JSON admin surface into a real
+  server-served web dashboard for devices, pairing, library scans, YouTube
+  cookie health, and now-playing control.
+
+Desktop "This computer" local-only mode should come after M10. The simplest
+design is to bundle `sunflowerd`, run it bound to `127.0.0.1`, and have the
+Flutter desktop client pair with that local server automatically. That is
+deliberately deferred so M9/M10 can first establish secure setup, sessions,
+pairing, and dashboard primitives.
 
 ## V1 client — visual verification
 

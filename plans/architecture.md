@@ -13,6 +13,7 @@ sections of this file rather than restating them.
 | `cmd/sunflowerd` | — | Main entrypoint, env/flag parsing, wire-up |
 | `cmd/probe` | — | Dev CLI for poking endpoints / InnerTube |
 | `internal/auth` | — | Device registration, token middleware |
+| `internal/adminui` | — | Server-rendered admin dashboard templates, static assets, CSRF helpers |
 | `internal/library` | local Room song table | File scan (fsnotify + walker), tag extraction via `dhowden/tag`, cover art thumbs via `disintegration/imaging` |
 | `internal/innertube` | `innertube` module | Native Go InnerTube: sig decryption, player-response parsing, home/next/related/artist/album/playlist, continuation, renderer normalizers |
 | `internal/recs` | `HomeViewModel` + `RecommendationRepository` | Section builders, candidate pipeline, ranking, daily cache, filter pipeline |
@@ -54,15 +55,105 @@ surface.
 
 ## Wire protocol — load-bearing endpoints
 
-All JSON. `Authorization: Bearer <token>`. Mutating endpoints require
-`Idempotency-Key` header (UUIDv7).
+All application API JSON uses `Authorization: Bearer <device_token>`.
+Mutating device endpoints require `Idempotency-Key` header (UUIDv7). M9 adds a
+separate admin browser session carried by an HttpOnly cookie; admin mutating
+forms and JSON calls require CSRF protection.
 
-### Device registration
+### Bootstrap / setup status (M9)
 ```
+GET /api/v1/setup/status
+→ {
+    configured: true|false,
+    pairing_required: true,
+    server_version,
+    server_capabilities: ["auth.pairing.v1", "admin.dashboard.v1", ...]
+  }
+```
+
+This endpoint is intentionally public and reveals no secrets. Clients use it
+to distinguish "server not reachable", "server needs owner setup", and "pairing
+required".
+
+### Owner setup (M9)
+```
+POST /api/v1/setup/owner
+{ setup_token, display_name, password }
+→ { ok: true }
+```
+
+Allowed only while no owner password exists. `setup_token` comes from
+`SUNFLOWER_SETUP_TOKEN` or an ephemeral first-run token printed to the server
+console. The endpoint rate-limits by remote address and is disabled forever
+after owner setup succeeds.
+
+### Admin auth (M9)
+```
+POST /api/v1/admin/auth/login
+{ password }
+→ Set-Cookie: sf_admin=...; HttpOnly; SameSite=Lax; Secure when HTTPS
+→ { csrf_token, expires_at }
+
+POST /api/v1/admin/auth/logout
+→ { ok: true }
+
+GET /api/v1/admin/me
+→ { user_id, display_name, session_expires_at }
+```
+
+Admin tokens are random high-entropy session secrets stored as hashes in
+Postgres. Browser sessions are not device tokens and cannot be used for player
+API calls.
+
+### Pairing and device registration (M9)
+```
+POST /api/v1/admin/pairing-codes
+{ label, ttl_seconds }
+→ {
+    pairing_code,
+    pairing_url,
+    expires_at
+  }
+
 POST /api/v1/auth/register-device
-→ { device_id, token, server_capabilities: ["recs.v1","stream.proxy","ws.now_playing"] }
+{ device_name, platform, client_version, pairing_code }
+→ {
+    device_id,
+    token,
+    server_capabilities: ["auth.pairing.v1", "recs.v1", "stream.proxy", "ws.now_playing"]
+  }
 ```
-Token is opaque 32 random bytes, stored as `argon2id` hash. No refresh.
+
+Pairing codes are single-use, expire after 10 minutes by default, and are shown
+only once. The server stores only an HMAC/argon2id-derived verifier, never the
+raw code. Registration without a valid pairing code returns
+`403 {"error":"pairing_required"}` or `401 {"error":"invalid_pairing_code"}`.
+
+### Device API auth
+```
+Authorization: Bearer sf_dev_...
+```
+
+Device tokens are opaque 32 random bytes, stored as hashes, and have no refresh
+token. M9 adds `revoked_at`; revoked devices get `401 {"error":"device_revoked"}`
+on HTTP and WebSocket requests. A revoked client clears local credentials and
+returns to the pairing screen.
+
+### Admin dashboard (M10)
+```
+GET /admin/                 # HTML overview, redirects to /admin/login if needed
+GET /admin/login            # HTML login form
+GET /api/v1/admin/status    # JSON dashboard payload
+GET /api/v1/admin/devices   # JSON device list
+POST /api/v1/admin/devices/{id}/revoke
+POST /api/v1/admin/library/scan
+POST /api/v1/admin/cookies/youtube
+POST /api/v1/admin/now-playing/command
+```
+
+`/api/v1/admin` from M8 remains a compatibility alias for the JSON status
+payload until callers migrate to `/api/v1/admin/status`. The browser UI is
+server-rendered HTML, not a separate SPA.
 
 ### Next-track decision (the novel piece)
 ```
@@ -122,6 +213,14 @@ persistent socket beats one HTTP request per tick.
 ```sql
 users (id, display_name, created_at)
 devices (id, user_id, name, platform, token_hash, last_seen_at, created_at)
+  -- M9 adds revoked_at, revoked_reason, token_label
+
+admin_sessions (id, user_id, token_hash UNIQUE, csrf_secret_hash,
+                expires_at, last_seen_at, revoked_at, created_at)
+pairing_codes  (id, user_id, code_hash, label, expires_at, used_at,
+                used_by_device_id, created_by_session_id, created_at)
+audit_events   (id, user_id, actor_type, actor_id, event, target_type,
+                target_id, metadata jsonb, created_at)
 
 -- media_id = "<source>:<external_id>", e.g. "yt:dQw4w9WgXcQ", "local:01HZ…"
 songs   (media_id PK, source_type, title, duration_ms, album_id,
@@ -212,6 +311,32 @@ buffering.
 - Cache hit within 24 h → replay stored response. Stale → 409 with conflict.
 - Conflict resolution: last-write-wins by client `occurred_at`. Returns
   `{accepted, server_state}` so client can reconcile its local view.
+
+### `internal/auth` enrollment model (M9)
+- First-run setup is owner-only. Once an owner password hash exists, setup
+  endpoints reject all future calls.
+- Admin passwords are stored as PHC-format argon2id hashes with per-password
+  salts. Device tokens remain opaque high-entropy random strings and are never
+  displayed after creation.
+- Pairing codes are short-lived, single-use, and rate-limited. Human entry uses
+  Crockford Base32 without ambiguous characters; QR pairing uses the same raw
+  code in a `sunflower://pair?...` or HTTPS URL.
+- Device auth middleware rejects missing, invalid, or revoked tokens before
+  handlers run. The WebSocket token query-param fallback remains, but it has
+  the same revocation and last-seen behavior as `Authorization`.
+- Every security-sensitive event writes `audit_events`: owner setup, admin
+  login success/failure, pairing code created/used/expired, device revoked,
+  YouTube cookies updated, and library scan started from admin.
+
+### `internal/adminui` dashboard model (M10)
+- Go `html/template` with embedded templates and static assets. No React/Vue
+  build step for v1 dashboard operations.
+- All dashboard pages require the admin session cookie. HTML forms include a
+  per-session CSRF token; JSON admin mutations require `X-CSRF-Token`.
+- Pages: overview, devices, library scans, YouTube cookies, now-playing, audit
+  log, and basic security settings.
+- The dashboard never displays device bearer tokens or raw YouTube cookies.
+  Pairing codes are displayed once at creation time.
 
 ## Flutter client — notable parts
 

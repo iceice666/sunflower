@@ -30,6 +30,11 @@
    maintain a platform-capability matrix in `core/player/capabilities.dart`
    and degrade UI features gracefully where platform support is missing.
 
+6. **Open enrollment exposure before M9.** In M0-M8, any network peer that can
+   reach the server can call `register-device` and obtain a valid device token.
+   Mitigation: M9 replaces open registration with owner setup, admin sessions,
+   one-time pairing codes, device revocation, rate limits, and audit events.
+
 ## Out of scope for v1 (opinionated)
 
 - Chromecast / AirPlay routing
@@ -44,4 +49,4 @@
 - Android Auto / CarPlay surfaces
 - Audio offload / silence skipping as user-facing features
 - Crossfade is M8 optional, behind a setting
-- Server-side admin web UI beyond a basic `/admin` JSON dashboard
+- Server-side admin web UI is out of scope for v1; it is planned as M10
