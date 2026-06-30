@@ -103,6 +103,23 @@ func (h *Hub) SendCommand(deviceID, command string) int {
 	return n
 }
 
+// DisconnectDevice closes every active connection for a revoked device.
+func (h *Hub) DisconnectDevice(deviceID string) int {
+	h.mu.RLock()
+	targets := make([]*Conn, 0)
+	for c := range h.conns {
+		if c.deviceID == deviceID {
+			targets = append(targets, c)
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, c := range targets {
+		_ = c.close()
+	}
+	return len(targets)
+}
+
 // Snapshot returns the latest now-playing state for every known device — the
 // /admin dashboard payload.
 func (h *Hub) Snapshot() []NowPlaying {

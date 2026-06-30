@@ -61,6 +61,10 @@ func Middleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 				return
 			}
+			if device.RevokedAt.Valid {
+				http.Error(w, `{"error":"device_revoked"}`, http.StatusUnauthorized)
+				return
+			}
 
 			go func() { _ = q.UpdateDeviceLastSeen(context.Background(), device.ID) }()
 

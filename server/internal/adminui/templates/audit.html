@@ -1,0 +1,21 @@
+{{define "content"}}
+<header class="top">
+  <h1>Audit</h1>
+</header>
+<table>
+  <thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Target</th><th>Metadata</th></tr></thead>
+  <tbody>
+  {{range .Events}}
+    <tr>
+      <td>{{fmtTime .CreatedAt}}</td>
+      <td>{{.Event}}</td>
+      <td>{{.ActorType}} {{.ActorID}}</td>
+      <td>{{.TargetType}} {{.TargetID}}</td>
+      <td><code>{{metadata .Metadata}}</code></td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5" class="muted">No audit events yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}

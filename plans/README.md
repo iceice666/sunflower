@@ -54,8 +54,8 @@ on the server.
 | M6 | complete | [`milestones/m6-offline-downloads.md`](milestones/m6-offline-downloads.md) | Playlist downloaded; airplane-mode playback works |
 | M7 | complete | [`milestones/m7-sync-and-write-replay.md`](milestones/m7-sync-and-write-replay.md) | Offline likes/edits drain to server in clock order, idempotent |
 | M8 | complete | [`milestones/m8-websocket-and-polish.md`](milestones/m8-websocket-and-polish.md) | Live now-playing push; optional crossfade |
-| M9 | planned | [`milestones/m9-secure-enrollment.md`](milestones/m9-secure-enrollment.md) | Public device registration is locked behind owner setup, admin login, and one-time pairing codes |
-| M10 | planned | [`milestones/m10-admin-dashboard.md`](milestones/m10-admin-dashboard.md) | Browser admin dashboard manages pairing, devices, scans, cookies, and now-playing control |
+| M9 | complete | [`milestones/m9-secure-enrollment.md`](milestones/m9-secure-enrollment.md) | Public device registration is locked behind owner setup, admin login, and one-time pairing codes |
+| M10 | complete | [`milestones/m10-admin-dashboard.md`](milestones/m10-admin-dashboard.md) | Browser admin dashboard manages pairing, devices, scans, cookies, and now-playing control |
 | — | **visually verified** | [`client-verification-report.md`](client-verification-report.md) | 22 goldens (PR) + 10 smoke artifacts (nightly Android) cover M1–M8 |
 
 Order rationale: InnerTube (M3) must precede recs (M5) because recs depend on

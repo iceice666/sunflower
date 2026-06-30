@@ -1,0 +1,30 @@
+{{define "content"}}
+<header class="top">
+  <h1>Pairing</h1>
+</header>
+{{if .Pairing}}
+<section class="band success">
+  <div>
+    <span>Pairing code</span>
+    <strong class="pair-code">{{.Pairing.PairingCode}}</strong>
+    <span>Expires {{fmtTime .Pairing.ExpiresAt}}</span>
+  </div>
+  <div>
+    <span>QR payload</span>
+    <code>{{.Pairing.PairingURL}}</code>
+  </div>
+</section>
+{{end}}
+<form method="post" action="/admin/pairing" class="grid-form">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <label>
+    Label
+    <input name="label" placeholder="Pixel 8">
+  </label>
+  <label>
+    TTL seconds
+    <input name="ttl_seconds" type="number" min="60" max="3600" value="600">
+  </label>
+  <button type="submit">Create code</button>
+</form>
+{{end}}

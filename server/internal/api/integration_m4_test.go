@@ -125,16 +125,8 @@ func TestM4QueueAndNextIntegration(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	// Register a device for auth.
-	regResp := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{"device_name": "m4", "platform": "test", "client_version": "0.0.1"}, "")
-	if regResp.StatusCode != http.StatusOK {
-		t.Fatalf("register-device: %d", regResp.StatusCode)
-	}
-	var reg struct {
-		Token string `json:"token"`
-	}
-	mustDecode(t, regResp.Body, &reg)
+	// Pair a device for auth.
+	reg := pairTestDevice(t, srv, "m4")
 
 	// --- 1. Start a queue from a YouTube song seed ---
 	startResp := doJSON(t, srv, http.MethodPost, "/api/v1/queue/start",

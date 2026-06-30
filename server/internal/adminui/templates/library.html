@@ -1,0 +1,30 @@
+{{define "content"}}
+<header class="top">
+  <h1>Library</h1>
+</header>
+<section class="metrics">
+  <div><span>Songs</span><strong>{{.Counts.Songs}}</strong></div>
+  <div><span>Albums</span><strong>{{.Counts.Albums}}</strong></div>
+  <div><span>Artists</span><strong>{{.Counts.Artists}}</strong></div>
+  <div><span>Playlists</span><strong>{{.Counts.Playlists}}</strong></div>
+</section>
+<form method="post" action="/admin/library/scan" class="stack">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <label>
+    Scan roots
+    <textarea name="roots" rows="4" placeholder="/music&#10;/srv/media"></textarea>
+  </label>
+  <button type="submit">Start scan</button>
+</form>
+<h2>Recent jobs</h2>
+<table data-poll="/api/v1/admin/library/status">
+  <thead><tr><th>ID</th><th>Status</th><th>Files</th><th>Updated</th><th>Error</th></tr></thead>
+  <tbody>
+  {{range .Jobs}}
+    <tr><td><code>{{.ID}}</code></td><td>{{.Status}}</td><td>{{.ProcessedFiles}}</td><td>{{fmtTime .UpdatedAt}}</td><td>{{.Error}}</td></tr>
+  {{else}}
+    <tr><td colspan="5" class="muted">No scan jobs yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}

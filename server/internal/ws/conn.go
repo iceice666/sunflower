@@ -69,6 +69,10 @@ func (c *Conn) trySend(b []byte) bool {
 	}
 }
 
+func (c *Conn) close() error {
+	return c.ws.Close()
+}
+
 func (c *Conn) readPump() {
 	defer func() {
 		c.hub.unregister(c)

@@ -370,4 +370,7 @@ client/lib/core/api/
 
 ## Implementation status
 
-Planned. No server/client code has been changed for M9 yet.
+Complete (2026-06-30). Implemented owner setup, admin sessions, CSRF,
+one-time pairing codes, device revocation, rate limiting, audit events, and
+pairing-first Flutter onboarding. Verified with `go test ./...` in `server/`
+and `flutter analyze` in `client/`.

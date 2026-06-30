@@ -3,9 +3,11 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/iceice666/sunflower/server/internal/adminui"
 	"github.com/iceice666/sunflower/server/internal/auth"
 	"github.com/iceice666/sunflower/server/internal/jobs"
 	"github.com/iceice666/sunflower/server/internal/library"
@@ -43,6 +45,16 @@ type Deps struct {
 
 	// M8 now-playing WebSocket hub. Nil disables /ws/now-playing and /admin.
 	Hub *ws.Hub
+
+	// M9/M10 secure enrollment + dashboard settings.
+	SetupToken          string
+	ServerVersion       string
+	PublicBaseURL       string
+	DevOpenRegistration bool
+	StartedAt           time.Time
+	SetupLimiter        *auth.RateLimiter
+	AdminLoginLimiter   *auth.RateLimiter
+	PairingLimiter      *auth.RateLimiter
 }
 
 // queueAndStreamYT is the InnerTube surface the queue and stream handlers need.
@@ -54,6 +66,27 @@ type queueAndStreamYT interface {
 
 // NewRouter builds the chi router with all M0–M2 routes and middleware.
 func NewRouter(d Deps) http.Handler {
+	if d.ServerVersion == "" {
+		d.ServerVersion = "0.3.0"
+	}
+	if d.StartedAt.IsZero() {
+		d.StartedAt = time.Now()
+	}
+	if d.SetupToken == "" {
+		// The real daemon always injects an env/generated token. This fallback
+		// keeps direct httptest router construction deterministic.
+		d.SetupToken = "sunflower-test-setup-token"
+	}
+	if d.SetupLimiter == nil {
+		d.SetupLimiter = auth.NewRateLimiter(10, 10*time.Minute)
+	}
+	if d.AdminLoginLimiter == nil {
+		d.AdminLoginLimiter = auth.NewRateLimiter(8, 5*time.Minute)
+	}
+	if d.PairingLimiter == nil {
+		d.PairingLimiter = auth.NewRateLimiter(20, 10*time.Minute)
+	}
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -62,9 +95,57 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(corsMiddleware())
 
 	r.Get("/healthz", healthz)
+	r.Get("/admin/static/*", adminui.StaticHandler)
+
+	r.Route("/admin", func(r chi.Router) {
+		r.Get("/login", d.adminLoginPage)
+		r.Post("/login", d.adminLoginForm)
+		r.Group(func(r chi.Router) {
+			r.Use(d.adminHTMLMiddleware)
+			r.Get("/", d.adminOverviewPage)
+			r.Post("/logout", d.adminLogoutForm)
+			r.Get("/devices", d.adminDevicesPage)
+			r.Post("/devices/{id}/revoke", d.adminRevokeDeviceForm)
+			r.Get("/pairing/new", d.adminPairingNewPage)
+			r.Post("/pairing", d.adminCreatePairingForm)
+			r.Get("/library", d.adminLibraryPage)
+			r.Post("/library/scan", d.adminStartScanForm)
+			r.Get("/cookies/youtube", d.adminCookiesPage)
+			r.Post("/cookies/youtube", d.adminUploadCookiesForm)
+			r.Post("/cookies/youtube/probe", d.adminProbeCookiesForm)
+			r.Post("/cookies/youtube/clear", d.adminClearCookiesForm)
+			r.Get("/now-playing", d.adminNowPlayingPage)
+			r.Post("/now-playing/command", d.adminNowPlayingCommandForm)
+			r.Get("/audit", d.adminAuditPage)
+		})
+	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/setup/status", d.setupStatus)
+		r.Post("/setup/owner", d.setupOwner)
 		r.Post("/auth/register-device", d.registerDevice)
+
+		r.Post("/admin/auth/login", d.adminLoginJSON)
+		r.Post("/admin/auth/logout", d.adminLogoutJSON)
+		r.Get("/admin/me", d.adminMeJSON)
+
+		r.Group(func(r chi.Router) {
+			r.Use(d.adminJSONMiddleware)
+			r.Get("/admin", d.adminStatusJSON)
+			r.Get("/admin/status", d.adminStatusJSON)
+			r.Get("/admin/devices", d.adminDevicesJSON)
+			r.With(d.adminCSRFMiddleware).Post("/admin/devices/{id}/revoke", d.adminRevokeDeviceJSON)
+			r.With(d.adminCSRFMiddleware).Post("/admin/pairing-codes", d.adminCreatePairingJSON)
+			r.Get("/admin/library/status", d.adminLibraryStatusJSON)
+			r.With(d.adminCSRFMiddleware).Post("/admin/library/scan", d.adminStartScanJSON)
+			r.Get("/admin/cookies/youtube/status", d.adminCookiesStatusJSON)
+			r.With(d.adminCSRFMiddleware).Post("/admin/cookies/youtube", d.adminUploadCookiesJSON)
+			r.With(d.adminCSRFMiddleware).Post("/admin/cookies/youtube/probe", d.adminProbeCookiesJSON)
+			r.With(d.adminCSRFMiddleware).Post("/admin/cookies/youtube/clear", d.adminClearCookiesJSON)
+			r.Get("/admin/now-playing", d.adminNowPlayingJSON)
+			r.With(d.adminCSRFMiddleware).Post("/admin/now-playing/command", d.adminNowPlayingCommandJSON)
+			r.Get("/admin/audit", d.adminAuditJSON)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(d.DB))
@@ -114,8 +195,6 @@ func NewRouter(d Deps) http.Handler {
 
 			// M8 now-playing WebSocket + admin dashboard.
 			r.Get("/ws/now-playing", d.wsNowPlaying)
-			r.Post("/ws/command", d.wsCommand)
-			r.Get("/admin", d.adminDashboard)
 		})
 
 		// Stream proxy is authorized by its short-lived HMAC token, not the

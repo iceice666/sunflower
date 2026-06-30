@@ -171,18 +171,5 @@ func testPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 func registerTestDevice(t *testing.T, srv *httptest.Server) string {
 	t.Helper()
 	t.Cleanup(srv.Close)
-	regResp := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{"device_name": "search", "platform": "test", "client_version": "0.0.1"}, "")
-	defer regResp.Body.Close()
-	if regResp.StatusCode != http.StatusOK {
-		t.Fatalf("register-device: want 200, got %d", regResp.StatusCode)
-	}
-	var reg struct {
-		Token string `json:"token"`
-	}
-	mustDecode(t, regResp.Body, &reg)
-	if reg.Token == "" {
-		t.Fatal("register-device: empty token")
-	}
-	return reg.Token
+	return pairTestDevice(t, srv, "search").Token
 }

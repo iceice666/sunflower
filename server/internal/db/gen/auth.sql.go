@@ -12,7 +12,7 @@ import (
 )
 
 const getDeviceByTokenHash = `-- name: GetDeviceByTokenHash :one
-SELECT id, user_id, name, platform, token_hash, last_seen_at, created_at FROM devices WHERE token_hash = $1
+SELECT id, user_id, name, platform, token_hash, last_seen_at, created_at, token_label, revoked_at, revoked_reason FROM devices WHERE token_hash = $1
 `
 
 func (q *Queries) GetDeviceByTokenHash(ctx context.Context, tokenHash string) (Device, error) {
@@ -26,25 +26,34 @@ func (q *Queries) GetDeviceByTokenHash(ctx context.Context, tokenHash string) (D
 		&i.TokenHash,
 		&i.LastSeenAt,
 		&i.CreatedAt,
+		&i.TokenLabel,
+		&i.RevokedAt,
+		&i.RevokedReason,
 	)
 	return i, err
 }
 
 const getFirstUser = `-- name: GetFirstUser :one
-SELECT id, display_name, created_at FROM users ORDER BY created_at LIMIT 1
+SELECT id, display_name, created_at, admin_password_hash, admin_password_updated_at FROM users ORDER BY created_at LIMIT 1
 `
 
 func (q *Queries) GetFirstUser(ctx context.Context) (User, error) {
 	row := q.db.QueryRow(ctx, getFirstUser)
 	var i User
-	err := row.Scan(&i.ID, &i.DisplayName, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.CreatedAt,
+		&i.AdminPasswordHash,
+		&i.AdminPasswordUpdatedAt,
+	)
 	return i, err
 }
 
 const insertDevice = `-- name: InsertDevice :one
 INSERT INTO devices (user_id, name, platform, token_hash)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, platform, token_hash, last_seen_at, created_at
+RETURNING id, user_id, name, platform, token_hash, last_seen_at, created_at, token_label, revoked_at, revoked_reason
 `
 
 type InsertDeviceParams struct {
@@ -70,6 +79,9 @@ func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) (Dev
 		&i.TokenHash,
 		&i.LastSeenAt,
 		&i.CreatedAt,
+		&i.TokenLabel,
+		&i.RevokedAt,
+		&i.RevokedReason,
 	)
 	return i, err
 }
@@ -77,13 +89,19 @@ func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) (Dev
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (display_name)
 VALUES ($1)
-RETURNING id, display_name, created_at
+RETURNING id, display_name, created_at, admin_password_hash, admin_password_updated_at
 `
 
 func (q *Queries) InsertUser(ctx context.Context, displayName string) (User, error) {
 	row := q.db.QueryRow(ctx, insertUser, displayName)
 	var i User
-	err := row.Scan(&i.ID, &i.DisplayName, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.CreatedAt,
+		&i.AdminPasswordHash,
+		&i.AdminPasswordUpdatedAt,
+	)
 	return i, err
 }
 

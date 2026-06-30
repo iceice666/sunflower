@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../auth/auth_failure.dart';
 import '../auth/token_store.dart';
 
 // ---------------------------------------------------------------------------
@@ -439,7 +440,11 @@ final sunflowerApiProvider = Provider<SunflowerApi>((ref) {
   // guard before use or watch the FutureProviders upstream).
   final serverUrl = ref.watch(serverUrlProvider).valueOrNull ?? '';
   final token = ref.watch(tokenProvider).valueOrNull ?? '';
-  return SunflowerApi(baseUrl: serverUrl, token: token);
+  return SunflowerApi(
+    baseUrl: serverUrl,
+    token: token,
+    onCredentialFailure: () => clearCredentialsAndNotify(ref),
+  );
 });
 
 /// Thin Dio wrapper exposing the M2 API surface:
@@ -447,8 +452,11 @@ final sunflowerApiProvider = Provider<SunflowerApi>((ref) {
 ///  - Stream URL builder
 ///  - Art URL builder
 class SunflowerApi {
-  SunflowerApi({required String baseUrl, required String token})
-      : _baseUrl = baseUrl,
+  SunflowerApi({
+    required String baseUrl,
+    required String token,
+    Future<void> Function()? onCredentialFailure,
+  })  : _baseUrl = baseUrl,
         _token = token,
         _dio = Dio(
           BaseOptions(
@@ -463,6 +471,18 @@ class SunflowerApi {
           onRequest: (options, handler) {
             options.headers['Authorization'] = 'Bearer $token';
             handler.next(options);
+          },
+        ),
+      );
+      _dio.interceptors.add(
+        InterceptorsWrapper(
+          onError: (error, handler) async {
+            final failure = classifyAuthFailure(error);
+            if (_clearsCredentials(failure.kind) &&
+                onCredentialFailure != null) {
+              await onCredentialFailure();
+            }
+            handler.next(error);
           },
         ),
       );
@@ -655,4 +675,10 @@ class SunflowerApi {
 
   /// Authorization header map — pass to just_audio and cached_network_image.
   Map<String, String> get authHeaders => {'Authorization': 'Bearer $_token'};
+}
+
+bool _clearsCredentials(AuthFailureKind kind) {
+  return kind == AuthFailureKind.missingToken ||
+      kind == AuthFailureKind.invalidToken ||
+      kind == AuthFailureKind.deviceRevoked;
 }

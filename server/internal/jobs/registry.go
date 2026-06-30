@@ -3,6 +3,7 @@ package jobs
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -60,6 +61,24 @@ func (r *Registry) Get(id string) (*Job, bool) {
 	j, ok := r.jobs[id]
 	r.mu.RUnlock()
 	return j, ok
+}
+
+// ListRecent returns jobs sorted newest first, capped at limit.
+func (r *Registry) ListRecent(limit int) []*Job {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*Job, 0, len(r.jobs))
+	for _, j := range r.jobs {
+		cp := *j
+		out = append(out, &cp)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
 }
 
 // Update applies fn to the job identified by id under a write lock.

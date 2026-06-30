@@ -90,24 +90,8 @@ func TestM1Integration(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	// --- 1. Register a device ---
-	regResp := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{
-			"device_name":    "test-device",
-			"platform":       "test",
-			"client_version": "0.0.1",
-		}, "")
-
-	if regResp.StatusCode != http.StatusOK {
-		t.Fatalf("register-device: want 200, got %d", regResp.StatusCode)
-	}
-	var reg struct {
-		Token string `json:"token"`
-	}
-	mustDecode(t, regResp.Body, &reg)
-	if reg.Token == "" {
-		t.Fatal("register-device: empty token")
-	}
+	// --- 1. Pair a device ---
+	reg := pairTestDevice(t, srv, "test-device")
 	if !strings.HasPrefix(reg.Token, "sf_dev_") {
 		t.Errorf("token format: got %q, want prefix 'sf_dev_'", reg.Token)
 	}
@@ -303,16 +287,8 @@ func TestM2StreamEndpoints(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	// --- Register ---
-	var reg struct {
-		Token string `json:"token"`
-	}
-	mustDecode(t, doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{"device_name": "test", "platform": "test", "client_version": "0.0.1"}, "").Body,
-		&reg)
-	if reg.Token == "" {
-		t.Fatal("register-device: empty token")
-	}
+	// --- Pair a device ---
+	reg := pairTestDevice(t, srv, "test")
 
 	// --- Write a known MP3 to a temp dir and scan it ---
 	musicDir := t.TempDir()
@@ -412,6 +388,77 @@ func TestM2StreamEndpoints(t *testing.T) {
 	}
 }
 
+type pairedDevice struct {
+	Token    string `json:"token"`
+	DeviceID string `json:"device_id"`
+}
+
+func pairTestDevice(t *testing.T, srv *httptest.Server, name string) pairedDevice {
+	t.Helper()
+	const ownerPassword = "sunflower owner password"
+
+	statusResp := doJSON(t, srv, http.MethodGet, "/api/v1/setup/status", nil, "")
+	var status struct {
+		Configured bool `json:"configured"`
+	}
+	mustDecode(t, statusResp.Body, &status)
+	if !status.Configured {
+		setupResp := doJSON(t, srv, http.MethodPost, "/api/v1/setup/owner", map[string]string{
+			"setup_token":  "sunflower-test-setup-token",
+			"display_name": "Owner",
+			"password":     ownerPassword,
+		}, "")
+		if setupResp.StatusCode != http.StatusOK {
+			t.Fatalf("setup owner: want 200, got %d", setupResp.StatusCode)
+		}
+		setupResp.Body.Close()
+	}
+
+	loginResp := doJSON(t, srv, http.MethodPost, "/api/v1/admin/auth/login",
+		map[string]string{"password": ownerPassword}, "")
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("admin login: want 200, got %d", loginResp.StatusCode)
+	}
+	var login struct {
+		CSRFToken string `json:"csrf_token"`
+	}
+	mustDecode(t, loginResp.Body, &login)
+	cookies := loginResp.Cookies()
+	if login.CSRFToken == "" {
+		t.Fatal("admin login: empty csrf token")
+	}
+
+	pairResp := doAdminJSON(t, srv, http.MethodPost, "/api/v1/admin/pairing-codes",
+		map[string]any{"label": name, "ttl_seconds": 600}, cookies, login.CSRFToken)
+	if pairResp.StatusCode != http.StatusOK {
+		t.Fatalf("create pairing code: want 200, got %d", pairResp.StatusCode)
+	}
+	var pair struct {
+		PairingCode string `json:"pairing_code"`
+	}
+	mustDecode(t, pairResp.Body, &pair)
+	if pair.PairingCode == "" {
+		t.Fatal("create pairing code: empty code")
+	}
+
+	regResp := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
+		map[string]string{
+			"device_name":    name,
+			"platform":       "test",
+			"client_version": "0.0.1",
+			"pairing_code":   pair.PairingCode,
+		}, "")
+	if regResp.StatusCode != http.StatusOK {
+		t.Fatalf("register-device: want 200, got %d", regResp.StatusCode)
+	}
+	var reg pairedDevice
+	mustDecode(t, regResp.Body, &reg)
+	if reg.Token == "" || reg.DeviceID == "" {
+		t.Fatalf("register-device: incomplete response: %+v", reg)
+	}
+	return reg
+}
+
 // doJSON sends a JSON request and returns the response.
 func doJSON(t *testing.T, srv *httptest.Server, method, path string, body any, token string) *http.Response {
 	t.Helper()
@@ -429,6 +476,33 @@ func doJSON(t *testing.T, srv *httptest.Server, method, path string, body any, t
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func doAdminJSON(t *testing.T, srv *httptest.Server, method, path string, body any, cookies []*http.Cookie, csrf string) *http.Response {
+	t.Helper()
+	var r io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		r = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, srv.URL+path, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if csrf != "" {
+		req.Header.Set("X-CSRF-Token", csrf)
+	}
+	for _, c := range cookies {
+		req.AddCookie(c)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

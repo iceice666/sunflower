@@ -1,0 +1,25 @@
+{{define "content"}}
+<header class="top">
+  <h1>YouTube Cookies</h1>
+  <span class="state {{.Cookie.Status}}">{{.Cookie.Status}}</span>
+</header>
+{{if .Cookie.Detail}}<p class="muted">{{.Cookie.Detail}}</p>{{end}}
+<form method="post" action="/admin/cookies/youtube" class="stack">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <label>
+    Cookie export
+    <textarea name="cookies" rows="10" autocomplete="off" spellcheck="false"></textarea>
+  </label>
+  <button type="submit">Update cookies</button>
+</form>
+<div class="actions">
+  <form method="post" action="/admin/cookies/youtube/probe">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <button type="submit">Probe</button>
+  </form>
+  <form method="post" action="/admin/cookies/youtube/clear" data-confirm="Clear stored YouTube cookies?">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <button class="danger" type="submit">Clear</button>
+  </form>
+</div>
+{{end}}

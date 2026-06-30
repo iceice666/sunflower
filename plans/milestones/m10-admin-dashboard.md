@@ -292,4 +292,8 @@ server/cmd/sunflowerd/
 
 ## Implementation status
 
-Planned. No server/client code has been changed for M10 yet.
+Complete (2026-06-30). Implemented the server-rendered `/admin/` dashboard,
+admin JSON route map, shared session/CSRF protection, devices/pairing/library/
+cookies/now-playing/audit pages, and smoke-test/seed-demo updates for the new
+admin-session model. Verified with `go test ./...` in `server/` and
+`flutter analyze` in `client/`.

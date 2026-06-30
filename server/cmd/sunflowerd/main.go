@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/iceice666/sunflower/server/internal/api"
+	"github.com/iceice666/sunflower/server/internal/auth"
 	"github.com/iceice666/sunflower/server/internal/config"
 	"github.com/iceice666/sunflower/server/internal/cookies"
 	"github.com/iceice666/sunflower/server/internal/db"
@@ -52,6 +53,22 @@ func main() {
 		log.Fatal().Err(err).Msg("migration failed")
 	}
 	log.Info().Msg("migrations applied")
+
+	setupToken := cfg.SetupToken
+	if setupToken == "" {
+		setupToken = generateSetupToken(log)
+	}
+	if configured, err := auth.OwnerConfigured(ctx, pool); err == nil && !configured {
+		if cfg.SetupToken == "" {
+			log.Warn().Str("setup_token", setupToken).Msg("first-run owner setup token generated for this process")
+		} else {
+			log.Info().Msg("first-run owner setup token loaded from SUNFLOWER_SETUP_TOKEN")
+		}
+	}
+	devOpenRegistration := cfg.Env == "development" && cfg.DevOpenRegistration
+	if devOpenRegistration {
+		log.Warn().Msg("SUNFLOWER_DEV_OPEN_REGISTRATION=1 enabled; device registration is open in development")
+	}
 
 	scanner := library.NewScanner(pool, cfg.DataDir, log)
 	jobRegistry := jobs.NewRegistry()
@@ -111,15 +128,20 @@ func main() {
 	proxy := &streamproxy.Handler{Signer: signer, Client: streamproxy.NewClient(), Log: log}
 
 	deps := api.Deps{
-		Log:       log,
-		DB:        pool,
-		Jobs:      jobRegistry,
-		Scanner:   scanner,
-		DataDir:   cfg.DataDir,
-		CookieKey: cookieKey,
-		Queue:     queue.NewStore(pool),
-		Streams:   resolver,
-		Proxy:     proxy,
+		Log:                 log,
+		DB:                  pool,
+		Jobs:                jobRegistry,
+		Scanner:             scanner,
+		DataDir:             cfg.DataDir,
+		CookieKey:           cookieKey,
+		Queue:               queue.NewStore(pool),
+		Streams:             resolver,
+		Proxy:               proxy,
+		SetupToken:          setupToken,
+		ServerVersion:       "0.3.0",
+		PublicBaseURL:       cfg.PublicBaseURL,
+		DevOpenRegistration: devOpenRegistration,
+		StartedAt:           time.Now(),
 	}
 	if yt != nil {
 		deps.YT = yt
@@ -183,6 +205,14 @@ func loadStreamProxyKey(hexKey string, log zerolog.Logger) []byte {
 	}
 	log.Warn().Msg("SUNFLOWER_STREAM_PROXY_KEY unset; using a random per-process key")
 	return b
+}
+
+func generateSetupToken(log zerolog.Logger) string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatal().Err(err).Msg("failed to generate setup token")
+	}
+	return hex.EncodeToString(b)
 }
 
 // shouldProxyYouTube resolves the SUNFLOWER_STREAM_PROXY policy. "always" and

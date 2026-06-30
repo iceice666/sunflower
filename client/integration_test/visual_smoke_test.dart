@@ -21,6 +21,8 @@
 // --dart-define parameters (all optional; defaults target standard emulator):
 //   SUNFLOWER_DEMO_URL    http://10.0.2.2:8080
 //   SUNFLOWER_DEMO_TOKEN  observer/seed device token; empty → WS check is skipped
+//   SUNFLOWER_DEMO_PAIRING_CODE  one-time code for the smoke client
+//   SUNFLOWER_DEMO_ADMIN_PASSWORD owner password for admin snapshot login
 
 // ignore_for_file: avoid_print
 
@@ -46,6 +48,8 @@ const _demoUrl = String.fromEnvironment(
 );
 // Observer token minted by seed-demo.sh.  Empty → WS check is soft-skipped.
 const _seedToken = String.fromEnvironment('SUNFLOWER_DEMO_TOKEN');
+const _pairingCode = String.fromEnvironment('SUNFLOWER_DEMO_PAIRING_CODE');
+const _adminPassword = String.fromEnvironment('SUNFLOWER_DEMO_ADMIN_PASSWORD');
 
 // ── Storage keys — must mirror client/lib/core/auth/token_store.dart ─────────
 
@@ -112,7 +116,7 @@ Future<void> main() async {
       await _shot(tester, 't01_onboarding_setup');
 
       // ── Connect to sunflowerd ────────────────────────────────────────────────
-      // Fill the URL field and tap Connect.
+      // Fill the URL + pairing code fields and tap Pair.
       // POST /api/v1/auth/register-device → saves credentials → routes to MainShell.
       // This creates the "smoke" client device (distinct from the seed/observer
       // device whose token is passed via --dart-define SUNFLOWER_DEMO_TOKEN).
@@ -123,9 +127,15 @@ Future<void> main() async {
       await tester.enterText(urlField, _demoUrl);
       await tester.pump();
 
+      final codeField = find.byType(TextFormField).at(1);
+      await tester.tap(codeField);
+      await tester.pump();
+      await tester.enterText(codeField, _pairingCode);
+      await tester.pump();
+
       final connectBtn = find.byType(FilledButton);
       expect(connectBtn, findsAtLeastNWidgets(1),
-          reason: 'ServerSetupScreen must have a FilledButton to connect');
+          reason: 'ServerSetupScreen must have a FilledButton to pair');
       await tester.tap(connectBtn.first);
 
       // Allow up to 10 s for the register-device round-trip and navigation.
@@ -363,20 +373,35 @@ Future<void> _wsTickCheck(WidgetTester tester) async {
 /// `t10_admin_snapshot`; the flutter-drive driver writes it to
 /// client/build/smoke-artifacts/t10_admin_snapshot.json for checklist mapping.
 Future<void> _adminCheck() async {
-  if (_seedToken.isEmpty) {
-    print('[smoke] SUNFLOWER_DEMO_TOKEN not set — /admin check skipped');
+  if (_adminPassword.isEmpty) {
+    print(
+        '[smoke] SUNFLOWER_DEMO_ADMIN_PASSWORD not set — /admin check skipped');
     return;
   }
 
-  final adminUri = Uri.parse('$_demoUrl/api/v1/admin');
+  final loginUri = Uri.parse('$_demoUrl/api/v1/admin/auth/login');
+  final adminUri = Uri.parse('$_demoUrl/api/v1/admin/status');
   final client = HttpClient();
   try {
+    final loginReq = await client.postUrl(loginUri);
+    loginReq.headers.contentType = ContentType.json;
+    loginReq.write(jsonEncode({'password': _adminPassword}));
+    final loginResp =
+        await loginReq.close().timeout(const Duration(seconds: 10));
+    expect(loginResp.statusCode, equals(200),
+        reason: 'admin login must return 200 (got ${loginResp.statusCode})');
+    final cookies = loginResp.cookies;
+    await loginResp.drain<void>();
+
     final req = await client.getUrl(adminUri);
-    req.headers.add(HttpHeaders.authorizationHeader, 'Bearer $_seedToken');
+    for (final cookie in cookies) {
+      req.cookies.add(cookie);
+    }
     final resp = await req.close().timeout(const Duration(seconds: 10));
 
     expect(resp.statusCode, equals(200),
-        reason: 'GET /admin must return 200 (got ${resp.statusCode})');
+        reason:
+            'GET /api/v1/admin/status must return 200 (got ${resp.statusCode})');
 
     final body = await resp.transform(utf8.decoder).join();
     final json = jsonDecode(body) as Map<String, dynamic>;

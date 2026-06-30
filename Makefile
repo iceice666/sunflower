@@ -99,6 +99,8 @@ smoke-android: .seed-env
 	    --target=integration_test/visual_smoke_test.dart \
 	    $$DEVICE_ARG \
 	    --dart-define=SUNFLOWER_DEMO_URL=$$EMULATOR_URL \
-	    --dart-define=SUNFLOWER_DEMO_TOKEN=$$SUNFLOWER_DEMO_TOKEN); \
+	    --dart-define=SUNFLOWER_DEMO_TOKEN=$$SUNFLOWER_DEMO_TOKEN \
+	    --dart-define=SUNFLOWER_DEMO_PAIRING_CODE=$$SUNFLOWER_DEMO_PAIRING_CODE \
+	    --dart-define=SUNFLOWER_DEMO_ADMIN_PASSWORD=$$SUNFLOWER_DEMO_ADMIN_PASSWORD); \
 	echo "==> [smoke] Artifacts in client/build/smoke-artifacts/:"; \
 	ls -1 client/build/smoke-artifacts/ 2>/dev/null || echo "  (none written)"

@@ -1,0 +1,33 @@
+{{define "content"}}
+<header class="top">
+  <h1>Devices</h1>
+  <a class="button" href="/admin/pairing/new">New pairing code</a>
+</header>
+<table>
+  <thead>
+    <tr><th>Name</th><th>Platform</th><th>Created</th><th>Last seen</th><th>Status</th><th></th></tr>
+  </thead>
+  <tbody>
+  {{range .Devices}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>{{.Platform}}</td>
+      <td>{{fmtTime .CreatedAt}}</td>
+      <td>{{fmtTime .LastSeenAt}}</td>
+      <td>{{if .RevokedAt}}revoked{{else}}active{{end}}</td>
+      <td>
+        {{if not .RevokedAt}}
+        <form method="post" action="/admin/devices/{{.ID}}/revoke" class="inline" data-confirm="Revoke this device?">
+          <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+          <input name="reason" placeholder="Reason" required>
+          <button class="danger" type="submit">Revoke</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
+  {{else}}
+    <tr><td colspan="6" class="muted">No devices yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}

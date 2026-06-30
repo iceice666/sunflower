@@ -12,6 +12,8 @@
 #   SERVER_URL     — default http://localhost:8080   (sunflowerd must be running)
 #   MEDIA_DIR      — where demo MP3 stubs are written; default /tmp/sunflower-demo-media
 #   SEED_ENV       — output env file;                 default .seed-env (repo root)
+#   SUNFLOWER_SETUP_TOKEN     — required if owner setup is not complete yet
+#   SUNFLOWER_OWNER_PASSWORD  — owner/admin password; default local demo password
 
 set -euo pipefail
 
@@ -19,6 +21,7 @@ DATABASE_URL="${DATABASE_URL:-postgres://postgres@localhost:5432/sunflower?sslmo
 SERVER_URL="${SERVER_URL:-http://localhost:8080}"
 MEDIA_DIR="${MEDIA_DIR:-/tmp/sunflower-demo-media}"
 SEED_ENV="${SEED_ENV:-.seed-env}"
+OWNER_PASSWORD="${SUNFLOWER_OWNER_PASSWORD:-sunflower demo owner password}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -93,14 +96,85 @@ PYEOF
 
 echo "==> [seed] Demo MP3 stubs written to $MEDIA_DIR"
 
-# ── 3. Register a seed device (mints a token) ────────────────────────────────
+# ── 3. Admin setup/login and pairing-code creation ──────────────────────────
 
-echo "==> [seed] Registering seed device …"
+echo "==> [seed] Ensuring owner setup and admin login …"
+
+SETUP_STATUS=$(curl -sf "$SERVER_URL/api/v1/setup/status")
+CONFIGURED=$(python3 -c "import sys,json; print(str(json.load(sys.stdin).get('configured', False)).lower())" <<< "$SETUP_STATUS")
+
+if [[ "$CONFIGURED" != "true" ]]; then
+  if [[ -z "${SUNFLOWER_SETUP_TOKEN:-}" ]]; then
+    echo "FATAL: server owner is not configured; set SUNFLOWER_SETUP_TOKEN to the token printed by sunflowerd."
+    exit 1
+  fi
+  curl -sf \
+    -X POST "$SERVER_URL/api/v1/setup/owner" \
+    -H "Content-Type: application/json" \
+    -d "$(python3 - <<PYEOF
+import json, os
+print(json.dumps({
+  "setup_token": os.environ["SUNFLOWER_SETUP_TOKEN"],
+  "display_name": "Owner",
+  "password": os.environ.get("SUNFLOWER_OWNER_PASSWORD", "sunflower demo owner password"),
+}))
+PYEOF
+)"
+  echo "    owner setup completed"
+fi
+
+COOKIE_JAR="$(mktemp)"
+trap 'rm -f "$COOKIE_JAR"' EXIT
+
+LOGIN_RESP=$(curl -sf \
+  -c "$COOKIE_JAR" \
+  -X POST "$SERVER_URL/api/v1/admin/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "$(python3 - <<PYEOF
+import json, os
+print(json.dumps({"password": os.environ.get("SUNFLOWER_OWNER_PASSWORD", "sunflower demo owner password")}))
+PYEOF
+)")
+CSRF_TOKEN=$(python3 -c "import sys,json; print(json.load(sys.stdin)['csrf_token'])" <<< "$LOGIN_RESP")
+
+create_pairing_code() {
+  local label="$1"
+  local ttl="$2"
+  curl -sf \
+    -b "$COOKIE_JAR" \
+    -X POST "$SERVER_URL/api/v1/admin/pairing-codes" \
+    -H "Content-Type: application/json" \
+    -H "X-CSRF-Token: $CSRF_TOKEN" \
+    -d "$(python3 - <<PYEOF
+import json
+print(json.dumps({"label": "$label", "ttl_seconds": int("$ttl")}))
+PYEOF
+)"
+}
+
+PAIR_RESP=$(create_pairing_code "seed-device" 600)
+PAIRING_CODE=$(python3 -c "import sys,json; print(json.load(sys.stdin)['pairing_code'])" <<< "$PAIR_RESP")
+
+SMOKE_PAIR_RESP=$(create_pairing_code "visual-smoke" 3600)
+SMOKE_PAIRING_CODE=$(python3 -c "import sys,json; print(json.load(sys.stdin)['pairing_code'])" <<< "$SMOKE_PAIR_RESP")
+
+# ── 4. Register a seed device (mints a token) ────────────────────────────────
+
+echo "==> [seed] Pairing seed device …"
 
 REGISTER_RESP=$(curl -sf \
   -X POST "$SERVER_URL/api/v1/auth/register-device" \
   -H "Content-Type: application/json" \
-  -d '{"device_name":"seed-device","platform":"cli","client_version":"0.2.0"}')
+  -d "$(python3 - <<PYEOF
+import json
+print(json.dumps({
+  "device_name": "seed-device",
+  "platform": "cli",
+  "client_version": "0.3.0",
+  "pairing_code": "$PAIRING_CODE",
+}))
+PYEOF
+)")
 
 DEMO_TOKEN=$(python3 -c "import sys,json; d=json.load(sys.stdin); print(d['token'])" <<< "$REGISTER_RESP")
 DEMO_DEVICE_ID=$(python3 -c "import sys,json; d=json.load(sys.stdin); print(d['device_id'])" <<< "$REGISTER_RESP")
@@ -108,7 +182,7 @@ DEMO_DEVICE_ID=$(python3 -c "import sys,json; d=json.load(sys.stdin); print(d['d
 echo "    device_id = $DEMO_DEVICE_ID"
 echo "    token     = ${DEMO_TOKEN:0:14}…  (truncated)"
 
-# ── 4. Trigger library scan ──────────────────────────────────────────────────
+# ── 5. Trigger library scan ──────────────────────────────────────────────────
 
 echo "==> [seed] Triggering library scan of $MEDIA_DIR …"
 
@@ -138,7 +212,7 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# ── 5. Verify songs in DB ────────────────────────────────────────────────────
+# ── 6. Verify songs in DB ────────────────────────────────────────────────────
 
 SONG_COUNT=$(curl -sf \
   -H "Authorization: Bearer $DEMO_TOKEN" \
@@ -148,7 +222,7 @@ if [[ "$SONG_COUNT" -eq 0 ]]; then
   echo "WARNING: no songs found after scan — check that sunflowerd DataDir is set and scan completed."
 fi
 
-# ── 6. Write .seed-env ───────────────────────────────────────────────────────
+# ── 7. Write .seed-env ───────────────────────────────────────────────────────
 
 SEED_ENV_PATH="$REPO_ROOT/$SEED_ENV"
 cat > "$SEED_ENV_PATH" <<EOF
@@ -156,6 +230,8 @@ cat > "$SEED_ENV_PATH" <<EOF
 SUNFLOWER_DEMO_URL=$SERVER_URL
 SUNFLOWER_DEMO_TOKEN=$DEMO_TOKEN
 SUNFLOWER_DEMO_DEVICE_ID=$DEMO_DEVICE_ID
+SUNFLOWER_DEMO_PAIRING_CODE=$SMOKE_PAIRING_CODE
+SUNFLOWER_DEMO_ADMIN_PASSWORD=$(printf '%q' "${SUNFLOWER_OWNER_PASSWORD:-sunflower demo owner password}")
 SUNFLOWER_DEMO_SCAN_JOB=$JOB_ID
 SUNFLOWER_DEMO_SONG_COUNT=$SONG_COUNT
 SUNFLOWER_DEMO_MEDIA_DIR=$MEDIA_DIR

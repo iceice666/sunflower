@@ -48,3 +48,9 @@ Future<void> clearCredentials() async {
     _storage.delete(key: _kDeviceId),
   ]);
 }
+
+Future<void> clearCredentialsAndNotify(Ref ref) async {
+  await clearCredentials();
+  ref.invalidate(tokenProvider);
+  ref.invalidate(serverUrlProvider);
+}

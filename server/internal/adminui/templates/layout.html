@@ -1,0 +1,37 @@
+{{define "layout"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} - Sunflower Admin</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+  <script defer src="/admin/static/admin.js"></script>
+</head>
+<body>
+  {{if .Authenticated}}
+  <aside class="side">
+    <a class="brand" href="/admin/">Sunflower</a>
+    <nav>
+      <a href="/admin/">Overview</a>
+      <a href="/admin/devices">Devices</a>
+      <a href="/admin/pairing/new">Pairing</a>
+      <a href="/admin/library">Library</a>
+      <a href="/admin/cookies/youtube">Cookies</a>
+      <a href="/admin/now-playing">Now Playing</a>
+      <a href="/admin/audit">Audit</a>
+    </nav>
+    <form method="post" action="/admin/logout">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button class="ghost" type="submit">Log out</button>
+    </form>
+  </aside>
+  {{end}}
+  <main class="{{if .Authenticated}}main{{else}}login-main{{end}}">
+    {{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
+    {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+    {{template "content" .}}
+  </main>
+</body>
+</html>
+{{end}}

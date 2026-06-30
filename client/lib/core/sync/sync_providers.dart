@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
+import '../auth/auth_failure.dart';
 import '../auth/token_store.dart';
 import '../db/database_provider.dart';
 import 'replay_buffer.dart';
@@ -19,6 +20,19 @@ final _replayDioProvider = Provider<Dio>((ref) {
   ));
   if (token.isNotEmpty) {
     dio.options.headers['Authorization'] = 'Bearer $token';
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onError: (error, handler) async {
+          final failure = classifyAuthFailure(error);
+          if (failure.kind == AuthFailureKind.missingToken ||
+              failure.kind == AuthFailureKind.invalidToken ||
+              failure.kind == AuthFailureKind.deviceRevoked) {
+            await clearCredentialsAndNotify(ref);
+          }
+          handler.next(error);
+        },
+      ),
+    );
   }
   return dio;
 });

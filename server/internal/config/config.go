@@ -36,6 +36,20 @@ type Config struct {
 	// and "auto" (default) proxies only when cookies are configured — the case
 	// where direct URLs are session/IP-bound and 403 off-network.
 	StreamProxyMode string
+
+	// SetupToken protects first-run owner setup. If unset, sunflowerd generates
+	// and prints a one-time console token for this process.
+	SetupToken string
+
+	// PublicBaseURL is used when constructing sunflower:// pairing URLs.
+	PublicBaseURL string
+
+	// Env is "development" for local dev-only escape hatches.
+	Env string
+
+	// DevOpenRegistration temporarily restores M0-M8 open device registration
+	// only when Env is "development".
+	DevOpenRegistration bool
 }
 
 // Load returns a Config populated from the environment.
@@ -49,6 +63,10 @@ func Load() Config {
 		StreamProxyKey:  os.Getenv("SUNFLOWER_STREAM_PROXY_KEY"),
 		CookieFile:      envOr("SUNFLOWER_YT_COOKIE_FILE", ".env.innertube_cookie"),
 		StreamProxyMode: envOr("SUNFLOWER_STREAM_PROXY", "auto"),
+		SetupToken:      os.Getenv("SUNFLOWER_SETUP_TOKEN"),
+		PublicBaseURL:   os.Getenv("SUNFLOWER_PUBLIC_BASE_URL"),
+		Env:             envOr("SUNFLOWER_ENV", "production"),
+		DevOpenRegistration: os.Getenv("SUNFLOWER_DEV_OPEN_REGISTRATION") == "1",
 	}
 }
 

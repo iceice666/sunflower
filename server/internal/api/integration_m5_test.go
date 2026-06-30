@@ -104,17 +104,8 @@ func TestM5HomeIntegration(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	// Register device → also creates the single user.
-	regResp := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{"device_name": "m5", "platform": "test", "client_version": "0.0.1"}, "")
-	if regResp.StatusCode != http.StatusOK {
-		t.Fatalf("register-device: %d", regResp.StatusCode)
-	}
-	var reg struct {
-		Token    string `json:"token"`
-		DeviceID string `json:"device_id"`
-	}
-	mustDecode(t, regResp.Body, &reg)
+	// Pair device → also creates the single user.
+	reg := pairTestDevice(t, srv, "m5")
 
 	// Resolve the user id for direct seeding.
 	var userID string

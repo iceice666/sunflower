@@ -84,14 +84,8 @@ func TestM6DownloadsIntegration(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	// Register device A.
-	regA := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{"device_name": "A", "platform": "test", "client_version": "0"}, "")
-	var devA struct {
-		Token    string `json:"token"`
-		DeviceID string `json:"device_id"`
-	}
-	mustDecode(t, regA.Body, &devA)
+	// Pair device A.
+	devA := pairTestDevice(t, srv, "A")
 
 	// Seed a local song row pointing at the temp file.
 	if _, err := pool.Exec(ctx,
@@ -137,12 +131,7 @@ func TestM6DownloadsIntegration(t *testing.T) {
 	}
 
 	// --- 4. Cross-device register is forbidden ---
-	regB := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{"device_name": "B", "platform": "test", "client_version": "0"}, "")
-	var devB struct {
-		Token string `json:"token"`
-	}
-	mustDecode(t, regB.Body, &devB)
+	devB := pairTestDevice(t, srv, "B")
 	// Device B tries to register under device A's id.
 	forbidden := doJSON(t, srv, http.MethodPost, "/api/v1/devices/"+devA.DeviceID+"/downloads",
 		map[string]any{"media_id": "local:dl1", "local_path": "/x", "bytes": 1}, devB.Token)

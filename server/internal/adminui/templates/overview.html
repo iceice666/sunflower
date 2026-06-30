@@ -1,0 +1,50 @@
+{{define "content"}}
+<header class="top">
+  <h1>Overview</h1>
+  <span class="muted">v{{.Status.ServerVersion}} · uptime {{.Status.UptimeSeconds}}s</span>
+</header>
+
+{{if .Status.Warnings}}
+<section class="band warn">
+  {{range .Status.Warnings}}<span>{{.}}</span>{{end}}
+</section>
+{{end}}
+
+<section class="metrics">
+  <div><span>DB</span><strong class="state {{.Status.DBStatus}}">{{.Status.DBStatus}}</strong></div>
+  <div><span>Songs</span><strong>{{.Status.LibraryCounts.Songs}}</strong></div>
+  <div><span>Albums</span><strong>{{.Status.LibraryCounts.Albums}}</strong></div>
+  <div><span>Artists</span><strong>{{.Status.LibraryCounts.Artists}}</strong></div>
+  <div><span>Playlists</span><strong>{{.Status.LibraryCounts.Playlists}}</strong></div>
+  <div><span>YouTube cookies</span><strong class="state {{.Status.CookieStatus.Status}}">{{.Status.CookieStatus.Status}}</strong></div>
+</section>
+
+<section class="split">
+  <div>
+    <h2>Recent devices</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Platform</th><th>Last seen</th><th>State</th></tr></thead>
+      <tbody>
+      {{range .Status.Devices}}
+        <tr><td>{{.Name}}</td><td>{{.Platform}}</td><td>{{fmtTime .LastSeenAt}}</td><td>{{if .RevokedAt}}revoked{{else}}active{{end}}</td></tr>
+      {{else}}
+        <tr><td colspan="4" class="muted">No paired devices.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h2>Now playing</h2>
+    <table data-poll="/api/v1/admin/now-playing">
+      <thead><tr><th>Device</th><th>Track</th><th>State</th></tr></thead>
+      <tbody>
+      {{range .Status.NowPlaying}}
+        <tr><td>{{.DeviceID}}</td><td>{{.Title}}<br><span class="muted">{{.Artist}}</span></td><td>{{if .IsPlaying}}playing{{else}}paused{{end}}</td></tr>
+      {{else}}
+        <tr><td colspan="3" class="muted">No active playback.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

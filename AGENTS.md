@@ -6,11 +6,11 @@ This file provides guidance to agents when working with code in this repository.
 
 **Sunflower** is a self-hosted music system: a Go server (`sunflowerd`) + a cross-platform Flutter client.
 
-**Current status (2026-06-18):** M0–M8 are all implemented and committed. The `server/` tree is a complete Go module (auth, library, InnerTube, queue/streams, recs, downloads registry, sync/idempotency, now-playing WebSocket); the `client/` tree is a complete Flutter project (player + queue/lookahead, home feed, offline downloads, write-replay buffer, now-playing socket). Server halves are fully verified (`go build`/`vet`/`test` incl. testcontainers, `gofmt`, `sqlc`); Flutter client halves are written to spec and `dart format`-verified (no Flutter SDK in this environment — `build_runner` codegen and `flutter test` run in a Flutter toolchain).
+**Current status (2026-06-30):** M0–M10 are implemented. The `server/` tree is a complete Go module (auth, secure enrollment, browser admin dashboard, library, InnerTube, queue/streams, recs, downloads registry, sync/idempotency, now-playing WebSocket); the `client/` tree is a complete Flutter project (pairing-first onboarding, player + queue/lookahead, home feed, offline downloads, write-replay buffer, now-playing socket). Server halves are fully verified (`go test ./...` incl. testcontainers, `gofmt`, `sqlc`); Flutter client halves are `dart format`/`flutter analyze`-verified.
 
 - `plans/README.md` — overview, locked decisions, milestone index
 - `plans/architecture.md` — static reference: component map, wire protocol, Postgres schema, server and client internals
-- `plans/milestones/m0–m8.md` — ordered build phases with acceptance criteria
+- `plans/milestones/m0–m10.md` — ordered build phases with acceptance criteria
 - `plans/risks.md` — top risks and v1 out-of-scope list
 - `docs/` — research notes on Metrolist (the Android reference implementation)
 

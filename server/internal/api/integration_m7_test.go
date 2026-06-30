@@ -72,12 +72,7 @@ func TestM7SyncIntegration(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	reg := doJSON(t, srv, http.MethodPost, "/api/v1/auth/register-device",
-		map[string]string{"device_name": "m7", "platform": "test", "client_version": "0"}, "")
-	var dev struct {
-		Token string `json:"token"`
-	}
-	mustDecode(t, reg.Body, &dev)
+	dev := pairTestDevice(t, srv, "m7")
 
 	var userID string
 	if err := pool.QueryRow(ctx, `SELECT id FROM users LIMIT 1`).Scan(&userID); err != nil {

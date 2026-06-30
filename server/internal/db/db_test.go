@@ -18,13 +18,16 @@ import (
 // expectedTables is the complete set of tables that must exist after all M0
 // migrations have been applied.
 var expectedTables = []string{
+	"admin_sessions",
 	"albums",
 	"artists",
+	"audit_events",
 	"devices",
 	"downloaded_tracks",
 	"encrypted_cookies",
 	"idempotency_log",
 	"likes",
+	"pairing_codes",
 	"play_events",
 	"playlist_items",
 	"playlists",

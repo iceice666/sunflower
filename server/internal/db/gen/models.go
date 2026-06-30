@@ -10,6 +10,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AdminSession struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	UserID         pgtype.UUID        `db:"user_id" json:"user_id"`
+	TokenHash      string             `db:"token_hash" json:"token_hash"`
+	CsrfSecretHash string             `db:"csrf_secret_hash" json:"csrf_secret_hash"`
+	ExpiresAt      pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at" json:"last_seen_at"`
+	RevokedAt      pgtype.Timestamptz `db:"revoked_at" json:"revoked_at"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type Album struct {
 	MediaID         string             `db:"media_id" json:"media_id"`
 	SourceType      string             `db:"source_type" json:"source_type"`
@@ -30,6 +41,18 @@ type Artist struct {
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type AuditEvent struct {
+	ID         pgtype.UUID        `db:"id" json:"id"`
+	UserID     pgtype.UUID        `db:"user_id" json:"user_id"`
+	ActorType  string             `db:"actor_type" json:"actor_type"`
+	ActorID    pgtype.Text        `db:"actor_id" json:"actor_id"`
+	Event      string             `db:"event" json:"event"`
+	TargetType pgtype.Text        `db:"target_type" json:"target_type"`
+	TargetID   pgtype.Text        `db:"target_id" json:"target_id"`
+	Metadata   json.RawMessage    `db:"metadata" json:"metadata"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type CookieHealth struct {
 	Provider  string             `db:"provider" json:"provider"`
 	Status    string             `db:"status" json:"status"`
@@ -38,13 +61,16 @@ type CookieHealth struct {
 }
 
 type Device struct {
-	ID         pgtype.UUID        `db:"id" json:"id"`
-	UserID     pgtype.UUID        `db:"user_id" json:"user_id"`
-	Name       pgtype.Text        `db:"name" json:"name"`
-	Platform   pgtype.Text        `db:"platform" json:"platform"`
-	TokenHash  string             `db:"token_hash" json:"token_hash"`
-	LastSeenAt pgtype.Timestamptz `db:"last_seen_at" json:"last_seen_at"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ID            pgtype.UUID        `db:"id" json:"id"`
+	UserID        pgtype.UUID        `db:"user_id" json:"user_id"`
+	Name          pgtype.Text        `db:"name" json:"name"`
+	Platform      pgtype.Text        `db:"platform" json:"platform"`
+	TokenHash     string             `db:"token_hash" json:"token_hash"`
+	LastSeenAt    pgtype.Timestamptz `db:"last_seen_at" json:"last_seen_at"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	TokenLabel    pgtype.Text        `db:"token_label" json:"token_label"`
+	RevokedAt     pgtype.Timestamptz `db:"revoked_at" json:"revoked_at"`
+	RevokedReason pgtype.Text        `db:"revoked_reason" json:"revoked_reason"`
 }
 
 type DownloadedTrack struct {
@@ -80,6 +106,18 @@ type Like struct {
 	SongMediaID    string             `db:"song_media_id" json:"song_media_id"`
 	LikedAt        pgtype.Timestamptz `db:"liked_at" json:"liked_at"`
 	IdempotencyKey pgtype.UUID        `db:"idempotency_key" json:"idempotency_key"`
+}
+
+type PairingCode struct {
+	ID                 pgtype.UUID        `db:"id" json:"id"`
+	UserID             pgtype.UUID        `db:"user_id" json:"user_id"`
+	CodeHash           string             `db:"code_hash" json:"code_hash"`
+	Label              pgtype.Text        `db:"label" json:"label"`
+	ExpiresAt          pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	UsedAt             pgtype.Timestamptz `db:"used_at" json:"used_at"`
+	UsedByDeviceID     pgtype.UUID        `db:"used_by_device_id" json:"used_by_device_id"`
+	CreatedBySessionID pgtype.UUID        `db:"created_by_session_id" json:"created_by_session_id"`
+	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type PlayEvent struct {
@@ -174,7 +212,9 @@ type SongArtist struct {
 }
 
 type User struct {
-	ID          pgtype.UUID        `db:"id" json:"id"`
-	DisplayName string             `db:"display_name" json:"display_name"`
-	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ID                     pgtype.UUID        `db:"id" json:"id"`
+	DisplayName            string             `db:"display_name" json:"display_name"`
+	CreatedAt              pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	AdminPasswordHash      pgtype.Text        `db:"admin_password_hash" json:"admin_password_hash"`
+	AdminPasswordUpdatedAt pgtype.Timestamptz `db:"admin_password_updated_at" json:"admin_password_updated_at"`
 }
