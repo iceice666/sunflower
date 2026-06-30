@@ -73,7 +73,21 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.run_smoke)
     name: Android emulator smoke (nightly)
-    runs-on: macos-14       # Apple-silicon macOS — fastest KVM-equivalent for Android
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sunflower
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sunflower"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -99,18 +113,13 @@ jobs:
 
       - name: Install server tools
         run: |
-          brew install postgresql@16
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
           go install github.com/pressly/goose/v3/cmd/goose@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Start Postgres
-        run: |
-          export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
-          initdb -D "$RUNNER_TEMP/pgdata" --username=postgres --auth=trust
-          pg_ctl -D "$RUNNER_TEMP/pgdata" -o "-k $RUNNER_TEMP -p 5432" -l "$RUNNER_TEMP/postgres.log" start
-          createdb -h "$RUNNER_TEMP" -p 5432 -U postgres sunflower
-          echo "DATABASE_URL=postgres://postgres@localhost:5432/sunflower?sslmode=disable" >> "$GITHUB_ENV"
-          echo "/opt/homebrew/opt/postgresql@16/bin" >> "$GITHUB_PATH"
+      - name: Export database URL
+        run: echo "DATABASE_URL=postgres://postgres@localhost:5432/sunflower?sslmode=disable" >> "$GITHUB_ENV"
 
       - name: Start sunflowerd
         run: |
@@ -134,14 +143,20 @@ jobs:
         working-directory: client
         run: flutter build apk --debug
 
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Android emulator smoke
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
-          arch: arm64-v8a
+          arch: x86_64
           profile: pixel_6
           target: google_apis
-          avd-name: Pixel_6_API33_ARM64
+          avd-name: Pixel_6_API33_X64
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
