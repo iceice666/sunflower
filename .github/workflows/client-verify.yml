@@ -138,10 +138,10 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
-          arch: x86_64
+          arch: arm64-v8a
           profile: pixel_6
           target: google_apis
-          avd-name: Pixel_6_API33
+          avd-name: Pixel_6_API33_ARM64
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
