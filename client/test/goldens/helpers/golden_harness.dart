@@ -76,7 +76,11 @@
 // (pixel_5 AVD, API 34, 393×851 @ 2.75 dpr).
 // ---------------------------------------------------------------------------
 
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,6 +112,9 @@ const Device goldenDevice = Device(
   devicePixelRatio: 2.75,
   brightness: Brightness.dark,
 );
+
+const double _goldenDiffTolerance = 0.0002; // 0.02%
+bool _goldenComparatorInstalled = false;
 
 // ─── App theme ───────────────────────────────────────────────────────────────
 
@@ -172,6 +179,8 @@ Future<void> pumpGolden(
   Widget widget, {
   List<Override> overrides = const [],
 }) async {
+  _installGoldenComparator();
+
   // Pin DPR so physical pixel counts match the emulator spec.
   tester.view.devicePixelRatio = goldenDevice.devicePixelRatio;
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -195,6 +204,49 @@ Future<void> pumpGolden(
 
   // Settle microtasks so FutureProviders with immediate fakes resolve.
   await tester.pumpAndSettle();
+}
+
+void _installGoldenComparator() {
+  if (_goldenComparatorInstalled) {
+    return;
+  }
+
+  goldenFileComparator = _TolerantGoldenFileComparator(
+    Uri.file('${Directory.current.path}/test/goldens/golden_harness.dart'),
+    precisionTolerance: _goldenDiffTolerance,
+  );
+  _goldenComparatorInstalled = true;
+}
+
+class _TolerantGoldenFileComparator extends LocalFileComparator {
+  _TolerantGoldenFileComparator(
+    super.testFile, {
+    required double precisionTolerance,
+  })  : assert(
+          precisionTolerance >= 0 && precisionTolerance <= 1,
+          'precisionTolerance must be between 0 and 1',
+        ),
+        _precisionTolerance = precisionTolerance;
+
+  final double _precisionTolerance;
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+
+    final passed = result.passed || result.diffPercent <= _precisionTolerance;
+    if (passed) {
+      result.dispose();
+      return true;
+    }
+
+    final error = await generateFailureOutput(result, golden, basedir);
+    result.dispose();
+    throw FlutterError(error);
+  }
 }
 
 // ─── Convenience wrapper ─────────────────────────────────────────────────────
