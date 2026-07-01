@@ -1,0 +1,133 @@
+name: build-artifacts
+
+on:
+  pull_request:
+    paths:
+      - 'client/**'
+      - 'rust/**'
+      - '.github/workflows/build-artifacts.yml'
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'client/**'
+      - 'rust/**'
+      - '.github/workflows/build-artifacts.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: build-artifacts-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.41.9'
+  JAVA_VERSION: '17'
+  RUST_VERSION: '1.95.0'
+  ANDROID_COMPILE_SDK: '36'
+  ANDROID_BUILD_TOOLS: '36.0.0'
+  ANDROID_NDK: '28.2.13676358'
+
+jobs:
+  android-app:
+    name: Android app APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager \
+            "platforms;android-${ANDROID_COMPILE_SDK}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${ANDROID_NDK}"
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Run build_runner
+        run: flutter pub run build_runner build
+
+      - name: Build Android release APK
+        run: flutter build apk --release
+
+      - name: Stage Android artifact
+        run: |
+          mkdir -p ../dist/android
+          cp build/app/outputs/flutter-apk/app-release.apk ../dist/android/sunflower-android-release.apk
+          cd ../dist/android
+          sha256sum sunflower-android-release.apk > sunflower-android-release.apk.sha256
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunflower-android-release-${{ github.sha }}
+          path: |
+            dist/android/sunflower-android-release.apk
+            dist/android/sunflower-android-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  dedicated-server:
+    name: Dedicated server binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: rust
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install "${RUST_VERSION}" --profile minimal
+          rustup default "${RUST_VERSION}"
+          rustc --version
+
+      - name: Build sunflowerd-rs release binary
+        run: cargo build --release --locked -p sunflower-server --bin sunflowerd-rs
+
+      - name: Stage dedicated server artifact
+        run: |
+          mkdir -p ../dist/server
+          cp target/release/sunflowerd-rs ../dist/server/sunflowerd-rs
+          chmod +x ../dist/server/sunflowerd-rs
+          cd ../dist/server
+          tar -czf sunflowerd-rs-linux-x86_64.tar.gz sunflowerd-rs
+          sha256sum sunflowerd-rs-linux-x86_64.tar.gz > sunflowerd-rs-linux-x86_64.tar.gz.sha256
+
+      - name: Upload dedicated server binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunflowerd-rs-linux-x86_64-${{ github.sha }}
+          path: |
+            dist/server/sunflowerd-rs-linux-x86_64.tar.gz
+            dist/server/sunflowerd-rs-linux-x86_64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
