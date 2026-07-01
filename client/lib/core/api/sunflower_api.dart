@@ -571,7 +571,7 @@ class SunflowerApi {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/queue/start',
       data: {'seed_kind': seedKind, 'seed_id': seedId, 'title': title},
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
     return QueueResponse.fromJson(response.data ?? const {});
   }
@@ -604,7 +604,7 @@ class SunflowerApi {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/streams/resolve',
       data: body,
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
     return ResolvedStream.fromJson(response.data ?? const {});
   }
@@ -652,7 +652,7 @@ class SunflowerApi {
         'liked': liked,
         'occurred_at': (occurredAt ?? DateTime.now()).toUtc().toIso8601String(),
       },
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
     return response.data?['liked'] as bool? ?? liked;
   }
@@ -663,7 +663,7 @@ class SunflowerApi {
     await _dio.post<Map<String, dynamic>>(
       '/api/v1/impressions',
       data: {'impressions': impressions},
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
   }
 
@@ -687,7 +687,7 @@ class SunflowerApi {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/playlists',
       data: {'title': title},
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
     return Playlist.fromJson(response.data ?? const {});
   }
@@ -697,7 +697,7 @@ class SunflowerApi {
     await _dio.post<void>(
       '/api/v1/playlists/${_pathSegment(playlistId)}/items',
       data: {'media_id': mediaId},
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
   }
 
@@ -725,7 +725,7 @@ class SunflowerApi {
     await _dio.post<void>(
       '/api/v1/devices/${_pathSegment(deviceId)}/downloads',
       data: {'media_id': mediaId, 'local_path': localPath, 'bytes': bytes},
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
   }
 
@@ -733,7 +733,7 @@ class SunflowerApi {
   Future<void> deleteDownload(String deviceId, String mediaId) async {
     await _dio.delete<void>(
       '/api/v1/devices/${_pathSegment(deviceId)}/downloads/${_pathSegment(mediaId)}',
-      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+      options: _idempotencyOptions(),
     );
   }
 
@@ -750,3 +750,8 @@ bool _clearsCredentials(AuthFailureKind kind) {
 String _pathSegment(String value) => Uri.encodeComponent(value);
 
 String _idempotencyKey() => const Uuid().v7();
+
+/// Builds a Dio [Options] carrying a fresh UUIDv7 Idempotency-Key header.
+/// Centralised so all mutating calls use the same header name.
+Options _idempotencyOptions() =>
+    Options(headers: {'Idempotency-Key': _idempotencyKey()});

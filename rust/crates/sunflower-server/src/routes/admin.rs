@@ -30,26 +30,7 @@ pub(crate) async fn admin_login(
         expires_at: api_rfc3339_seconds(login.expires_at),
     })
     .into_response();
-    append_cookie(
-        &mut response,
-        admin_cookie(
-            ADMIN_COOKIE_NAME,
-            &login.token,
-            login.expires_at,
-            true,
-            is_https(&headers),
-        ),
-    );
-    append_cookie(
-        &mut response,
-        admin_cookie(
-            ADMIN_CSRF_COOKIE_NAME,
-            &login.csrf,
-            login.expires_at,
-            false,
-            is_https(&headers),
-        ),
-    );
+    append_admin_session_cookies(&mut response, &login, is_https(&headers));
     response
 }
 
@@ -179,26 +160,7 @@ pub(crate) async fn admin_login_form(
     };
     state.admin_login_limiter.reset(&limiter_key);
     let mut response = redirect_found_post("/admin/");
-    append_cookie(
-        &mut response,
-        admin_cookie(
-            ADMIN_COOKIE_NAME,
-            &login.token,
-            login.expires_at,
-            true,
-            is_https(&headers),
-        ),
-    );
-    append_cookie(
-        &mut response,
-        admin_cookie(
-            ADMIN_CSRF_COOKIE_NAME,
-            &login.csrf,
-            login.expires_at,
-            false,
-            is_https(&headers),
-        ),
-    );
+    append_admin_session_cookies(&mut response, &login, is_https(&headers));
     response
 }
 
@@ -992,4 +954,28 @@ pub(crate) async fn admin_audit(
         Ok(events) => Json(AdminAuditResponse { events }).into_response(),
         Err(_) => legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal"),
     }
+}
+
+/// Appends both the session-token cookie and the CSRF cookie to `response`.
+/// Extracted from the two identical cookie-append blocks in `admin_login` and
+/// `admin_login_form` to keep them in sync.
+fn append_admin_session_cookies(
+    response: &mut Response,
+    login: &sunflower_storage_postgres::AdminLoginResult,
+    https: bool,
+) {
+    append_cookie(
+        response,
+        admin_cookie(ADMIN_COOKIE_NAME, &login.token, login.expires_at, true, https),
+    );
+    append_cookie(
+        response,
+        admin_cookie(
+            ADMIN_CSRF_COOKIE_NAME,
+            &login.csrf,
+            login.expires_at,
+            false,
+            https,
+        ),
+    );
 }
