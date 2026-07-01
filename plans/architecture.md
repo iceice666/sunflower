@@ -6,27 +6,26 @@ sections of this file rather than restating them.
 
 ## Component map
 
-### Go server — `server/`
+### Rust workspace — `rust/`
 
-| Package | Metrolist analogue | Purpose |
-|---|---|---|
-| `cmd/sunflowerd` | — | Main entrypoint, env/flag parsing, wire-up |
-| `cmd/probe` | — | Dev CLI for poking endpoints / InnerTube |
-| `internal/auth` | — | Device registration, token middleware |
-| `internal/adminui` | — | Server-rendered admin dashboard templates, static assets, CSRF helpers |
-| `internal/library` | local Room song table | File scan (fsnotify + walker), tag extraction via `dhowden/tag`, cover art thumbs via `disintegration/imaging` |
-| `internal/innertube` | `innertube` module | Native Go InnerTube: sig decryption, player-response parsing, home/next/related/artist/album/playlist, continuation, renderer normalizers |
-| `internal/recs` | `HomeViewModel` + `RecommendationRepository` | Section builders, candidate pipeline, ranking, daily cache, filter pipeline |
-| `internal/queue` | `Queue` + `YouTubeQueue` | Server-side queue session, radio expansion, automix shelf |
-| `internal/streams` | `YTPlayerUtils` | URL resolution decision tree (local path vs YT direct vs proxy) |
-| `internal/streamproxy` | `ResolvingDataSource` fallback path | Range-supporting reverse proxy with short-lived HMAC tokens |
-| `internal/sync` | — | Idempotency-key dedupe, write-replay handling, conflict resolution |
-| `internal/events` | `PlaybackStatsListener` | Play event ingestion, impression logging, scrobble window |
-| `internal/cookies` | — | YT cookie storage (libsodium secretbox), refresh job |
-| `internal/db` | Room | `sqlc`-generated query layer |
-| `internal/api` | — | chi router, handlers, JSON shapes, middleware |
-| `internal/ws` | — | WebSocket hub for now-playing |
-| `internal/jobs` | — | Background workers: cookie health probe, library scan, recs warmup |
+| Crate | Purpose |
+|---|---|
+| `sunflower-core` | Shared domain and wire contract types, queue/lookahead logic, local recommendation ranking, repository traits |
+| `sunflower-server` | Runnable Rust `sunflowerd-rs`: axum router, auth/admin/API handlers, native InnerTube, queue/streams, recs, jobs, now-playing WebSocket |
+| `sunflower-storage-postgres` | Online/source-of-truth storage; applies embedded schema migrations, then Rust-local extension tables |
+| `sunflower-storage-sqlite` | Device-local recommendation storage for mobile/desktop local mode |
+| `sunflower-bridge` | Flutter Rust Bridge API for local songs, stat snapshots, ranking, recommendation snapshots, and feedback replay state |
+
+The old Go `server/` tree has been removed. Assets that still matter to the
+Rust implementation live with the Rust crates:
+
+- Postgres schema: `rust/crates/sunflower-storage-postgres/migrations/`
+- Admin CSS/JS: `rust/crates/sunflower-server/assets/admin/`
+- InnerTube parser fixtures: `rust/crates/sunflower-server/testdata/innertube/`
+
+Rust contract tests preserve the established public wire shapes, status codes,
+route behavior, parsers, stream proxy policy, idempotency behavior, and selected
+storage semantics.
 
 ### Flutter client — `client/lib/` (feature-first)
 
@@ -34,12 +33,14 @@ sections of this file rather than restating them.
 core/
   api/                # generated DTOs + dio client + retry-on-403
   auth/               # token store, device-register flow
+  bridge/             # generated Flutter Rust Bridge bindings
   db/                 # Drift schema + DAOs
   sync/               # write-replay buffer, idempotency keys (UUIDv7)
   player/             # just_audio + audio_service handler
   downloads/          # background isolate download manager
   media_session/      # via audio_service
   network/            # dio interceptors
+  recommendations/    # FRB-backed local recommender + offline Home fallback
 features/
   home/               # sections feed, cold-start cache
   player_ui/          # now-playing, queue panel
@@ -56,9 +57,11 @@ surface.
 ## Wire protocol — load-bearing endpoints
 
 All application API JSON uses `Authorization: Bearer <device_token>`.
-Mutating device endpoints require `Idempotency-Key` header (UUIDv7). M9 adds a
-separate admin browser session carried by an HttpOnly cookie; admin mutating
-forms and JSON calls require CSRF protection.
+Mutating device endpoints require `Idempotency-Key` header (UUIDv7). Device
+registration uses the same idempotency contract even though it is the endpoint
+that issues the first bearer token. M9 adds a separate admin browser session
+carried by an HttpOnly cookie; admin mutating forms and JSON calls require CSRF
+protection.
 
 ### Bootstrap / setup status (M9)
 ```
@@ -116,6 +119,7 @@ POST /api/v1/admin/pairing-codes
   }
 
 POST /api/v1/auth/register-device
+Idempotency-Key: <uuidv7>
 { device_name, platform, client_version, pairing_code }
 → {
     device_id,
@@ -128,6 +132,9 @@ Pairing codes are single-use, expire after 10 minutes by default, and are shown
 only once. The server stores only an HMAC/argon2id-derived verifier, never the
 raw code. Registration without a valid pairing code returns
 `403 {"error":"pairing_required"}` or `401 {"error":"invalid_pairing_code"}`.
+Replaying the same registration `Idempotency-Key` on the same route within 24
+hours returns the original token response without consuming or re-checking the
+single-use pairing code.
 
 ### Device API auth
 ```
@@ -183,11 +190,40 @@ POST /api/v1/streams/resolve  {media_id, audio_quality, reason}
 ```
 POST /api/v1/events
 { events: [ { event_id (UUIDv7), kind, media_id, queue_id, occurred_at,
-              elapsed_ms, total_played_ms, reason } ] }
-→ { results: [{event_id, accepted, conflicted_with?, reason?}] }
+              total_played_ms, duration_ms, reason } ] }
+→ { results: [{event_id, accepted, reason?}] }
 ```
-Each event carries its own idempotency key; the request also carries a batch
-key. "Conflict" on mutations = duplicate key, not state collision.
+Each event carries its own UUIDv7 event id; the request also carries the
+batch-level `Idempotency-Key`. The batch key replays the exact HTTP response for
+same-request retries; the per-event id prevents double-scrobbling when the client
+re-batches the same event under a new HTTP key. The server processes a batch in
+request order and returns `results` in that same order; client replay buffers are
+responsible for draining buffered mutations by `client_clock`. "Conflict" on
+mutations = duplicate key, not state collision.
+
+### Local recommendation mode
+
+When the remote Home/recommendation surface is unreachable, the Flutter client
+builds a stale `HomeFeed` from device-local state:
+
+- Drift `RecentPlays` and downloaded-track rows provide playable candidates.
+- `sunflower-storage-sqlite` stores local songs, recommendation events, and the
+  latest remote snapshot.
+- `sunflower-core::LocalRecommendationEngine` ranks candidates from a
+  `LocalStatsSnapshot`.
+- Playback-start events stay local-only. Remote-contract feedback
+  (`playCompleted`, `skipped`, `liked`/`disliked`, `impression`) is converted
+  back to the legacy `/events`, `/likes`, and `/impressions` shapes and sent by
+  the recommendation feedback client with the same UUIDv7 as the
+  `Idempotency-Key`. The local Rust SQLite event log remains the durable retry
+  source until those sends succeed.
+
+Home reads use `recommendationApiProvider`, whose base URL is the optional
+standalone recommendation server when configured and the main server otherwise.
+The optional URL can be stored in secure storage or supplied at build/run time
+with `--dart-define=SUNFLOWER_RECOMMENDATION_URL=...`.
+Library, queue, playlist, download, and source-of-truth sync calls continue to
+use the main `sunflowerApiProvider` / write-replay buffer.
 
 ### Now-playing push — WebSocket
 ```
@@ -251,41 +287,68 @@ encrypted_cookies (user_id, provider PK, ciphertext bytea, nonce bytea,
                    refreshed_at, expires_at_hint)
 
 idempotency_log (key PK, user_id, device_id, route, response_hash,
+                 response_status, response_body, response_content_type,
                  created_at, expires_at)
 rec_cache (cache_key PK, user_id, payload jsonb, generated_at, expires_at)
+rust_ingested_events (user_id, event_id PK, device_id, created_at)
+
+-- Rust rewrite extension tables
+rust_songs (media_id PK, source_type, title, available, payload jsonb, updated_at)
+rust_recommendation_events (event_id PK, media_id, client_clock, occurred_at,
+                            kind, payload jsonb, synced_at)
+rust_recommendation_snapshots (snapshot_id PK, model_version, generated_at,
+                               expires_at, payload jsonb)
+rust_like_tombstones (user_id, song_media_id PK, unliked_at, idempotency_key)
 ```
 
 Cookie encryption: libsodium `crypto_secretbox` with a 32-byte key from
 `SUNFLOWER_COOKIE_KEY`. Not `pgcrypto` — encryption stays in the app layer so
 the key never reaches Postgres.
 
+## SQLite local recommendation schema
+
+The client-local Rust store mirrors only the data needed for offline ranking
+and feedback replay:
+
+```sql
+songs (media_id PK, source_type, title, available, payload_json, updated_at)
+recommendation_events (event_id PK, media_id, client_clock, occurred_at, kind,
+                       payload_json, synced_at)
+recommendation_snapshots (snapshot_id PK, generated_at, expires_at,
+                          model_version, payload_json)
+```
+
+Local-library songs are considered locally available when `source_type=local`
+and `available=true`, even if the mobile bridge did not persist a concrete file
+path. Downloaded remote tracks are considered both downloaded and locally
+available when they have a local path.
+
 ## Server internals — notable parts
 
-### `internal/innertube`
-Mirrors Metrolist's Kotlin `innertube` module but in Go:
+### `sunflower-server::innertube`
+Mirrors Metrolist's Kotlin `innertube` module in Rust:
 - `sig/` — fetch `base.js`, regex-extract sig function, parse its op list
-  (reverse/splice/swap), apply in pure Go. Cache by base.js hash; invalidate
+  (reverse/splice/swap), apply in pure Rust. Cache by base.js hash; invalidate
   on sustained 403.
 - `payloads/` — POST body builders for `/youtubei/v1/{player,next,browse,search}`
   with `ANDROID_MUSIC` client context.
-- `parser/` — renderer normalizers, one file per surface
-  (`home_page.go`, `next_page.go`, `related_page.go`, `artist_page.go`,
-  `album_page.go`, `playlist_page.go`). **Optional-field tolerant**: missing
-  branches return zero values, never errors.
-- `continuation/` — opaque tokens, preserved as `[]byte`, posted back verbatim.
+- Parser helpers normalize renderer surfaces for home, next, related, artist,
+  album, playlist, and search. **Optional-field tolerant**: missing branches
+  return zero values, never errors.
+- Continuations are opaque strings/bytes and are posted back verbatim.
 
-Cookie middleware on the HTTP client reads from `internal/cookies` and
-attaches `Cookie:` headers; watches for `Set-Cookie` rotations.
+Cookie middleware on the HTTP client reads encrypted cookie state and attaches
+`Cookie:` headers; it preserves the legacy provider formats.
 
-### `internal/recs`
+### Remote recommendation engine
 One function per Metrolist surface: `BuildHome`, `QuickPicks`,
 `DailyDiscover`, `SimilarToArtist`, `SimilarToSong`, `SimilarToAlbum`,
 `CommunityPlaylists`, `Radio`.
 
-- **Fan-out:** `errgroup` per home build, per-seed sub-fanout capped at 5
+- **Fan-out:** async Rust tasks per home build, per-seed sub-fanout capped at 5
   concurrent InnerTube calls, 8s per-call timeout. Failed similar-to sections
   are dropped, not propagated.
-- **Filter pipeline:** composable `func(Candidate) bool` — `notExplicit`,
+- **Filter pipeline:** composable candidate predicates — `notExplicit`,
   `notVideo`, `notShorts`, `notBlocked`, `notRecentImpression(<24h)`,
   `notDuplicateInSection`.
 - **Ranking** (per docs):
@@ -294,25 +357,23 @@ One function per Metrolist surface: `BuildHome`, `QuickPicks`,
   next midnight in user TZ, community playlists 24 h, radio/automix not cached.
 - Cache key includes user, source, seed, locale, region, filters hash.
 
-### `internal/library`
-- Tag extraction: pure-Go `dhowden/tag` (covers MP3/M4A/FLAC/OGG; avoids CGo).
-- Watcher: `fsnotify` on roots, 2 s debounce.
+### Library scanner (`sunflower-server::jobs`)
+- Tag extraction: Rust ID3 parsing plus filename fallback for non-MP3 audio.
 - `media_id = "local:" + sha1(path)[:16]` for stability across rescans.
-- Cover art: resize to 256/512/1024 with `disintegration/imaging`, store under
+- Cover art: resize to 256/512/1024 with the Rust `image` crate, store under
   `<data>/art/<media_id>/{256,512,1024}.jpg`.
 
-### `internal/streamproxy`
-Fallback path only — `httputil`-style reverse proxy with `Range` forwarding,
-HMAC-signed short-lived tokens (5 min) to prevent open-proxy abuse, no disk
-buffering.
+### Stream proxy (`sunflower-server::stream_proxy`)
+Fallback path only — reqwest-backed reverse proxy with `Range` forwarding,
+HMAC-signed short-lived tokens to prevent open-proxy abuse, no disk buffering.
 
-### `internal/sync`
+### Sync/idempotency (`sunflower-server` + `sunflower-storage-postgres`)
 - Middleware reads `Idempotency-Key` on all mutations.
 - Cache hit within 24 h → replay stored response. Stale → 409 with conflict.
 - Conflict resolution: last-write-wins by client `occurred_at`. Returns
   `{accepted, server_state}` so client can reconcile its local view.
 
-### `internal/auth` enrollment model (M9)
+### Auth/enrollment model (M9)
 - First-run setup is owner-only. Once an owner password hash exists, setup
   endpoints reject all future calls.
 - Admin passwords are stored as PHC-format argon2id hashes with per-password
@@ -328,8 +389,8 @@ buffering.
   login success/failure, pairing code created/used/expired, device revoked,
   YouTube cookies updated, and library scan started from admin.
 
-### `internal/adminui` dashboard model (M10)
-- Go `html/template` with embedded templates and static assets. No React/Vue
+### Admin dashboard model (M10)
+- Server-rendered HTML with embedded Rust string/static assets. No React/Vue
   build step for v1 dashboard operations.
 - All dashboard pages require the admin session cookie. HTML forms include a
   per-session CSRF token; JSON admin mutations require `X-CSRF-Token`.

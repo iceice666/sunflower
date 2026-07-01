@@ -2,11 +2,11 @@
 
 ## Why this exists
 
-M0–M8 are marked complete and the **server** half is honestly verified
-(`go build` / `go test` / `gofmt` / `sqlc` all green). The **client** half is
-not: every milestone note says the Flutter code was only `dart format`-verified
-because no Flutter SDK was available in-env. Nothing has ever been *rendered* or
-*run* on a device.
+M0–M8 are marked complete and the **Rust server/core** half is honestly
+verified (`cargo test --workspace --locked`, clippy, rustfmt, and Postgres-backed
+contract tests). The **client** half originally lagged behind because no Flutter
+SDK was available in-env; this plan records how visual verification closed that
+gap.
 
 This plan closes that gap: prove each milestone's **visual demo target** actually
 renders correctly, and leave behind regression protection so it stays that way.
@@ -15,7 +15,7 @@ renders correctly, and leave behind regression protection so it stays that way.
 
 | Thing | State | Implication |
 |---|---|---|
-| Go toolchain | in `nix develop` shell | server runs locally |
+| Rust toolchain | rustc 1.95 via `flake.nix` | server/core builds locally |
 | Flutter SDK | in `nix develop` via `flake.nix` (`flutter` 3.41.9 / Dart 3.11.5) | Phase 0 SDK blocker cleared |
 | macOS native assets | Flutter wrapped to use host Xcode `/usr/bin/xcrun` + SDK | fixes `objective_c`/`-isysroot` hook failures |
 | Android | `~/Library/Android/sdk`, `adb`+`emulator`, AVD `Pixel_10` | live verify = Android |
@@ -74,8 +74,8 @@ Baseline per-screen state set: **loading / empty / populated / error / offline**
 ### Phase 1 — Golden harness
 - Adopt a golden lib (recommend **alchemist** or `golden_toolkit`) for
   deterministic font loading + multi-device sizing (avoids host-font flakiness).
-- Provider-override scaffolding: fake repositories + fixtures. Reuse server
-  JSON fixtures (`internal/innertube/parser/testdata/`) where shapes match.
+- Provider-override scaffolding: fake repositories + fixtures. Reuse Rust server
+  JSON fixtures (`rust/crates/sunflower-server/testdata/innertube/`) where shapes match.
 - Pin device config: Pixel-class size, dark theme, fixed text scale.
 - Establish `--update-goldens` baseline + review workflow.
 
@@ -104,7 +104,7 @@ Baseline per-screen state set: **loading / empty / populated / error / offline**
 ## Deliverables
 - `client/test/goldens/**` + golden tests
 - `client/integration_test/visual_smoke_test.dart`
-- seed script (`scripts/seed-demo.sh` or Make target)
+- seed script (`scripts/seed-demo.sh` or `just seed-demo`)
 - `.github/workflows/client-verify.yml`
 - `flake.nix` Flutter addition
 - this plan + a results report

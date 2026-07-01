@@ -4,11 +4,10 @@
 # Idempotent: re-running against an already-seeded DB is safe (ON CONFLICT DO NOTHING).
 # On success writes .seed-env at the repo root with SUNFLOWER_DEMO_URL, _TOKEN, _DEVICE_ID.
 #
-# Prerequisites (all present in `nix develop`):
-#   psql, goose, curl, python3, adb (for the Makefile smoke target)
+# Prerequisites:
+#   curl, python3 (adb/flutter are used by `just smoke-android`)
 #
 # Environment overrides:
-#   DATABASE_URL   — default postgres://postgres@localhost:5432/sunflower?sslmode=disable
 #   SERVER_URL     — default http://localhost:8080   (sunflowerd must be running)
 #   MEDIA_DIR      — where demo MP3 stubs are written; default /tmp/sunflower-demo-media
 #   SEED_ENV       — output env file;                 default .seed-env (repo root)
@@ -17,7 +16,6 @@
 
 set -euo pipefail
 
-DATABASE_URL="${DATABASE_URL:-postgres://postgres@localhost:5432/sunflower?sslmode=disable}"
 SERVER_URL="${SERVER_URL:-http://localhost:8080}"
 MEDIA_DIR="${MEDIA_DIR:-/tmp/sunflower-demo-media}"
 SEED_ENV="${SEED_ENV:-.seed-env}"
@@ -28,18 +26,16 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ── 0. Sanity checks ─────────────────────────────────────────────────────────
 
-for cmd in psql goose curl python3; do
+for cmd in curl python3; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "FATAL: $cmd not found on PATH"; exit 1; }
 done
 
-echo "==> [seed] DATABASE_URL = $DATABASE_URL"
 echo "==> [seed] SERVER_URL   = $SERVER_URL"
 echo "==> [seed] MEDIA_DIR    = $MEDIA_DIR"
 
-# ── 1. Migrations ────────────────────────────────────────────────────────────
+# ── 1. Migration boundary ────────────────────────────────────────────────────
 
-echo "==> [seed] Applying migrations …"
-(cd "$REPO_ROOT/server" && goose -dir db/migrations postgres "$DATABASE_URL" up)
+echo "==> [seed] Using migrations applied by the running sunflowerd."
 
 # ── 2. Demo media stubs ──────────────────────────────────────────────────────
 # Minimal ID3v2.3-tagged MP3 stubs (ID3 header + one silent MPEG frame).
@@ -240,5 +236,5 @@ EOF
 echo "==> [seed] Wrote $SEED_ENV_PATH"
 echo ""
 echo "    To run the Android smoke test:"
-echo "      make smoke-android"
+echo "      just smoke-android"
 echo "    (requires Pixel_10 AVD running and sunflowerd on localhost:8080)"

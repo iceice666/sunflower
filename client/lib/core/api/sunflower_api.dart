@@ -5,6 +5,11 @@ import 'package:uuid/uuid.dart';
 import '../auth/auth_failure.dart';
 import '../auth/token_store.dart';
 
+int? _jsonIntOrNull(Object? value) => value is num ? value.toInt() : null;
+
+int _jsonInt(Object? value, [int fallback = 0]) =>
+    _jsonIntOrNull(value) ?? fallback;
+
 // ---------------------------------------------------------------------------
 // Song model
 // ---------------------------------------------------------------------------
@@ -46,7 +51,7 @@ class Song {
       albumTitle: json['album_title'] as String? ?? '',
       hasArt: json['has_art'] as bool? ?? false,
       albumId: json['album_id'] as String?,
-      durationMs: json['duration_ms'] as int?,
+      durationMs: _jsonIntOrNull(json['duration_ms']),
     );
   }
 
@@ -90,7 +95,7 @@ class ResolvedStream {
       streamUrl: json['stream_url'] as String? ?? '',
       title: json['title'] as String? ?? '',
       artists: (json['artists'] as List<dynamic>? ?? const []).cast<String>(),
-      durationMs: json['duration_ms'] as int? ?? 0,
+      durationMs: _jsonInt(json['duration_ms']),
       expiresAt: rawExpiry == null ? null : DateTime.tryParse(rawExpiry),
       mimeType: json['mime_type'] as String? ?? '',
     );
@@ -106,25 +111,40 @@ class QueueItem {
     this.title = '',
     this.artists = const [],
     this.durationMs = 0,
+    this.resolvedStream,
   });
 
   final String mediaId;
   final String title;
   final List<String> artists;
   final int durationMs;
+  final ResolvedStream? resolvedStream;
 
   factory QueueItem.fromJson(Map<String, dynamic> json) {
+    final resolvedStream = _resolvedStreamOrNull(json);
     return QueueItem(
       mediaId: json['media_id'] as String? ?? '',
       title: json['title'] as String? ?? '',
       artists: (json['artists'] as List<dynamic>? ?? const []).cast<String>(),
-      durationMs: json['duration_ms'] as int? ?? 0,
+      durationMs: _jsonInt(json['duration_ms']),
+      resolvedStream: resolvedStream,
     );
   }
 }
 
-/// The GET /api/v1/next payload: a resolved [current] plus a window of
-/// unresolved [lookahead] items and a [hasMore] flag for continuation.
+ResolvedStream? _resolvedStreamOrNull(Map<String, dynamic> json) {
+  final source = json['source'] as String? ?? '';
+  final streamUrl = json['stream_url'] as String? ?? '';
+  if (source.isEmpty || streamUrl.isEmpty) return null;
+  return ResolvedStream.fromJson(json);
+}
+
+/// The GET /api/v1/next payload: a resolved [current] plus a lookahead window.
+///
+/// Older servers returned metadata-only [lookahead] items. Current Rust servers
+/// may include the same playable stream fields as [current];
+/// those are exposed through [QueueItem.resolvedStream] and fall back to
+/// `/streams/resolve` when absent.
 class NextResponse {
   const NextResponse({
     required this.queueId,
@@ -132,6 +152,9 @@ class NextResponse {
     required this.current,
     required this.lookahead,
     required this.hasMore,
+    this.continuation,
+    this.automix = const [],
+    this.queueVersion = 0,
   });
 
   final String queueId;
@@ -139,16 +162,24 @@ class NextResponse {
   final ResolvedStream? current;
   final List<QueueItem> lookahead;
   final bool hasMore;
+  final String? continuation;
+  final List<QueueItem> automix;
+  final int queueVersion;
 
   factory NextResponse.fromJson(Map<String, dynamic> json) {
     final cur = json['current'] as Map<String, dynamic>?;
     final look = json['lookahead'] as List<dynamic>? ?? const [];
+    final automix = json['automix'] as List<dynamic>? ?? const [];
     return NextResponse(
       queueId: json['queue_id'] as String? ?? '',
-      position: json['position'] as int? ?? 0,
+      position: _jsonInt(json['position']),
       current: cur == null ? null : ResolvedStream.fromJson(cur),
       lookahead:
           look.cast<Map<String, dynamic>>().map(QueueItem.fromJson).toList(),
+      continuation: json['continuation'] as String?,
+      automix:
+          automix.cast<Map<String, dynamic>>().map(QueueItem.fromJson).toList(),
+      queueVersion: _jsonInt(json['queue_version']),
       hasMore: json['has_more'] as bool? ?? false,
     );
   }
@@ -176,7 +207,7 @@ class QueueResponse {
       queueId: json['queue_id'] as String? ?? '',
       seedKind: json['seed_kind'] as String? ?? '',
       title: json['title'] as String? ?? '',
-      version: (json['version'] as num?)?.toInt() ?? 0,
+      version: _jsonInt(json['version']),
       items:
           items.cast<Map<String, dynamic>>().map(QueueItem.fromJson).toList(),
     );
@@ -214,7 +245,7 @@ class HomeItem {
       source: json['source'] as String? ?? '',
       artists: (json['artists'] as List<dynamic>? ?? const []).cast<String>(),
       albumId: json['album_id'] as String?,
-      durationMs: json['duration_ms'] as int? ?? 0,
+      durationMs: _jsonInt(json['duration_ms']),
       thumbnailUrl: json['thumbnail_url'] as String?,
     );
   }
@@ -338,7 +369,7 @@ class SearchSong {
       title: json['title'] as String? ?? '',
       artists: (json['artists'] as List<dynamic>? ?? const []).cast<String>(),
       thumbnailUrl: json['thumbnail_url'] as String?,
-      durationMs: json['duration_ms'] as int? ?? 0,
+      durationMs: _jsonInt(json['duration_ms']),
     );
   }
 }
@@ -405,7 +436,7 @@ class Playlist {
     return Playlist(
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '',
-      version: (json['version'] as num?)?.toInt() ?? 0,
+      version: _jsonInt(json['version']),
       items: raw.cast<Map<String, dynamic>>().map(HomeItem.fromJson).toList(),
     );
   }
@@ -423,7 +454,7 @@ class SongHash {
     return SongHash(
       mediaId: json['media_id'] as String? ?? '',
       sha256: json['sha256'] as String? ?? '',
-      bytes: (json['bytes'] as num?)?.toInt() ?? 0,
+      bytes: _jsonInt(json['bytes']),
     );
   }
 }
@@ -439,6 +470,18 @@ final sunflowerApiProvider = Provider<SunflowerApi>((ref) {
   // Read cached values synchronously (may be null on first load — callers
   // guard before use or watch the FutureProviders upstream).
   final serverUrl = ref.watch(serverUrlProvider).valueOrNull ?? '';
+  final token = ref.watch(tokenProvider).valueOrNull ?? '';
+  return SunflowerApi(
+    baseUrl: serverUrl,
+    token: token,
+    onCredentialFailure: () => clearCredentialsAndNotify(ref),
+  );
+});
+
+/// API provider for recommendation reads. It uses a standalone recommendation
+/// server when configured, and otherwise falls back to the main server.
+final recommendationApiProvider = Provider<SunflowerApi>((ref) {
+  final serverUrl = ref.watch(recommendationBaseUrlProvider);
   final token = ref.watch(tokenProvider).valueOrNull ?? '';
   return SunflowerApi(
     baseUrl: serverUrl,
@@ -506,11 +549,11 @@ class SunflowerApi {
   /// Returns the authenticated stream URL for [mediaId].
   /// The client passes this to just_audio with an Authorization header.
   String streamUrl(String mediaId) =>
-      '$_baseUrl/api/v1/library/songs/$mediaId/stream';
+      '$_baseUrl/api/v1/library/songs/${_pathSegment(mediaId)}/stream';
 
   /// Returns the art URL for [albumId] at [size] (256 | 512 | 1024).
   String artUrl(String albumId, {int size = 512}) =>
-      '$_baseUrl/api/v1/library/albums/$albumId/art?size=$size';
+      '$_baseUrl/api/v1/library/albums/${_pathSegment(albumId)}/art?size=$size';
 
   // -------------------------------------------------------------------------
   // M4 queue / next / streams
@@ -528,7 +571,7 @@ class SunflowerApi {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/queue/start',
       data: {'seed_kind': seedKind, 'seed_id': seedId, 'title': title},
-      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
     );
     return QueueResponse.fromJson(response.data ?? const {});
   }
@@ -548,11 +591,20 @@ class SunflowerApi {
   Future<ResolvedStream> resolveStream(
     String mediaId, {
     bool proxy = false,
+    String? audioQuality,
+    String? reason,
   }) async {
+    final body = <String, dynamic>{'media_id': mediaId, 'proxy': proxy};
+    if (audioQuality != null && audioQuality.isNotEmpty) {
+      body['audio_quality'] = audioQuality;
+    }
+    if (reason != null && reason.isNotEmpty) {
+      body['reason'] = reason;
+    }
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/streams/resolve',
-      data: {'media_id': mediaId, 'proxy': proxy},
-      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+      data: body,
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
     );
     return ResolvedStream.fromJson(response.data ?? const {});
   }
@@ -588,11 +640,19 @@ class SunflowerApi {
   }
 
   /// Toggles a like for [mediaId]. Mutating — carries an Idempotency-Key.
-  Future<bool> toggleLike(String mediaId, bool liked) async {
+  Future<bool> toggleLike(
+    String mediaId,
+    bool liked, {
+    DateTime? occurredAt,
+  }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/likes',
-      data: {'media_id': mediaId, 'liked': liked},
-      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+      data: {
+        'media_id': mediaId,
+        'liked': liked,
+        'occurred_at': (occurredAt ?? DateTime.now()).toUtc().toIso8601String(),
+      },
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
     );
     return response.data?['liked'] as bool? ?? liked;
   }
@@ -603,6 +663,7 @@ class SunflowerApi {
     await _dio.post<Map<String, dynamic>>(
       '/api/v1/impressions',
       data: {'impressions': impressions},
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
     );
   }
 
@@ -616,7 +677,7 @@ class SunflowerApi {
   /// Fetches a single playlist with its items.
   Future<Playlist> getPlaylist(String id) async {
     final response = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/playlists/$id',
+      '/api/v1/playlists/${_pathSegment(id)}',
     );
     return Playlist.fromJson(response.data ?? const {});
   }
@@ -626,7 +687,7 @@ class SunflowerApi {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/playlists',
       data: {'title': title},
-      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
     );
     return Playlist.fromJson(response.data ?? const {});
   }
@@ -634,9 +695,9 @@ class SunflowerApi {
   /// Adds a song to a playlist.
   Future<void> addPlaylistItem(String playlistId, String mediaId) async {
     await _dio.post<void>(
-      '/api/v1/playlists/$playlistId/items',
+      '/api/v1/playlists/${_pathSegment(playlistId)}/items',
       data: {'media_id': mediaId},
-      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
     );
   }
 
@@ -648,7 +709,7 @@ class SunflowerApi {
   /// verification. Throws (DioException) for non-local songs (404).
   Future<SongHash> songHash(String mediaId) async {
     final response = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/library/songs/$mediaId/hash',
+      '/api/v1/library/songs/${_pathSegment(mediaId)}/hash',
     );
     return SongHash.fromJson(response.data ?? const {});
   }
@@ -662,15 +723,18 @@ class SunflowerApi {
     required int bytes,
   }) async {
     await _dio.post<void>(
-      '/api/v1/devices/$deviceId/downloads',
+      '/api/v1/devices/${_pathSegment(deviceId)}/downloads',
       data: {'media_id': mediaId, 'local_path': localPath, 'bytes': bytes},
-      options: Options(headers: {'Idempotency-Key': const Uuid().v4()}),
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
     );
   }
 
   /// Removes a download registration from the server.
   Future<void> deleteDownload(String deviceId, String mediaId) async {
-    await _dio.delete<void>('/api/v1/devices/$deviceId/downloads/$mediaId');
+    await _dio.delete<void>(
+      '/api/v1/devices/${_pathSegment(deviceId)}/downloads/${_pathSegment(mediaId)}',
+      options: Options(headers: {'Idempotency-Key': _idempotencyKey()}),
+    );
   }
 
   /// Authorization header map — pass to just_audio and cached_network_image.
@@ -682,3 +746,7 @@ bool _clearsCredentials(AuthFailureKind kind) {
       kind == AuthFailureKind.invalidToken ||
       kind == AuthFailureKind.deviceRevoked;
 }
+
+String _pathSegment(String value) => Uri.encodeComponent(value);
+
+String _idempotencyKey() => const Uuid().v7();

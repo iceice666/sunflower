@@ -3,7 +3,11 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
+import '../../core/bridge/api.dart' as bridge;
 import '../../core/db/database_provider.dart';
+import '../../core/db/database.dart';
+import '../../core/recommendations/local_core.dart';
+import '../../core/recommendations/local_home_fallback.dart';
 
 /// Filter preferences for the home feed, wired from the settings screen.
 class HomePrefs {
@@ -29,7 +33,7 @@ final homePrefsProvider = StateProvider<HomePrefs>((ref) => const HomePrefs());
 ///   - On failure (server unreachable), the last cached feed is returned with
 ///     stale=true so the UI shows yesterday's sections plus a "stale" banner.
 final homeFeedProvider = FutureProvider.autoDispose<HomeFeed>((ref) async {
-  final api = ref.watch(sunflowerApiProvider);
+  final api = ref.watch(recommendationApiProvider);
   final db = ref.watch(databaseProvider);
   final prefs = ref.watch(homePrefsProvider);
 
@@ -44,15 +48,71 @@ final homeFeedProvider = FutureProvider.autoDispose<HomeFeed>((ref) async {
     return feed;
   } catch (_) {
     final cached = await db.getHome(prefs.cacheKey);
+    final local = await _buildLocalFallback(ref, db).catchError(
+      (_) => null,
+    );
     if (cached != null) {
-      final json = jsonDecode(cached.payloadJson) as Map<String, dynamic>;
-      final feed = HomeFeed.fromJson(json);
-      // Force stale so the UI surfaces the cold-start indicator.
-      return HomeFeed(sections: feed.sections, chips: feed.chips, stale: true);
+      try {
+        final json = jsonDecode(cached.payloadJson) as Map<String, dynamic>;
+        final feed = HomeFeed.fromJson(json);
+        // Force stale so the UI surfaces the cold-start indicator.
+        return _offlineFeed(cached: feed, local: local);
+      } catch (_) {
+        // Home cache is advisory. A corrupt stale payload must not block the
+        // device-local recommender from keeping the app usable offline.
+      }
     }
+    if (local != null) return local;
     rethrow;
   }
 });
+
+Future<HomeFeed?> _buildLocalFallback(Ref ref, SunflowerDatabase db) async {
+  final handle = await ref
+      .read(localCoreHandleProvider.future)
+      .timeout(const Duration(seconds: 2), onTimeout: () => null);
+  return LocalHomeFallback(
+    statsLoader: handle == null
+        ? null
+        : ({required recentLimit}) {
+            return bridge.localStatsSnapshot(
+              handle: handle,
+              recentLimit: recentLimit,
+            );
+          },
+  ).build(db);
+}
+
+HomeFeed _offlineFeed({required HomeFeed cached, required HomeFeed? local}) {
+  if (local == null || local.sections.isEmpty) {
+    return HomeFeed(
+      sections: cached.sections,
+      chips: cached.chips,
+      stale: true,
+    );
+  }
+
+  final localSectionIds = {
+    for (final section in local.sections) section.id,
+  };
+  return HomeFeed(
+    sections: [
+      ...local.sections,
+      for (final section in cached.sections)
+        if (!localSectionIds.contains(section.id)) section,
+    ],
+    chips: _uniqueStrings([...local.chips, ...cached.chips]),
+    stale: true,
+  );
+}
+
+List<String> _uniqueStrings(Iterable<String> values) {
+  final seen = <String>{};
+  return [
+    for (final value in values)
+      if (seen.add(value)) value,
+  ];
+}
 
 /// Serializes a HomeFeed back to the wire JSON shape for caching.
 Map<String, dynamic> _feedToJson(HomeFeed feed) => {

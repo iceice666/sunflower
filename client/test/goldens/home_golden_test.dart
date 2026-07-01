@@ -1,6 +1,6 @@
 // Golden tests — home feed screen: sections/chips, stale (offline), error.
 //
-// HomeScreen uses homeFeedProvider which reads both sunflowerApiProvider AND
+// HomeScreen uses homeFeedProvider which reads recommendationApiProvider and
 // databaseProvider (for the stale-cache write). All three tests override
 // homeFeedProvider directly so the database is never touched.
 //

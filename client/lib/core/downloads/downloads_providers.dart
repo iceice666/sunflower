@@ -5,6 +5,7 @@ import '../auth/token_store.dart';
 import '../db/database.dart';
 import '../db/database_provider.dart';
 import '../player/source_resolver.dart';
+import '../sync/sync_providers.dart';
 import 'download_manager.dart';
 
 /// The device id is stored at registration time. M6 reads it to scope the
@@ -17,9 +18,15 @@ final deviceIdProvider = FutureProvider<String>((ref) async {
 /// Singleton [DownloadManager]. Started lazily; disposed with the provider.
 final downloadManagerProvider = Provider<DownloadManager>((ref) {
   final api = ref.watch(sunflowerApiProvider);
+  final bufferedApi = ref.watch(bufferedApiProvider);
   final db = ref.watch(databaseProvider);
   final deviceId = ref.watch(deviceIdProvider).valueOrNull ?? '';
-  final mgr = DownloadManager(api: api, db: db, deviceId: deviceId);
+  final mgr = DownloadManager(
+    api: api,
+    bufferedApi: bufferedApi,
+    db: db,
+    deviceId: deviceId,
+  );
   ref.onDispose(mgr.dispose);
   return mgr;
 });

@@ -31,6 +31,10 @@ class ExpiryGuard {
   /// Re-resolves [mediaId]. Pass [proxy] true on a hard 403 to force the server
   /// proxy path; near-expiry refreshes use the default direct path.
   Future<ResolvedStream> resolve(String mediaId, {bool proxy = false}) {
-    return _api.resolveStream(mediaId, proxy: proxy);
+    return _api.resolveStream(
+      mediaId,
+      proxy: proxy,
+      reason: proxy ? 'http_403' : 'near_expiry',
+    );
   }
 }

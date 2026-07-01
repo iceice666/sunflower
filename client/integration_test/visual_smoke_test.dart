@@ -11,10 +11,10 @@
 // Prerequisites
 //   • Pixel_10 AVD booted  (`emulator -avd Pixel_10`)
 //   • sunflowerd running on host port 8080
-//   • DB seeded            (`make seed-demo`)  →  .seed-env written
+//   • DB seeded            (`just seed-demo`)  →  .seed-env written
 //
 // Run via:
-//   make smoke-android   (wraps `flutter drive`)
+//   just smoke-android   (wraps `flutter drive`)
 // which sources .seed-env and passes values as --dart-define flags. Screenshots
 // land host-side in client/build/smoke-artifacts/ (written by the driver).
 //

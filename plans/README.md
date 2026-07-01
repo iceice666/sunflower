@@ -1,19 +1,29 @@
 # Sunflower — Plan
 
 A Metrolist-inspired self-hosted music system in two parts: a Flutter
-cross-platform client and a Go server that owns recommendations, history,
-preferences, and the "what plays next" decision.
+cross-platform client and a Rust server/core. Rust is now the canonical
+implementation: runnable server, shared domain core, Flutter Rust Bridge
+surface, Postgres/SQLite storage, and local-mode recommendation engine. The
+old Go `server/` implementation has been removed after the Rust rewrite reached
+wire/behavior parity.
 
 ## Why this plan exists
 
 The research in [`../docs/`](../docs/) describes Metrolist's Android-only
 architecture — Media3/ExoPlayer client, on-device Room DB, on-device InnerTube
-fan-out. This plan turns that research into a two-artifact system where the
-client is slim *in logic* (no recommendation generation, no direct InnerTube
-calls) while the server takes on the brain. The client still has real surface
-area — player, OS media session, Drift SQLite, offline downloads, write-replay
-buffer for offline mutations — but every "what plays next" decision originates
-on the server.
+fan-out. The first implementation centralized the brain in Go `sunflowerd`.
+The final Rust implementation keeps the same public wire contract while
+splitting the system into:
+
+- Rust server + Postgres storage for the online, source-of-truth API.
+- Rust `sunflower-core` for queue/recommendation/domain logic shared by server
+  and client-local mode.
+- Rust SQLite storage behind Flutter Rust Bridge for device-local stat
+  snapshots, local ranking, and offline feedback capture.
+- Flutter UI/player/download/sync surfaces that can keep useful recommendation
+  behavior when the remote recommendation surface is unreachable, then feed
+  local feedback back through the recommendation feedback sink when
+  connectivity returns.
 
 ## Locked decisions
 
@@ -22,11 +32,11 @@ on the server.
 | Client | Flutter (iOS, Android, desktop, web), `just_audio` + `audio_service`, Drift |
 | Catalog | Hybrid: self-hosted library files + YouTube Music fallback |
 | Stream delivery | Client direct-to-origin by default; server proxy as fallback on 403/CORS |
-| Server stack | Go + chi + Postgres |
-| InnerTube | Reimplemented natively in Go (no Python sidecar) |
+| Server stack | Rust + axum + Postgres; SQLite for device-local mode |
+| InnerTube | Native implementation in Rust server, matched against committed fixtures/contracts |
 | YT personalization | Server holds user's YT cookies, encrypted at rest (libsodium) |
 | Sync | Server is source of truth; client buffers writes offline and replays; now-playing pushed via WebSocket; rest is polling |
-| Recommendations | Mirror Metrolist's InnerTube-derived fan-out server-side (no ML) |
+| Recommendations | Remote server builds canonical sections; client has Rust-core local ranking from SQLite stat snapshots for local mode |
 | Offline | Explicit per-track / per-playlist downloads with local cache + DB |
 | Auth | Single-user admin account; devices get long-lived opaque tokens only through admin-generated pairing codes (M9) |
 
@@ -35,9 +45,11 @@ on the server.
 - [`architecture.md`](architecture.md) — static reference: component map, wire
   protocol shapes, Postgres schema, server-internal designs, client-internal
   designs. Read this once; refer back during every milestone.
-- [`milestones/`](milestones/) — one file per build phase (M0–M10). Each has a
-  demo target, scope, file-level acceptance criteria, and verification steps.
-  Work them in order — later milestones assume earlier ones are stable.
+- [`milestones/`](milestones/) — archived build-phase notes for M0–M10. They
+  preserve the original Go-era implementation plan and acceptance history, so
+  some paths and commands inside those files intentionally reference the
+  removed `server/` tree. Use this README and [`architecture.md`](architecture.md)
+  as the current Rust implementation reference.
 - [`risks.md`](risks.md) — top risks with mitigations, plus what is explicitly
   out of scope for v1.
 
@@ -75,17 +87,22 @@ M0-M8 prove the music system. M9-M10 make it safe and operable:
   server-served web dashboard for devices, pairing, library scans, YouTube
   cookie health, and now-playing control.
 
-Desktop "This computer" local-only mode should come after M10. The simplest
-design is to bundle `sunflowerd`, run it bound to `127.0.0.1`, and have the
-Flutter desktop client pair with that local server automatically. That is
-deliberately deferred so M9/M10 can first establish secure setup, sessions,
-pairing, and dashboard primitives.
+Local mode is part of the Rust rewrite rather than a separate post-M10 desktop
+deferment. The Flutter client opens a device-local SQLite store through Flutter
+Rust Bridge, records playback/preference/impression signals there, ranks local
+candidates with `sunflower-core`, and drains remote-contract feedback from the
+Rust SQLite event log to the configured recommendation server once it is
+reachable.
 
 ## V1 client — visual verification
 
-M0–M8 server-side acceptance criteria were verified at implementation time (`go build` /
-`go test` / `gofmt` / `sqlc` all green). The Flutter client was subsequently brought up
-to the same standard:
+M0–M10 acceptance criteria are now verified on the Rust implementation. The
+Rust workspace is verified with `cargo test --workspace --locked`, contract
+tests that preserve the established wire shapes and selected behavior,
+`cargo clippy --workspace --locked --all-targets -- -D warnings`, and
+`cargo fmt --all -- --check`; Postgres-backed Rust parity is run with
+`just test-rust-pg-local` and by the `rust-parity` CI job. The Flutter client
+was subsequently brought up to the same standard:
 
 - **22 golden-test baselines** (`client/test/goldens/goldens/snapshots/`) cover every screen and
   key state from the [verification matrix](post-v1-visual-verification.md). Pixel-diff
@@ -100,19 +117,25 @@ to the same standard:
 home feed, two-device WS concurrency in CI) are documented in the report's coverage-gaps
 table and are out of scope for V1.
 
-## "Slim client" — honest framing
+## Client/runtime boundary — honest framing
 
-The client is slim in *logic*, not surface area. It owns:
+The client is no longer "no recommendation logic". It owns:
 
 - `just_audio` / `audio_service` player + OS media session
 - Drift SQLite database (pending mutations, lookahead cache, downloaded
   tracks, home cache, recent plays)
 - Background isolate download manager
 - Write-replay buffer for offline mutations
+- Flutter Rust Bridge handle to `sunflower-core` + SQLite local recommendation
+  state
+- Optional standalone recommendation server URL; Home reads and local feedback
+  drain to it, falling back to the main server when unset
+- Local-home fallback ranking from recent plays, downloads, likes, impressions,
+  and playback completions
 
 It does NOT own:
 
-- Candidate generation or ranking
-- InnerTube calls
-- YT cookies
-- Cross-device merge logic (server resolves with last-write-wins)
+- InnerTube calls or YouTube cookie custody
+- Cross-device merge/source-of-truth resolution
+- Server queue/session ownership while online
+- Canonical remote recommendation cache and remote section fan-out

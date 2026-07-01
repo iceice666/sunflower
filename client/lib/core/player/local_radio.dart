@@ -15,25 +15,44 @@ class LocalRadio {
   final SunflowerDatabase _db;
 
   /// Returns up to [limit] fallback entries ordered most-recent first, each
-  /// paired with its playable local stream URL. Items without a usable
-  /// [RecentPlay.streamUrl] are skipped (e.g. expired YT entries we can no
-  /// longer resolve offline). One query, no per-item rescans.
+  /// paired with a playable local URL. A reusable local stream URL wins; when
+  /// it is absent, a completed download is still playable via file://.
   Future<List<({QueueItem item, String url})>> fromRecentPlays({
     int limit = 50,
   }) async {
     final rows = await _db.recentPlays_(limit: limit);
-    return [
-      for (final r in rows)
-        if (r.streamUrl != null && r.streamUrl!.isNotEmpty)
-          (
-            item: QueueItem(
-              mediaId: r.mediaId,
-              title: r.title,
-              artists: r.artistName.isEmpty ? const [] : [r.artistName],
-              durationMs: r.durationMs,
-            ),
-            url: r.streamUrl!,
+    final out = <({QueueItem item, String url})>[];
+    for (final r in rows) {
+      final url = await _playableUrlFor(r);
+      if (url == null) continue;
+      out.add(
+        (
+          item: QueueItem(
+            mediaId: r.mediaId,
+            title: r.title,
+            artists: r.artistName.isEmpty ? const [] : [r.artistName],
+            durationMs: r.durationMs,
           ),
-    ];
+          url: url,
+        ),
+      );
+    }
+    return out;
   }
+
+  Future<String?> _playableUrlFor(RecentPlay play) async {
+    if (_hasReusableLocalStream(play)) {
+      return play.streamUrl;
+    }
+    final downloaded = await _db.downloadedTrack(play.mediaId);
+    if (downloaded == null) return null;
+    return Uri.file(downloaded.localPath).toString();
+  }
+}
+
+bool _hasReusableLocalStream(RecentPlay play) {
+  if (play.streamUrl == null || play.streamUrl!.isEmpty) return false;
+  return play.source == 'local' ||
+      play.mediaId.startsWith('local:') ||
+      Uri.tryParse(play.streamUrl!)?.scheme == 'file';
 }

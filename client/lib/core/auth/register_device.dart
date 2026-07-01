@@ -56,7 +56,7 @@ Future<RegisterResult> registerDevice(
   required String pairingCode,
 }) async {
   final dio = Dio(BaseOptions(baseUrl: baseUrl));
-  final idempotencyKey = const Uuid().v4();
+  final idempotencyKey = const Uuid().v7();
 
   late final Response<Map<String, dynamic>> response;
   try {

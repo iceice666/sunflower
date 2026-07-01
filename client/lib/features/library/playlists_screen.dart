@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
+import '../../core/sync/sync_providers.dart';
 import '../../core/ui/empty_state.dart';
 import 'playlist_detail_screen.dart';
 
@@ -112,6 +113,6 @@ Future<void> createPlaylist(BuildContext context, WidgetRef ref) async {
   );
   controller.dispose();
   if (title == null || title.isEmpty) return;
-  await ref.read(sunflowerApiProvider).createPlaylist(title);
+  await ref.read(bufferedApiProvider).createPlaylist(title);
   ref.invalidate(playlistsProvider);
 }

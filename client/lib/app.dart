@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/token_store.dart';
+import 'core/recommendations/local_core.dart';
 import 'core/ui/sunflower_theme.dart';
 import 'core/ws/ws_providers.dart';
 import 'features/home/home_screen.dart';
@@ -55,6 +56,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     // Activate the now-playing socket for the whole authed session (tick
     // emission + remote control).
     ref.watch(nowPlayingProvider);
+    ref.watch(localFeedbackSyncProvider);
 
     return Scaffold(
       body: IndexedStack(index: _index, children: _tabs),

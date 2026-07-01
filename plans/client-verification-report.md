@@ -60,7 +60,7 @@ regressions on every merge.
 ### Screenshot → milestone criterion map
 
 Screenshot filenames are relative to `client/build/smoke-artifacts/` (pulled by ADB post-run).
-Server seeded via `make seed-demo` (`scripts/seed-demo.sh`).
+Server seeded via `just seed-demo` (`scripts/seed-demo.sh`).
 
 | Screenshot file | Demo flow step | Milestone | Acceptance criterion |
 |---|---|---|---|
@@ -77,9 +77,9 @@ Server seeded via `make seed-demo` (`scripts/seed-demo.sh`).
 
 **Total smoke artifacts: 9 screenshots + 1 admin JSON snapshot**, all 8 milestone demo targets covered (M1–M8).
 
-> **Live smoke prerequisite:** a running `sunflowerd` with `make seed-demo` applied (which
-> mints a device token into `.seed-env`). The nightly CI job provisions Postgres + goose
-> migrations on the macOS runner, boots `sunflowerd`, runs `make seed-demo`, then
+> **Live smoke prerequisite:** a running `sunflowerd` with `just seed-demo` applied (which
+> mints a device token into `.seed-env`). The nightly CI job provisions Postgres,
+> boots Rust `sunflowerd` (which applies embedded migrations), runs `just seed-demo`, then
 > `flutter drive` against the AVD — the `.seed-env` token is passed via
 > `--dart-define=SUNFLOWER_DEMO_TOKEN`, enabling the WS-tick and `/admin` assertions.
 > Screenshots are streamed host-side by `test_driver/integration_test.dart`.
@@ -113,5 +113,5 @@ Server seeded via `make seed-demo` (`scripts/seed-demo.sh`).
 | `client/test/goldens/*.dart` (screen tests) | GoldenScreens | New — one test file per screen × key states |
 | `client/integration_test/visual_smoke_test.dart` | LiveSmoke | New — Android smoke driver; captures to app-specific external storage |
 | `scripts/seed-demo.sh` | LiveSmoke | New — seeds Postgres + demo library + device token for smoke run |
-| `Makefile` | LiveSmoke | Updated — `seed-demo` and `smoke-android` targets |
+| `justfile` | LiveSmoke | Updated — `seed-demo` and `smoke-android` recipes |
 | `client/android/**` | Main | Updated — Gradle plugin migration, SDK/NDK bump, launcher icon fix for Flutter 3.41 Android builds |

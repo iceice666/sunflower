@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/sunflower_api.dart';
 import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
+import '../../core/recommendations/local_core.dart';
+import '../../core/sync/sync_providers.dart';
 import '../../core/ui/artwork_tile.dart';
 import '../../core/ui/empty_state.dart';
 import '../../core/ui/track_row.dart';
@@ -63,6 +65,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final api = ref.read(sunflowerApiProvider);
     final db = ref.read(databaseProvider);
     final handler = ref.read(audioHandlerProvider);
+    final bufferedApi = ref.read(bufferedApiProvider);
+    final localRecommendations =
+        await ref.read(localRecommendationRecorderProvider.future);
     final queue = await api.startQueue(
       seedKind: 'song',
       seedId: song.mediaId,
@@ -73,6 +78,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       db: db,
       queueId: queue.queueId,
       authHeaders: api.authHeaders,
+      bufferedApi: bufferedApi,
+      localRecommendations: localRecommendations,
     );
   }
 

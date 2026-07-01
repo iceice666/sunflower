@@ -201,7 +201,33 @@ class SunflowerDatabase extends _$SunflowerDatabase {
   /// Records a play of [mediaId], incrementing its play count and bumping the
   /// last-played timestamp. Upsert keyed on the media id.
   Future<void> recordPlay(RecentPlaysCompanion play) async {
-    await into(recentPlays).insertOnConflictUpdate(play);
+    final now = DateTime.now();
+    await customStatement(
+      '''
+      INSERT INTO recent_plays
+          (media_id, title, artist_name, source, stream_url, duration_ms,
+           play_count, last_played_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+      ON CONFLICT(media_id) DO UPDATE SET
+          title = excluded.title,
+          artist_name = excluded.artist_name,
+          source = excluded.source,
+          stream_url = excluded.stream_url,
+          duration_ms = excluded.duration_ms,
+          play_count = recent_plays.play_count + excluded.play_count,
+          last_played_at = excluded.last_played_at
+      ''',
+      [
+        play.mediaId.value,
+        _valueOr(play.title, ''),
+        _valueOr(play.artistName, ''),
+        _valueOr(play.source, ''),
+        _valueOr<String?>(play.streamUrl, null),
+        _valueOr(play.durationMs, 0),
+        _valueOr(play.playCount, 1),
+        _valueOr(play.lastPlayedAt, now).millisecondsSinceEpoch,
+      ],
+    );
   }
 
   /// Returns up to [limit] recent plays, most recent first — the seed list for
@@ -315,6 +341,16 @@ class SunflowerDatabase extends _$SunflowerDatabase {
     return (await downloadedTrack(mediaId)) != null;
   }
 
+  /// Returns the subset of [mediaIds] that has a completed local file.
+  Future<Set<String>> downloadedMediaIds(Iterable<String> mediaIds) async {
+    final ids = mediaIds.toSet();
+    if (ids.isEmpty) return {};
+    final rows = await (select(downloadedTracks)
+          ..where((t) => t.mediaId.isIn(ids)))
+        .get();
+    return {for (final row in rows) row.mediaId};
+  }
+
   /// Removes a downloaded track record (after the file is deleted).
   Future<void> removeDownloadedTrack(String mediaId) async {
     await (delete(downloadedTracks)..where((t) => t.mediaId.equals(mediaId)))
@@ -323,10 +359,19 @@ class SunflowerDatabase extends _$SunflowerDatabase {
 
   // --- PendingMutations (M7 write-replay) -----------------------------------
 
-  /// Enqueues a mutation. Keyed on idempotency key; re-enqueue is a no-op
-  /// update.
+  /// Enqueues a mutation. Keyed on idempotency key; re-enqueue is a no-op so
+  /// the original body, client clock, and retry state remain stable.
   Future<void> enqueueMutation(PendingMutationsCompanion m) async {
-    await into(pendingMutations).insertOnConflictUpdate(m);
+    await into(pendingMutations).insert(m, mode: InsertMode.insertOrIgnore);
+  }
+
+  /// True when a mutation with [key] already exists in the local replay log.
+  Future<bool> hasMutation(String key) async {
+    final row = await (select(pendingMutations)
+          ..where((t) => t.idempotencyKey.equals(key))
+          ..limit(1))
+        .getSingleOrNull();
+    return row != null;
   }
 
   /// Returns mutations due for replay (status pending/failed, next attempt due),
@@ -354,6 +399,13 @@ class SunflowerDatabase extends _$SunflowerDatabase {
   Future<void> confirmMutation(String key) async {
     await (update(pendingMutations)..where((t) => t.idempotencyKey.equals(key)))
         .write(const PendingMutationsCompanion(status: Value('confirmed')));
+  }
+
+  /// Drops a mutation that can never succeed (for example malformed or stale
+  /// input rejected with a permanent 4xx).
+  Future<void> discardMutation(String key) async {
+    await (delete(pendingMutations)..where((t) => t.idempotencyKey.equals(key)))
+        .go();
   }
 
   /// Records a failed attempt with the next backoff time.
@@ -412,4 +464,8 @@ LazyDatabase _openConnection() {
     final file = File(p.join(dir.path, 'sunflower.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
+}
+
+T _valueOr<T>(Value<T> value, T fallback) {
+  return value.present ? value.value : fallback;
 }

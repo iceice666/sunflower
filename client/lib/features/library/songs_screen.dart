@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
+import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
+import '../../core/recommendations/local_core.dart';
+import '../../core/sync/sync_providers.dart';
 import '../../core/ui/empty_state.dart';
 import '../../core/ui/track_row.dart';
 
@@ -53,12 +56,19 @@ class _SongsPaneState extends ConsumerState<SongsPane> {
 
   Future<void> _play(List<Song> allSongs, int index) async {
     final api = ref.read(sunflowerApiProvider);
+    final db = ref.read(databaseProvider);
     final handler = ref.read(audioHandlerProvider);
+    final bufferedApi = ref.read(bufferedApiProvider);
+    final localRecommendations =
+        await ref.read(localRecommendationRecorderProvider.future);
     await handler.loadPlaylist(
       allSongs,
       index,
       api.streamUrl,
       api.authHeaders,
+      db,
+      bufferedApi,
+      localRecommendations,
     );
   }
 

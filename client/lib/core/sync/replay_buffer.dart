@@ -57,21 +57,28 @@ class ReplayBuffer {
     _timer = null;
   }
 
-  /// Enqueues a mutation for replay. Evicts on overflow before inserting so the
-  /// buffer never exceeds the cap. Returns the idempotency key used.
+  /// Enqueues a mutation for replay. Duplicate keys keep the original row;
+  /// new rows evict on overflow before inserting so the buffer never exceeds
+  /// the cap. Returns the idempotency key used.
   Future<String> enqueue({
     required String kind,
     required String method,
     required String path,
     Map<String, dynamic> body = const {},
+    String? idempotencyKey,
   }) async {
+    final key = idempotencyKey ?? _keys.next();
+    if (await _db.hasMutation(key)) {
+      await drain();
+      return key;
+    }
+
     // Overflow handling: evict the lowest-priority oldest entry first.
     if (Eviction.isOverCap(await _db.pendingCount())) {
       final evicted = await _db.evictOldestLowPriority();
       if (evicted != null) _overflowDrops++;
     }
 
-    final key = _keys.next();
     final clock = _nextClock();
     await _db.enqueueMutation(
       PendingMutationsCompanion.insert(
@@ -89,10 +96,10 @@ class ReplayBuffer {
     return key;
   }
 
-  /// Drains all due mutations in client-clock order. A failed mutation is
-  /// rescheduled with backoff and draining continues with the rest (a transient
-  /// failure on one entry must not stall newer independent entries forever — but
-  /// note ordering is preserved among entries that DO succeed).
+  /// Drains all due mutations in client-clock order. Transient failures are
+  /// rescheduled with backoff and stop this drain to preserve dependency order.
+  /// Permanent 4xx failures are discarded so one stale mutation cannot block
+  /// newer offline feedback forever.
   Future<void> drain() async {
     if (_draining) return;
     _draining = true;
@@ -113,8 +120,15 @@ class ReplayBuffer {
   }
 
   Future<bool> _replayOne(PendingMutation m) async {
+    late final Map<String, dynamic> body;
     try {
-      final body = (jsonDecode(m.bodyJson) as Map).cast<String, dynamic>();
+      body = _decodeBody(m.bodyJson);
+    } catch (e) {
+      await _db.discardMutation(m.idempotencyKey);
+      return true;
+    }
+
+    try {
       await _dio.request<dynamic>(
         m.path,
         data: m.method == 'DELETE' ? null : body,
@@ -126,6 +140,10 @@ class ReplayBuffer {
       await _db.confirmMutation(m.idempotencyKey);
       return true;
     } catch (e) {
+      if (_isPermanentReplayFailure(e)) {
+        await _db.discardMutation(m.idempotencyKey);
+        return true;
+      }
       final attempts = m.attempts + 1;
       await _db.reschedule(
         m.idempotencyKey,
@@ -135,6 +153,23 @@ class ReplayBuffer {
       );
       return false;
     }
+  }
+
+  Map<String, dynamic> _decodeBody(String bodyJson) {
+    if (bodyJson.trim().isEmpty) return {};
+    final decoded = jsonDecode(bodyJson);
+    if (decoded is! Map) {
+      throw const FormatException('pending mutation body must be an object');
+    }
+    return decoded.cast<String, dynamic>();
+  }
+
+  bool _isPermanentReplayFailure(Object error) {
+    if (error is! DioException) return false;
+    final status = error.response?.statusCode;
+    if (status == null) return false;
+    if (status == 401 || status == 408 || status == 429) return false;
+    return status >= 400 && status < 500;
   }
 
   int _nextClock() {

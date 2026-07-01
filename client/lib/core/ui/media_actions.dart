@@ -5,6 +5,7 @@ import '../../features/downloads_ui/download_button.dart';
 import '../api/sunflower_api.dart';
 import '../downloads/downloads_providers.dart';
 import '../player/capabilities.dart';
+import '../recommendations/local_core.dart';
 import '../sync/sync_providers.dart';
 
 class LikeButton extends ConsumerStatefulWidget {
@@ -35,7 +36,19 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
         final next = !_liked;
         setState(() => _liked = next);
         try {
-          await ref.read(bufferedApiProvider).like(widget.mediaId, liked: next);
+          final occurredAt = DateTime.now();
+          final key = await ref.read(bufferedApiProvider).like(
+                widget.mediaId,
+                liked: next,
+                occurredAt: occurredAt,
+              );
+          await _recordLocalPreference(
+            ref,
+            mediaId: widget.mediaId,
+            liked: next,
+            occurredAt: occurredAt,
+            idempotencyKey: key,
+          );
         } catch (_) {
           if (mounted) setState(() => _liked = !next);
         }
@@ -117,7 +130,19 @@ class MediaOverflowMenu extends ConsumerWidget {
       onSelected: (action) async {
         switch (action) {
           case _MediaAction.like:
-            await ref.read(bufferedApiProvider).like(mediaId, liked: true);
+            final occurredAt = DateTime.now();
+            final key = await ref.read(bufferedApiProvider).like(
+                  mediaId,
+                  liked: true,
+                  occurredAt: occurredAt,
+                );
+            await _recordLocalPreference(
+              ref,
+              mediaId: mediaId,
+              liked: true,
+              occurredAt: occurredAt,
+              idempotencyKey: key,
+            );
             break;
           case _MediaAction.download:
             await MediaDownloadButton(mediaId: mediaId, title: title)
@@ -201,3 +226,25 @@ class MediaOverflowMenu extends ConsumerWidget {
 }
 
 enum _MediaAction { like, download, addToPlaylist }
+
+Future<void> _recordLocalPreference(
+  WidgetRef ref, {
+  required String mediaId,
+  required bool liked,
+  required DateTime occurredAt,
+  required String idempotencyKey,
+}) async {
+  try {
+    final recorder = await ref.read(localRecommendationRecorderProvider.future);
+    // The main server mutation was queued above. Keep the local rec event
+    // unsynced until the recommendation feedback drain reaches the rec server.
+    await recorder?.recordPreference(
+      mediaId: mediaId,
+      liked: liked,
+      occurredAt: occurredAt,
+      eventId: idempotencyKey,
+    );
+  } catch (_) {
+    // Local recommendation stats are advisory.
+  }
+}

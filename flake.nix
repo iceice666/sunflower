@@ -1,5 +1,5 @@
 {
-  description = "Sunflower — self-hosted music system (Go server + Flutter client)";
+  description = "Sunflower — local-first music system (Rust core + Flutter client)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -12,8 +12,26 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         defaultDbUrl = "postgres://postgres@localhost:5432/sunflower?sslmode=disable";
-        pgData      = "$PWD/server/.pgdata";
-        pgSock      = "$PWD/server/.pgsock";
+        pgData      = "$PWD/.dev/pgdata";
+        pgSock      = "$PWD/.dev/pgsock";
+        rustVersion = pkgs.rustc.version;
+        rustToolchain = assert pkgs.lib.assertMsg
+          (pkgs.lib.hasPrefix "1.95." rustVersion)
+          "Sunflower requires rustc 1.95.x; flake.lock currently resolves ${rustVersion}.";
+        pkgs.symlinkJoin {
+          name = "rust-${rustVersion}-toolchain";
+          paths = [
+            pkgs.rustc
+            pkgs.cargo
+            pkgs.rustfmt
+            pkgs.clippy
+          ];
+        };
+        frbCodegenVersion = pkgs.lib.getVersion pkgs.flutter_rust_bridge_codegen;
+        frbCodegen = assert pkgs.lib.assertMsg
+          (frbCodegenVersion == "2.12.0")
+          "Sunflower requires flutter_rust_bridge_codegen 2.12.0; flake.lock currently resolves ${frbCodegenVersion}.";
+        pkgs.flutter_rust_bridge_codegen;
 
         # Idempotent: init, start, wait, createdb
         pgUpScript = pkgs.writeShellApplication {
@@ -53,31 +71,13 @@
           '';
         };
 
-        migrateScript = pkgs.writeShellApplication {
-          name = "migrate";
-          runtimeInputs = [ pkgs.goose ];
-          text = ''
-            DB_URL="''${DATABASE_URL:-${defaultDbUrl}}"
-            goose -dir server/db/migrations postgres "$DB_URL" up
-          '';
-        };
-
         sunflowerdScript = pkgs.writeShellApplication {
           name = "sunflowerd";
-          runtimeInputs = [ pkgs.go ];
+          runtimeInputs = [ rustToolchain ];
           text = ''
-            export GOTOOLCHAIN=local
-            cd server
-            go run ./cmd/sunflowerd "$@"
-          '';
-        };
-
-        sqlcScript = pkgs.writeShellApplication {
-          name = "sqlc-gen";
-          runtimeInputs = [ pkgs.sqlc ];
-          text = ''
-            cd server
-            sqlc generate
+            export DATABASE_URL="''${DATABASE_URL:-${defaultDbUrl}}"
+            cd rust
+            cargo run --locked -p sunflower-server --bin sunflowerd-rs -- "$@"
           '';
         };
 
@@ -87,8 +87,7 @@
         # shim returns "error: unable to find sdk: 'macosx'" inside the hook
         # subprocess, which is then passed verbatim as -isysroot and the build
         # fails. Wrap `flutter` so its child hooks use the host Xcode toolchain
-        # (Apple xcrun + clang + real macOS SDK). Scoped to flutter only — the
-        # Go/cgo half keeps the nix toolchain untouched.
+        # (Apple xcrun + clang + real macOS SDK). Scoped to flutter only.
         flutterWrapped =
           if pkgs.stdenv.isDarwin then
             pkgs.writeShellScriptBin "flutter" ''
@@ -105,32 +104,31 @@
         # Development shell — `nix develop`
         devShells.default = pkgs.mkShell {
           packages = [
-            pkgs.go
-            pkgs.goose
-            pkgs.sqlc
+            pkgs.just
             pkgs.postgresql_16
-            pkgs.gnumake
-            pkgs.gopls
-            pkgs.delve
+            rustToolchain
+            pkgs.rust-analyzer
+            frbCodegen
             flutterWrapped # `flutter` wrapped for host Xcode toolchain (see above)
             pkgs.flutter   # bundles Dart 3.11.5 (satisfies sdk '>=3.5.0 <4.0.0')
             pkgs.jdk17     # Android Gradle builds + emulator launch
           ];
 
           env = {
-            GOTOOLCHAIN = "local";
             JAVA_HOME   = "${pkgs.jdk17.home}";
           };
 
           shellHook = ''
-            export PGDATA="$PWD/server/.pgdata"
-            export PGHOST="$PWD/server/.pgsock"
+            export PGDATA="$PWD/.dev/pgdata"
+            export PGHOST="$PWD/.dev/pgsock"
             export DATABASE_URL="${defaultDbUrl}"
             echo "Sunflower dev shell ready."
-            echo "  make dev-up   — start local Postgres"
-            echo "  make run      — run sunflowerd"
-            echo "  make migrate  — apply migrations"
-            echo "  make test     — run tests"
+            echo "  just dev-up    — start local Postgres"
+            echo "  just run       — run Rust sunflowerd"
+            echo "  just test-rust — run Rust tests"
+            echo "  just test-rust-pg-local — run Rust Postgres parity tests"
+            echo "  just frb-gen   — generate Flutter Rust Bridge bindings"
+            echo "  rust edition/MSRV: 2024 / 1.95"
 
             # Flutter / Android: use the system Android SDK (not nix-managed).
             export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"
@@ -149,9 +147,7 @@
         apps = {
           pg-up      = { type = "app"; program = "${pgUpScript}/bin/pg-up"; };
           pg-down    = { type = "app"; program = "${pgDownScript}/bin/pg-down"; };
-          migrate    = { type = "app"; program = "${migrateScript}/bin/migrate"; };
           sunflowerd = { type = "app"; program = "${sunflowerdScript}/bin/sunflowerd"; };
-          sqlc       = { type = "app"; program = "${sqlcScript}/bin/sqlc-gen"; };
 
           # Default app
           default = { type = "app"; program = "${sunflowerdScript}/bin/sunflowerd"; };

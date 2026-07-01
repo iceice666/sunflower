@@ -68,7 +68,7 @@
 // ─── Updating goldens ────────────────────────────────────────────────────────
 //
 //   flutter test --update-goldens test/goldens/   # from client/
-//   make golden-update                            # CI alias
+//   just golden-update                            # repo-root alias
 //
 // Golden image location: test/goldens/snapshots/<path>.png
 //

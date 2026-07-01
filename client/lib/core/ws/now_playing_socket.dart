@@ -3,6 +3,13 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+const nowPlayingSubprotocol = 'sunflower.now-playing.v1';
+
+typedef WebSocketConnector = WebSocketChannel Function(
+  Uri uri, {
+  Iterable<String>? protocols,
+});
+
 /// Persistent now-playing WebSocket (M8) with reconnect backoff (5 s → 30 s →
 /// 5 min cap). Emits decoded server frames (commands) and accepts outbound
 /// client frames (ticks / transitions / state). The tick emitter and command
@@ -11,12 +18,12 @@ class NowPlayingSocket {
   NowPlayingSocket({
     required String baseUrl,
     required String token,
-    WebSocketChannel Function(Uri)? connect,
+    WebSocketConnector? connect,
   })  : _wsUrl = _toWsUrl(baseUrl, token),
         _connect = connect ?? WebSocketChannel.connect;
 
   final Uri _wsUrl;
-  final WebSocketChannel Function(Uri) _connect;
+  final WebSocketConnector _connect;
 
   static const _backoff = <Duration>[
     Duration(seconds: 5),
@@ -45,7 +52,10 @@ class NowPlayingSocket {
   void _open() {
     if (_closed) return;
     try {
-      final ch = _connect(_wsUrl);
+      final ch = _connect(
+        _wsUrl,
+        protocols: const [nowPlayingSubprotocol],
+      );
       _channel = ch;
       _sub = ch.stream.listen(
         (data) {

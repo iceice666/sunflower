@@ -1,5 +1,11 @@
 # M7 — Full Sync + Write-Replay
 
+> **Archive note (2026-07-01):** This milestone is retained as historical
+> build and acceptance context from the original Go `server/` implementation.
+> The canonical implementation is now Rust under `rust/`; use
+> [`../README.md`](../README.md) and [`../architecture.md`](../architecture.md)
+> for current crate layout, migrations, assets, and verification commands.
+
 ## Demo target
 
 - Airplane mode on. In the app: like 5 songs, unlike 1, add 3 songs to a
@@ -56,7 +62,9 @@ client/lib/features/settings/
 
 - `Idempotency-Key` middleware applied to: `/likes`, `/playlists/*`,
   `/events`, `/queue/*/mutate`, `/streams/resolve`, `/cookies/youtube`,
-  `/devices/{id}/downloads`.
+  `/devices/{id}/downloads`; `/auth/register-device` enforces the same UUIDv7
+  idempotency contract inside its handler so malformed JSON keeps the legacy
+  `invalid_request` precedence.
 - Replaying the same request body with the same key within 24 h returns the
   same response without applying the mutation a second time.
 - Buffered mutations are replayed in `client_clock` ASC.
@@ -96,19 +104,25 @@ client/lib/features/settings/
 **Server half: done.** Verified (`go build`/`vet`/`test` incl. a testcontainers
 integration test `internal/api/integration_m7_test.go`, `gofmt`, `sqlc` green):
 
-- `internal/sync` — `idempotency.go` (middleware: read `Idempotency-Key`, replay
-  a stable response on a known key without re-running the handler, record key +
-  response hash + 24 h expiry on first 2xx), `gc.go` (hourly purge of expired
-  rows + `RunGC` for tests), `conflict.go` (last-write-wins helper; likes also
+- `internal/sync` — `idempotency.go` (middleware: require UUIDv7
+  `Idempotency-Key`, replay the original stored response on a known key without
+  re-running the handler, record key + response status/body/content-type/hash +
+  24 h expiry on first 2xx), `gc.go` (hourly purge of expired rows + `RunGC` for
+  tests), `conflict.go` (last-write-wins helper; likes also
   enforce it in SQL via `GREATEST`).
 - `internal/events` — `scrobble_window.go` (Metrolist-style threshold: ≥30 s or
   ≥50% of duration).
-- `internal/api` — `handlers_events.go` (`POST /events` batch, scrobble-filtered
-  inserts), `middleware_idempotency.go` (nil-safe wiring), `.With(idem)` applied
+- `internal/api` — `handlers_events.go` (`POST /events` batch, request-order
+  processing, UUIDv7 `event_id` validation, per-event re-batch dedupe, and
+  scrobble-filtered inserts), `middleware_idempotency.go` (nil-safe wiring),
+  `.With(idem)` applied
   to every mutating route (`/likes`, `/playlists/*`, `/events`, `/queue/start`,
-  `/streams/resolve`, `/cookies/youtube`, `/devices/{id}/downloads`).
+  `/streams/resolve`, `/cookies/youtube`, `/devices/{id}/downloads`);
+  `handlers_auth.go` applies the same UUIDv7 idempotency/replay behavior to
+  `POST /auth/register-device` before pairing-code consumption.
 - `db/query/sync.sql` (+ generated) — `FindIdempotencyLog`,
-  `InsertIdempotencyLog`, `GCIdempotencyLog`, `InsertPlayEvent`.
+  `InsertIdempotencyLog`, `GCIdempotencyLog`, `ClaimPlayEventID`,
+  `InsertPlayEvent`.
 - GC started in `cmd/sunflowerd`. Tests: idempotent replay (no double-apply),
   scrobble window, conflict resolver, GC removes expired rows.
 

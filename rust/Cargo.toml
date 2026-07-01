@@ -1,0 +1,39 @@
+[workspace]
+members = [
+    "crates/sunflower-core",
+    "crates/sunflower-storage-postgres",
+    "crates/sunflower-storage-sqlite",
+    "crates/sunflower-bridge",
+    "crates/sunflower-server",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/iceice666/sunflower"
+rust-version = "1.95"
+
+[workspace.dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+argon2 = "0.5"
+axum = { version = "0.7", features = ["ws"] }
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+crypto_secretbox = "0.1"
+flutter_rust_bridge = "2.12"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+rusqlite = { version = "0.32", features = ["bundled", "chrono", "serde_json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha1 = "0.10"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "chrono", "json", "uuid"] }
+thiserror = "2.0"
+tokio = { version = "1.42", features = ["fs", "io-util", "macros", "rt-multi-thread", "signal", "sync"] }
+tower = { version = "0.5", features = ["util"] }
+uuid = { version = "1.11", features = ["serde", "v4", "v7"] }

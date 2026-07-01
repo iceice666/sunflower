@@ -20,7 +20,6 @@ class Eviction {
       case 'like':
       case 'unlike':
         return priorityLike;
-      case 'event':
       case 'impression':
         return priorityImpression;
       default:

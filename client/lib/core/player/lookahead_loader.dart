@@ -11,10 +11,10 @@ import 'package:drift/drift.dart' show Value;
 const kMinBuffer = 4;
 
 /// LookaheadLoader owns the server-queue cursor and fills a buffer of upcoming
-/// [QueueItem]s by paging `GET /api/v1/next`. It does NOT resolve stream URLs —
-/// that is the audio handler's job as it appends sources — it only guarantees
-/// the *item list* stays ahead of playback and mirrors it into [LookaheadCache]
-/// for cold-start.
+/// [QueueItem]s by paging `GET /api/v1/next`. Newer servers may include
+/// playable stream fields on lookahead entries; older metadata-only entries are
+/// resolved later by the audio handler. The loader mirrors both forms into
+/// [LookaheadCache] for cold-start.
 ///
 /// The loader is deliberately transport-only: no just_audio dependency, so it
 /// is unit-testable against a mock [SunflowerApi] and an in-memory database.
@@ -111,13 +111,27 @@ class LookaheadLoader {
           cur.artists,
           cur.durationMs,
           cur.source,
+          streamUrl: cur.streamUrl,
+          streamExpiresAt: cur.expiresAt,
+          mimeType: cur.mimeType,
         ),
       );
       pos++;
     }
     for (final it in resp.lookahead) {
+      final stream = it.resolvedStream;
       rows.add(
-        _companion(pos, it.mediaId, it.title, it.artists, it.durationMs, ''),
+        _companion(
+          pos,
+          it.mediaId,
+          it.title,
+          it.artists,
+          it.durationMs,
+          stream?.source ?? '',
+          streamUrl: stream?.streamUrl,
+          streamExpiresAt: stream?.expiresAt,
+          mimeType: stream?.mimeType,
+        ),
       );
       pos++;
     }
@@ -134,8 +148,11 @@ class LookaheadLoader {
     String title,
     List<String> artists,
     int durationMs,
-    String source,
-  ) {
+    String source, {
+    String? streamUrl,
+    DateTime? streamExpiresAt,
+    String? mimeType,
+  }) {
     return LookaheadCacheCompanion.insert(
       queueId: _queueId,
       position: position,
@@ -144,6 +161,9 @@ class LookaheadLoader {
       artistsJson: Value(_encodeArtists(artists)),
       durationMs: Value(durationMs),
       source: Value(source),
+      streamUrl: Value(streamUrl),
+      streamExpiresAt: Value(streamExpiresAt),
+      mimeType: Value(mimeType),
     );
   }
 }

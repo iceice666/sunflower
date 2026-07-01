@@ -1,8 +1,0 @@
-{
-  "func_name": "decodeN",
-  "func_body": "function decodeN(a){return a.split('').reverse().join('')}",
-  "cases": [
-    {"in": "hello", "out": "olleh"},
-    {"in": "abcde", "out": "edcba"}
-  ]
-}

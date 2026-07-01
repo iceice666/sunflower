@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/api_client.dart';
 import '../../core/api/sunflower_api.dart';
+import '../../core/db/database.dart';
 import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
+import '../../core/player/playback_feedback_recorder.dart';
+import '../../core/recommendations/local_core.dart';
+import '../../core/sync/sync_providers.dart';
 import '../../core/ui/empty_state.dart';
 import '../../core/ui/section_rail.dart';
 import '../../core/ui/status_banner.dart';
@@ -79,21 +84,22 @@ class _FeedBody extends ConsumerWidget {
     final api = ref.read(sunflowerApiProvider);
     final db = ref.read(databaseProvider);
     final handler = ref.read(audioHandlerProvider);
+    final bufferedApi = ref.read(bufferedApiProvider);
+    final recommendationFeedback =
+        ref.read(recommendationFeedbackClientProvider);
+    final localRecommendations =
+        await ref.read(localRecommendationRecorderProvider.future);
 
     // Log the impression (best effort) so novelty/dedupe can suppress repeats.
-    unawaitedLog(
-      api.logImpressions([
-        {
-          'section_id': section.id,
-          'source': item.source,
-          'seed_id': section.seed ?? '',
-          'media_id': item.mediaId,
-          'position': index,
-        },
-      ]),
-    );
+    unawaitedLog(recordHomeImpression(
+      recommendationFeedback: recommendationFeedback,
+      localRecommendations: localRecommendations,
+      section: section,
+      item: item,
+      index: index,
+    ));
 
-    if (!item.mediaId.startsWith('yt:')) {
+    if (await shouldPlayHomeItemLocally(section, item, db)) {
       final song = Song(
         mediaId: item.mediaId,
         sourceType: item.source,
@@ -104,7 +110,15 @@ class _FeedBody extends ConsumerWidget {
         albumId: item.albumId,
         durationMs: item.durationMs,
       );
-      await handler.loadPlaylist([song], 0, api.streamUrl, api.authHeaders);
+      await handler.loadPlaylist(
+        [song],
+        0,
+        api.streamUrl,
+        api.authHeaders,
+        db,
+        bufferedApi,
+        localRecommendations,
+      );
       return;
     }
 
@@ -116,13 +130,69 @@ class _FeedBody extends ConsumerWidget {
       db: db,
       queueId: queue.queueId,
       authHeaders: api.authHeaders,
+      bufferedApi: bufferedApi,
+      localRecommendations: localRecommendations,
     );
   }
+}
+
+Future<bool> shouldPlayHomeItemLocally(
+  HomeSection section,
+  HomeItem item,
+  SunflowerDatabase db,
+) async {
+  if (section.kind == 'local_quick_picks' || !item.mediaId.startsWith('yt:')) {
+    return true;
+  }
+  return db.isDownloaded(item.mediaId);
 }
 
 /// Fire-and-forget a future, swallowing errors (impression logging is advisory).
 void unawaitedLog(Future<void> f) {
   f.catchError((_) {});
+}
+
+Future<void> recordHomeImpression({
+  required RecommendationFeedbackClient recommendationFeedback,
+  required LocalRecommendationRecorder? localRecommendations,
+  required HomeSection section,
+  required HomeItem item,
+  required int index,
+}) async {
+  final occurredAt = DateTime.now();
+  final impression = {
+    'section_id': section.id,
+    'source': item.source,
+    'seed_id': section.seed ?? '',
+    'media_id': item.mediaId,
+    'position': index,
+  };
+
+  String? eventId;
+  try {
+    eventId = await localRecommendations?.recordImpression(
+      sectionId: section.id,
+      source: item.source,
+      seedId: section.seed ?? '',
+      mediaId: item.mediaId,
+      position: index,
+      occurredAt: occurredAt,
+    );
+  } catch (_) {
+    // Local recommendation stats are advisory.
+  }
+
+  try {
+    final key = await recommendationFeedback.logImpressions(
+      [impression],
+      idempotencyKey: eventId,
+    );
+    if (eventId != null && key != null) {
+      await localRecommendations?.markFeedbackQueued([eventId]);
+    }
+  } catch (_) {
+    // Impression feedback is advisory; playback should continue regardless.
+  }
 }
 
 class _StaleBanner extends StatelessWidget {

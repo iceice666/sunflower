@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - 'client/**'
+      - 'rust/**'
+      - 'justfile'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'scripts/**'
+      - 'plans/**'
       - '.github/workflows/client-verify.yml'
   schedule:
     # Nightly at 02:00 UTC — Android emulator smoke only
@@ -24,11 +30,63 @@ concurrency:
 env:
   FLUTTER_VERSION: '3.41.9'
   JAVA_VERSION: '17'
+  RUST_VERSION: '1.95.0'
+  SUNFLOWER_SETUP_TOKEN: 'sunflower-ci-setup-token'
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 1 — Golden tests (every PR, macOS, no emulator)
+# Job 1 — Rust parity tests (every PR, Postgres service)
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
+  rust-parity:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    name: Rust parity tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sunflower
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sunflower"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres@localhost:5432/sunflower?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install "${RUST_VERSION}" --profile minimal --component rustfmt --component clippy
+          rustup default "${RUST_VERSION}"
+          rustc --version
+
+      - name: Check Rust formatting
+        run: cd rust && cargo fmt --all -- --check
+
+      - name: Run Rust workspace tests
+        run: cd rust && cargo test --workspace --locked
+
+      - name: Run Postgres-backed Rust parity tests
+        run: |
+          cd rust
+          export SUNFLOWER_RUN_PG_TESTS=1
+          cargo test --locked -p sunflower-storage-postgres -- --nocapture
+          cargo test --locked -p sunflower-server -- --nocapture
+
+      - name: Run Rust clippy
+        run: cd rust && cargo clippy --workspace --locked --all-targets -- -D warnings
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 2 — Golden tests (every PR, macOS, no emulator)
+# ─────────────────────────────────────────────────────────────────────────────
   golden-tests:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     name: Flutter golden tests
@@ -105,18 +163,17 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23.x'
-          cache-dependency-path: server/go.sum
-
-      - name: Install server tools
+      - name: Set up Rust ${{ env.RUST_VERSION }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-          go install github.com/pressly/goose/v3/cmd/goose@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          rustup toolchain install "${RUST_VERSION}" --profile minimal
+          rustup default "${RUST_VERSION}"
+          rustc --version
+
+      - name: Install just
+        run: |
+          cargo install just --locked
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          just --version
 
       - name: Export database URL
         run: echo "DATABASE_URL=postgres://postgres@localhost:5432/sunflower?sslmode=disable" >> "$GITHUB_ENV"
@@ -124,8 +181,8 @@ jobs:
       - name: Start sunflowerd
         run: |
           mkdir -p "$RUNNER_TEMP/sunflower-data"
-          (cd server && DATA_DIR="$RUNNER_TEMP/sunflower-data" go run ./cmd/sunflowerd) &
-          for i in {1..30}; do
+          (cd rust && DATA_DIR="$RUNNER_TEMP/sunflower-data" cargo run --locked -p sunflower-server --bin sunflowerd-rs) &
+          for i in {1..180}; do
             if curl -fsS http://localhost:8080/healthz >/dev/null; then exit 0; fi
             sleep 1
           done
@@ -159,7 +216,7 @@ jobs:
           avd-name: Pixel_6_API33_X64
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: make seed-demo && make smoke-android
+          script: just seed-demo && just smoke-android
 
       - name: Upload smoke screenshots
         if: always()

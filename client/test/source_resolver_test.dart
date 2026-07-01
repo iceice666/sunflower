@@ -45,4 +45,44 @@ void main() {
     final chosen = await resolver.resolve('local:xyz', 'https://stream/xyz');
     expect(chosen, local);
   });
+
+  test('downloaded playback source clears auth headers and expiry', () async {
+    final expiresAt = DateTime.utc(2026, 7, 1, 12);
+    await db.completeDownload(
+      DownloadedTracksCompanion.insert(
+        mediaId: 'yt:downloaded',
+        localPath: '/data/downloads/downloaded.audio',
+        bytes: const Value(2048),
+      ),
+    );
+
+    final source = await resolver.playbackSourceFor(
+      mediaId: 'yt:downloaded',
+      networkUrl: 'https://googlevideo.example/transient',
+      source: 'youtube',
+      expiresAt: expiresAt,
+      authHeaders: const {'Authorization': 'Bearer token'},
+    );
+
+    expect(source.uri, startsWith('file://'));
+    expect(source.headers, isNull);
+    expect(source.expiresAt, isNull);
+  });
+
+  test('local server playback source keeps auth headers and expiry', () async {
+    final expiresAt = DateTime.utc(2026, 7, 1, 12);
+    final headers = const {'Authorization': 'Bearer token'};
+
+    final source = await resolver.playbackSourceFor(
+      mediaId: 'local:one',
+      networkUrl: 'http://server/api/v1/library/songs/local%3Aone/stream',
+      source: 'local',
+      expiresAt: expiresAt,
+      authHeaders: headers,
+    );
+
+    expect(source.uri, contains('/api/v1/library/songs/'));
+    expect(source.headers, headers);
+    expect(source.expiresAt, expiresAt);
+  });
 }

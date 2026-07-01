@@ -4,9 +4,9 @@ This file provides guidance to agents when working with code in this repository.
 
 ## What this repository is
 
-**Sunflower** is a self-hosted music system: a Go server (`sunflowerd`) + a cross-platform Flutter client.
+**Sunflower** is a self-hosted music system: a Rust server/core (`sunflowerd-rs`) + a cross-platform Flutter client.
 
-**Current status (2026-06-30):** M0–M10 are implemented. The `server/` tree is a complete Go module (auth, secure enrollment, browser admin dashboard, library, InnerTube, queue/streams, recs, downloads registry, sync/idempotency, now-playing WebSocket); the `client/` tree is a complete Flutter project (pairing-first onboarding, player + queue/lookahead, home feed, offline downloads, write-replay buffer, now-playing socket). Server halves are fully verified (`go test ./...` incl. testcontainers, `gofmt`, `sqlc`); Flutter client halves are `dart format`/`flutter analyze`-verified.
+**Current status (2026-07-01):** M0–M10 are implemented on the Rust stack. The `rust/` workspace is the canonical backend/core implementation (auth, secure enrollment, browser admin dashboard, library, native InnerTube, queue/streams, recs, downloads registry, sync/idempotency, now-playing WebSocket, local recommendation core, Postgres and SQLite storage, Flutter Rust Bridge). The old Go `server/` implementation has been removed; retained SQL migrations, admin static assets, and InnerTube fixtures now live under Rust crates. The `client/` tree is a complete Flutter project (pairing-first onboarding, player + queue/lookahead, home feed, offline downloads, write-replay buffer, now-playing socket, local recommendation fallback). Rust is verified with `cargo test --workspace --locked`, `cargo clippy --workspace --locked --all-targets -- -D warnings`, and `cargo fmt --all -- --check`; Flutter is verified with `flutter analyze` and targeted tests/goldens.
 
 - `plans/README.md` — overview, locked decisions, milestone index
 - `plans/architecture.md` — static reference: component map, wire protocol, Postgres schema, server and client internals
@@ -16,24 +16,16 @@ This file provides guidance to agents when working with code in this repository.
 
 ## Planned structure
 
-### Server (`server/`)
-Go + chi + Postgres, `sqlc` for the query layer. Key packages:
+### Rust workspace (`rust/`)
+Rust 2024 + axum + Postgres/SQLite. Key crates:
 
-| Package | Purpose |
+| Crate | Purpose |
 |---|---|
-| `cmd/sunflowerd` | Entrypoint, env/flag parsing, wire-up |
-| `cmd/probe` | Dev CLI for poking endpoints / InnerTube |
-| `internal/innertube` | Native Go InnerTube: sig decryption, payloads, parser, continuation |
-| `internal/recs` | Section builders, candidate pipeline, ranking, daily cache |
-| `internal/library` | File scan (fsnotify), tag extraction (dhowden/tag), cover art (disintegration/imaging) |
-| `internal/streams` | URL resolution: local path → YT direct → proxy |
-| `internal/streamproxy` | Range-supporting reverse proxy with HMAC-signed tokens |
-| `internal/sync` | Idempotency-key dedupe, write-replay, last-write-wins conflict resolution |
-| `internal/cookies` | YT cookie storage (libsodium secretbox), refresh job |
-| `internal/db` | sqlc-generated query layer |
-| `internal/api` | chi router, handlers, middleware |
-| `internal/ws` | WebSocket hub for now-playing |
-| `internal/jobs` | Background workers |
+| `sunflower-server` | Runnable `sunflowerd-rs`: env/flag parsing, axum router, handlers, admin UI, jobs, native InnerTube, stream proxy, WebSocket |
+| `sunflower-core` | Shared domain/wire types, queue/lookahead logic, local recommendation ranking |
+| `sunflower-storage-postgres` | Source-of-truth Postgres storage and embedded schema migrations |
+| `sunflower-storage-sqlite` | Device-local SQLite storage for local mode/stat snapshots |
+| `sunflower-bridge` | Flutter Rust Bridge API used by the Flutter client |
 
 ### Client (`client/lib/`)
 Flutter, feature-first layout. Core packages: `core/{api,auth,db,sync,player,downloads,media_session,network}`. Feature packages: `features/{home,player_ui,library,search,downloads_ui,settings}`.
@@ -43,7 +35,7 @@ Flutter, feature-first layout. Core packages: `core/{api,auth,db,sync,player,dow
 - **Auth**: single-user, long-lived opaque device tokens (no refresh). Tokens stored as `argon2id` hashes.
 - **media_id format**: `"<source>:<id>"` — e.g. `"yt:dQw4w9WgXcQ"`, `"local:01HZ…"` (local uses `sha1(path)[:16]`).
 - **Cookie encryption**: libsodium `crypto_secretbox` in the app layer (key from `SUNFLOWER_COOKIE_KEY`); never touches Postgres.
-- **InnerTube**: native Go reimplementation, no Python sidecar. Parsers must be optional-field tolerant (zero value on missing, never error).
+- **InnerTube**: native Rust implementation, no Python sidecar. Parsers must be optional-field tolerant (zero value on missing, never error).
 - **Stream delivery**: client-direct-to-origin by default; server proxy only as 403/CORS fallback with HMAC-signed 5-min tokens.
 - **Sync**: server is source of truth; client buffers mutations offline in `PendingMutations` (Drift) and replays by `client_clock` ASC; last-write-wins by `occurred_at`.
 - **All mutating API calls** require an `Idempotency-Key` header (UUIDv7).
@@ -58,24 +50,21 @@ Work milestones in order — each depends on the prior being stable:
 | M0 | `sunflowerd` boots, `/healthz` OK, migrations applied |
 | M1 | Device registers; library scan populates songs/albums/artists |
 | M2 | Flutter app plays a local-library track end-to-end (Android first) |
-| M3 | `probe innertube next --video-id=…` returns a playable URL |
+| M3 | Rust InnerTube player/next/search paths return playable URLs and parsed sections |
 | M4 | Client plays YT tracks with `/next` lookahead and 403 re-resolve |
 | M5 | Home feed populated; cold-start renders cached sections |
 | M6 | Playlist downloaded; airplane-mode playback works |
 | M7 | Offline likes/edits drain to server in clock order, idempotent |
 | M8 | Live now-playing push; optional crossfade |
 
-## `internal/innertube` structure
+## Rust InnerTube structure
 
-- `sig/` — fetch `base.js`, extract sig function, cache by hash; invalidate on sustained 403 burst.
-- `payloads/` — POST body builders for `/youtubei/v1/{player,next,browse,search}` with `ANDROID_MUSIC` context.
-- `parser/` — one file per surface (`home_page.go`, `next_page.go`, …); optional-field-tolerant.
-- `parser/testdata/` — committed fixture corpus to catch renderer drift.
-- `continuation/` — opaque tokens preserved as `[]byte`, posted back verbatim.
+- `rust/crates/sunflower-server/src/innertube.rs` — HTTP client, payloads, parsers, continuation/radio expansion helpers.
+- `rust/crates/sunflower-server/testdata/innertube/` — committed fixture corpus to catch renderer drift.
 
-## `internal/recs` design
+## Recommendation design
 
-Fan-out via `errgroup`, capped at 5 concurrent InnerTube calls per home build, 8s per-call timeout. Failed sections drop silently.
+Remote fan-out is capped and timeout-bound in `sunflower-server`; failed sections drop silently. Device-local fallback ranking lives in `sunflower-core` and `sunflower-storage-sqlite`.
 
 Ranking formula: `0.35·sourceAffinity + 0.20·seedStrength + 0.15·recency + 0.15·novelty + 0.10·remoteConfidence + 0.05·diversityBoost`
 

@@ -4,6 +4,14 @@ This document summarizes how Metrolist builds music recommendations and turns th
 
 Research date: 2026-05-15.
 
+Current Sunflower status (2026-07-01): the blueprint below has been implemented
+as Rust server/core code plus Flutter local mode. Remote recommendation sections
+are built by `sunflower-server`; shared ranking/domain logic lives in
+`sunflower-core`; device-local stat snapshots, local ranking, and feedback
+replay state live in `sunflower-storage-sqlite` behind Flutter Rust Bridge. The
+old Go recommendation implementation has been removed with the rest of the Go
+server.
+
 ## Sources
 
 - Metrolist repo: <https://github.com/MetrolistGroup/Metrolist>

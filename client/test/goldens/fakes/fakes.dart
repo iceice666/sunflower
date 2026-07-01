@@ -190,19 +190,53 @@ class FakeBufferedApi extends Fake implements BufferedApiClient {
   Future<void> retryNow() async {}
 
   @override
-  Future<void> like(String mediaId, {required bool liked}) async {}
+  Future<String> like(
+    String mediaId, {
+    required bool liked,
+    DateTime? occurredAt,
+    String? idempotencyKey,
+  }) async =>
+      idempotencyKey ?? '018f3f27-0000-7000-8000-000000000001';
 
   @override
-  Future<void> scrobble({
+  Future<String> scrobble({
     required String mediaId,
     required String queueId,
     required int totalPlayedMs,
     required int durationMs,
     required DateTime occurredAt,
-  }) async {}
+    String? idempotencyKey,
+  }) async =>
+      idempotencyKey ?? '018f3f27-0000-7000-8000-000000000002';
+
+  @override
+  Future<String> playbackEvent({
+    required String kind,
+    required String mediaId,
+    required String queueId,
+    required DateTime occurredAt,
+    int totalPlayedMs = 0,
+    int durationMs = 0,
+    String reason = '',
+    String? idempotencyKey,
+  }) async =>
+      idempotencyKey ?? '018f3f27-0000-7000-8000-000000000002';
+
+  @override
+  Future<String?> logImpressions(
+    List<Map<String, dynamic>> impressions, {
+    String? idempotencyKey,
+  }) async =>
+      impressions.isEmpty
+          ? null
+          : idempotencyKey ?? '018f3f27-0000-7000-8000-000000000003';
 
   @override
   Future<void> addPlaylistItem(String playlistId, String mediaId) async {}
+
+  @override
+  Future<String> createPlaylist(String title, {String? idempotencyKey}) async =>
+      idempotencyKey ?? '018f3f27-0000-7000-8000-000000000004';
 
   @override
   Future<void> removePlaylistItem(String playlistId, String mediaId) async {}
@@ -212,4 +246,15 @@ class FakeBufferedApi extends Fake implements BufferedApiClient {
 
   @override
   Future<void> deletePlaylist(String playlistId) async {}
+
+  @override
+  Future<void> registerDownload({
+    required String deviceId,
+    required String mediaId,
+    required String localPath,
+    required int bytes,
+  }) async {}
+
+  @override
+  Future<void> removeDownload(String deviceId, String mediaId) async {}
 }

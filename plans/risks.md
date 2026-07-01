@@ -4,7 +4,7 @@
 
 1. **InnerTube parser drift.** YouTube changes renderer shapes without notice.
    Mitigation: defensive parsers (zero-value on missing fields, never error),
-   fixture corpus committed under `internal/innertube/parser/testdata/`,
+   fixture corpus committed under `rust/crates/sunflower-server/testdata/innertube/`,
    structured logging of every renderer kind seen vs. expected so anomalies
    surface fast.
 
@@ -30,10 +30,10 @@
    maintain a platform-capability matrix in `core/player/capabilities.dart`
    and degrade UI features gracefully where platform support is missing.
 
-6. **Open enrollment exposure before M9.** In M0-M8, any network peer that can
-   reach the server can call `register-device` and obtain a valid device token.
-   Mitigation: M9 replaces open registration with owner setup, admin sessions,
-   one-time pairing codes, device revocation, rate limits, and audit events.
+6. **Enrollment and admin boundary regressions.** The M9 owner setup/admin
+   session/pairing model replaced open registration. Mitigation: keep contract
+   tests around setup, pairing-code use, device revocation, rate limits, CSRF,
+   and audit events.
 
 ## Out of scope for v1 (opinionated)
 
@@ -49,4 +49,5 @@
 - Android Auto / CarPlay surfaces
 - Audio offload / silence skipping as user-facing features
 - Crossfade is M8 optional, behind a setting
-- Server-side admin web UI is out of scope for v1; it is planned as M10
+- Server-side admin web UI shipped in M10; richer multi-user operations remain
+  out of scope for v1

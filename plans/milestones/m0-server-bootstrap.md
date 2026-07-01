@@ -1,8 +1,14 @@
 # M0 — Server Bootstrap
 
+> **Archive note (2026-07-01):** This milestone is retained as historical
+> build and acceptance context from the original Go `server/` implementation.
+> The canonical implementation is now Rust under `rust/`; use
+> [`../README.md`](../README.md) and [`../architecture.md`](../architecture.md)
+> for current crate layout, migrations, assets, and verification commands.
+
 ## Demo target
 
-`go run ./cmd/sunflowerd` boots, connects to a local Postgres, applies
+`just run` boots the Rust `sunflowerd`, connects to a local Postgres, applies
 migrations, and `curl http://localhost:8080/healthz` returns `200 {"status":"ok"}`.
 
 ## Scope
@@ -30,16 +36,16 @@ server/
                                  # downloaded_tracks
 dev/
   docker-compose.yml             # postgres:16 with persistent volume
-  Makefile                       # up, down, migrate, sqlc, test
+  justfile                       # up, down, migrate, sqlc, test
 ```
 
 Schema content lives in [`../architecture.md`](../architecture.md#postgres-schema-key-tables).
 
 ## Acceptance criteria
 
-- `make dev-up` brings Postgres up on `localhost:5432`.
-- `make migrate` runs goose, exits 0, leaves all M0 tables present.
-- `make run` starts the server; `curl /healthz` returns 200.
+- `just dev-up` brings Postgres up on `localhost:5432`.
+- `just migrate` runs goose, exits 0, leaves all M0 tables present.
+- `just run` starts the server; `curl /healthz` returns 200.
 - `sqlc generate` runs clean against the migrations (even if no queries yet).
 - `go test ./...` passes (only smoke tests in M0).
 

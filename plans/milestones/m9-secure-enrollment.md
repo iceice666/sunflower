@@ -1,5 +1,11 @@
 # M9 — Secure Enrollment
 
+> **Archive note (2026-07-01):** This milestone is retained as historical
+> build and acceptance context from the original Go `server/` implementation.
+> The canonical implementation is now Rust under `rust/`; use
+> [`../README.md`](../README.md) and [`../architecture.md`](../architecture.md)
+> for current crate layout, migrations, assets, and verification commands.
+
 ## Demo target
 
 - Start a fresh server with no owner configured. The server exposes
@@ -48,6 +54,9 @@ The target model is:
   - one-time, short-lived pairing codes
   - QR/pairing URL payload returned for M10 UI use
   - `POST /api/v1/auth/register-device` requires a valid pairing code
+  - device registration requires a UUIDv7 `Idempotency-Key`; replaying the same
+    key returns the original registration response without consuming the code
+    again
 - Device lifecycle:
   - add device labels
   - add `revoked_at` / `revoked_reason`
@@ -163,6 +172,7 @@ Codes:
 
 ```
 POST /api/v1/auth/register-device
+Idempotency-Key: <uuidv7>
 {
   "device_name": "Pixel 8",
   "platform": "android",
@@ -187,6 +197,13 @@ Failure cases:
 - `403 pairing_required` when no code is supplied.
 - `401 invalid_pairing_code` for unknown, expired, or already-used codes.
 - `429 rate_limited` for repeated failures.
+- `400 invalid_idempotency_key` when the key is missing, malformed, or not
+  UUIDv7. Malformed JSON still returns `400 invalid_request` before the
+  idempotency check.
+
+Replaying the same valid `Idempotency-Key` on the same route within 24 hours
+returns the original registration body and does not consume or re-check the
+single-use pairing code.
 
 ### Device revocation
 
@@ -303,6 +320,8 @@ client/lib/core/api/
 - Pairing:
   - admin can create a pairing code.
   - device registration succeeds exactly once with that code.
+  - replaying the original device-registration `Idempotency-Key` returns the
+    same device token response after the pairing code has been consumed.
   - reuse, expired code, missing code, and random code all fail.
   - raw pairing code is not persisted or logged.
 - Device auth:
@@ -334,6 +353,8 @@ client/lib/core/api/
 - Server integration tests:
   - fresh setup -> login -> create pairing code -> register device -> API call
   - register without code fails
+  - register replay with the same UUIDv7 idempotency key returns the original
+    response after the code is consumed
   - revoke device -> API and WebSocket fail
   - audit rows are written for setup/login/pair/revoke
 - Client tests:

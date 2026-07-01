@@ -1,5 +1,11 @@
 # M5 — Recommendation Pipeline + Home Feed
 
+> **Archive note (2026-07-01):** This milestone is retained as historical
+> build and acceptance context from the original Go `server/` implementation.
+> The canonical implementation is now Rust under `rust/`; use
+> [`../README.md`](../README.md) and [`../architecture.md`](../architecture.md)
+> for current crate layout, migrations, assets, and verification commands.
+
 ## Demo target
 
 Open Flutter app. Home tab shows multiple sections:
@@ -11,7 +17,8 @@ Open Flutter app. Home tab shows multiple sections:
 - Community Playlists
 
 Pull to refresh → updates. Kill server → cold-start still shows yesterday's
-cached sections from `HomeCache`.
+cached sections from `HomeCache`, and the Rust local recommender can prepend a
+playable local section from device-local stats.
 
 ## Scope
 
@@ -26,6 +33,7 @@ cached sections from `HomeCache`.
 - Like toggle.
 - Impression logging (`recommendation_impressions`).
 - Flutter home screen with cold-start cache + section rendering.
+- Rust-core local recommendation fallback for remote recommendation outages.
 
 ## Files to create
 
@@ -83,8 +91,9 @@ client/lib/features/library/
   vary one, verify the ordering changes accordingly.
 - Like toggle from any home tile updates `likes` table and refreshes Quick
   Picks/Daily Discover on next fetch.
-- Cold-start (server unreachable on app launch) → `HomeCache` renders
-  yesterday's content with a "stale" indicator.
+- Cold-start (server unreachable on app launch) → local playable picks render
+  first when available, cached `HomeCache` sections render behind them, and the
+  feed carries a stale indicator.
 
 ## Dependencies on prior milestones
 
@@ -109,7 +118,7 @@ client/lib/features/library/
 
 ## Implementation status
 
-**Server half: done.** Verified (`go build`/`vet`/`test` incl. a testcontainers
+**Legacy Go server half: done.** Verified (`go build`/`vet`/`test` incl. a testcontainers
 integration test `internal/api/integration_m5_test.go`, `gofmt`, `sqlc` all green):
 
 - `internal/recs` — candidate pipeline (`engine.go` with a `buildBudget` total
@@ -129,9 +138,20 @@ integration test `internal/api/integration_m5_test.go`, `gofmt`, `sqlc` all gree
 - Unit tests: ranking (vary-one-signal ordering, weights sum, sub-scorer
   bounds), filters, cache key derivation, fan-out merge/dedup.
 
-**Client half: done.** Implemented to spec, parse/format-verified with
-`dart format` (no Flutter SDK here → `build_runner`/`flutter test` run in a
-Flutter env; see M4 note):
+**Rust rewrite + client local mode: done.** The Rust workspace preserves the
+legacy `/home`, `/likes`, `/impressions`, playlist, route, and idempotency wire
+contracts while adding `sunflower-core` local ranking and SQLite-backed local
+stats for Flutter Rust Bridge. Client-side Home fallback now:
+
+- takes playable candidates from Drift recent plays and downloads;
+- loads `LocalStatsSnapshot` from Rust SQLite when available;
+- ranks with `sunflower-core::LocalRecommendationEngine`;
+- records local playback/preference/impression events;
+- drains remote-contract feedback to `/events`, `/likes`, and `/impressions`
+  from the Rust SQLite event log through the recommendation feedback client
+  with the same UUIDv7 idempotency key.
+
+**Client half: done.** Implemented to spec and verified with Flutter tests:
 
 - `core/db/database.dart` — `HomeCache` table + DAOs; `core/db/database_provider.dart`.
 - `core/api/sunflower_api.dart` — `HomeFeed`/`HomeSection`/`HomeItem`/`Playlist`

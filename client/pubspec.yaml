@@ -17,6 +17,9 @@ dependencies:
   # Networking
   dio: ^5.7.0
   web_socket_channel: ^3.0.1
+  flutter_rust_bridge: 2.12.0
+  sunflower_bridge:
+    path: rust_builder
 
   # State management
   flutter_riverpod: ^2.6.1

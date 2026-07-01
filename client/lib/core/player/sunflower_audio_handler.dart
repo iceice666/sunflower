@@ -1,15 +1,16 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../api/api_client.dart';
 import '../api/sunflower_api.dart';
 import '../db/database.dart';
 import 'expiry_guard.dart';
 import 'local_radio.dart';
 import 'lookahead_loader.dart';
+import 'playback_feedback_recorder.dart';
 import 'source_resolver.dart';
 
 const _kLastMediaId = 'last_media_id';
@@ -25,11 +26,12 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   SunflowerAudioHandler() {
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
     _player.currentIndexStream.listen(_onIndexChanged);
+    _player.positionStream.listen((_) => _maybeScrobble());
     // just_audio surfaces stream errors (e.g. a 403 on an expired googlevideo
     // URL) on the playback event stream's error channel. In queue mode we
     // recover by forcing a proxy re-resolve of the current source.
     _player.playbackEventStream.listen(
-      (_) {},
+      (_) => _maybeScrobble(),
       onError: (Object e, StackTrace _) {
         if (_queueMode) unawaited(recoverFrom403());
       },
@@ -50,8 +52,12 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   LookaheadLoader? _loader;
   ExpiryGuard? _expiryGuard;
   LocalRadio? _localRadio;
-  SunflowerDatabase? _db;
   SourceResolver? _sourceResolver;
+  PlaybackFeedbackRecorder _feedback = const PlaybackFeedbackRecorder(db: null);
+  String _queueId = '';
+  int? _lastRecordedDirectIndex;
+  int? _lastRecordedQueueIndex;
+  PlaybackScrobbleGate? _scrobbleGate;
   // Per-source expiry, indexed in lockstep with the ConcatenatingAudioSource
   // children, so the expiry guard knows which entries need a refresh.
   final List<DateTime?> _expiries = [];
@@ -67,21 +73,42 @@ class SunflowerAudioHandler extends BaseAudioHandler {
     int index,
     String Function(String mediaId) streamUrlBuilder,
     Map<String, String> authHeaders,
-  ) async {
+    SunflowerDatabase? db, [
+    BufferedApiClient? bufferedApi,
+    LocalRecommendationRecorder? localRecommendations,
+  ]) async {
+    _queueMode = false;
     _songs = songs;
     _authHeaders = authHeaders;
+    _sourceResolver = db == null ? null : SourceResolver(db);
+    _feedback = PlaybackFeedbackRecorder.fromBufferedApi(
+      db: db,
+      bufferedApi: bufferedApi,
+      localRecommendations: localRecommendations,
+    );
+    _queueId = '';
+    _lastRecordedQueueIndex = null;
+    _lastRecordedDirectIndex = index;
+    _scrobbleGate = null;
 
-    final sources = songs.map((s) {
-      return AudioSource.uri(
-        Uri.parse(streamUrlBuilder(s.mediaId)),
-        headers: authHeaders,
-        tag: _mediaItemFor(s),
+    final sources = <AudioSource>[];
+    for (final s in songs) {
+      final localUri = await _sourceResolver?.localUriFor(s.mediaId);
+      final uri = localUri ?? streamUrlBuilder(s.mediaId);
+      final headers = localUri == null ? authHeaders : null;
+      sources.add(
+        AudioSource.uri(
+          Uri.parse(uri),
+          headers: headers,
+          tag: _mediaItemFor(s),
+        ),
       );
-    }).toList();
+    }
 
     _playlist = ConcatenatingAudioSource(children: sources);
     await _player.setAudioSource(_playlist, initialIndex: index);
     mediaItem.add(_mediaItemFor(songs[index]));
+    unawaited(_recordSongPlay(songs[index]));
     await play();
   }
 
@@ -96,11 +123,21 @@ class SunflowerAudioHandler extends BaseAudioHandler {
     required SunflowerDatabase db,
     required String queueId,
     required Map<String, String> authHeaders,
+    BufferedApiClient? bufferedApi,
+    LocalRecommendationRecorder? localRecommendations,
     int position = 0,
   }) async {
     _queueMode = true;
     _authHeaders = authHeaders;
-    _db = db;
+    _feedback = PlaybackFeedbackRecorder.fromBufferedApi(
+      db: db,
+      bufferedApi: bufferedApi,
+      localRecommendations: localRecommendations,
+    );
+    _queueId = queueId;
+    _lastRecordedDirectIndex = null;
+    _lastRecordedQueueIndex = null;
+    _scrobbleGate = null;
     _localRadioEngaged = false;
     _loader = LookaheadLoader(api: api, db: db, queueId: queueId);
     _expiryGuard = ExpiryGuard(api: api);
@@ -124,8 +161,10 @@ class SunflowerAudioHandler extends BaseAudioHandler {
 
     _playlist = ConcatenatingAudioSource(children: []);
     await _appendResolved(current);
+    _lastRecordedQueueIndex = 0;
     await _player.setAudioSource(_playlist, initialIndex: 0);
     mediaItem.add(_mediaItemForStream(current));
+    unawaited(_recordStreamPlay(current));
     await _fillBuffer();
     await play();
   }
@@ -150,23 +189,20 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   /// lockstep so [_refreshIfNeeded] can target it later. Also records the play
   /// into local history for the offline radio fallback.
   Future<void> _appendResolved(ResolvedStream s) async {
-    // Prefer a downloaded local file over the network URL (M6): if this media
-    // is downloaded, play from disk and never touch the network.
-    final localUri = await _sourceResolver?.localUriFor(s.mediaId);
-    final uri = localUri ?? s.streamUrl;
-    final isLocalFile = localUri != null;
+    final playbackSource = await _playbackSourceFor(
+      mediaId: s.mediaId,
+      networkUrl: s.streamUrl,
+      source: s.source,
+      expiresAt: s.expiresAt,
+    );
     await _playlist.add(
       AudioSource.uri(
-        Uri.parse(uri),
-        // file:// and local-server URLs both authenticate differently: a
-        // downloaded file needs no headers; a local-server stream does.
-        headers: (isLocalFile || s.source != 'local') ? null : _authHeaders,
+        Uri.parse(playbackSource.uri),
+        headers: playbackSource.headers,
         tag: _mediaItemForStream(s),
       ),
     );
-    // A local file never expires; otherwise track the network URL's expiry.
-    _expiries.add(isLocalFile ? null : s.expiresAt);
-    unawaited(_recordPlay(s));
+    _expiries.add(playbackSource.expiresAt);
   }
 
   /// Resolves and appends buffered items until the player has ≥kMinBuffer
@@ -188,7 +224,8 @@ class SunflowerAudioHandler extends BaseAudioHandler {
       final item = loader.takeNext();
       if (item == null) break; // queue exhausted
       try {
-        final resolved = await guard.resolve(item.mediaId);
+        final resolved =
+            item.resolvedStream ?? await guard.resolve(item.mediaId);
         await _appendResolved(resolved);
       } catch (_) {
         break; // resolve failed; stop filling, fall through to fallback later
@@ -204,25 +241,75 @@ class SunflowerAudioHandler extends BaseAudioHandler {
     if (!force && !guard.needsRefresh(_expiries[index])) return false;
 
     final tag = _player.sequence?[index].tag as MediaItem?;
-    final mediaId = tag?.id;
-    if (mediaId == null) return false;
+    if (tag == null) return false;
+    final mediaId = tag.id;
 
     final pos = _player.position;
+    final localSource = await _sourceResolver?.downloadedSource(mediaId);
+    if (localSource != null) {
+      await _replaceSourceAt(index, localSource, tag);
+      await _seekBackIfCurrent(index, pos);
+      return true;
+    }
+
     final resolved = await guard.resolve(mediaId, proxy: force);
+    final playbackSource = await _playbackSourceFor(
+      mediaId: resolved.mediaId,
+      networkUrl: resolved.streamUrl,
+      source: resolved.source,
+      expiresAt: resolved.expiresAt,
+    );
+    await _replaceSourceAt(
+        index, playbackSource, _mediaItemForStream(resolved));
+    await _seekBackIfCurrent(index, pos);
+    return true;
+  }
+
+  Future<PlaybackSource> _playbackSourceFor({
+    required String mediaId,
+    required String networkUrl,
+    required String source,
+    required DateTime? expiresAt,
+  }) async {
+    final resolver = _sourceResolver;
+    if (resolver == null) {
+      return PlaybackSource.network(
+        uri: networkUrl,
+        source: source,
+        expiresAt: expiresAt,
+        authHeaders: _authHeaders,
+      );
+    }
+    return resolver.playbackSourceFor(
+      mediaId: mediaId,
+      networkUrl: networkUrl,
+      source: source,
+      expiresAt: expiresAt,
+      authHeaders: _authHeaders,
+    );
+  }
+
+  Future<void> _replaceSourceAt(
+    int index,
+    PlaybackSource source,
+    MediaItem tag,
+  ) async {
     await _playlist.removeAt(index);
     await _playlist.insert(
       index,
       AudioSource.uri(
-        Uri.parse(resolved.streamUrl),
-        headers: resolved.source == 'local' ? _authHeaders : null,
-        tag: _mediaItemForStream(resolved),
+        Uri.parse(source.uri),
+        headers: source.headers,
+        tag: tag,
       ),
     );
-    _expiries[index] = resolved.expiresAt;
+    _expiries[index] = source.expiresAt;
+  }
+
+  Future<void> _seekBackIfCurrent(int index, Duration position) async {
     if (_player.currentIndex == index) {
-      await _player.seek(pos, index: index);
+      await _player.seek(position, index: index);
     }
-    return true;
   }
 
   /// Engages the offline local-radio fallback: appends recent-play items as
@@ -240,33 +327,101 @@ class SunflowerAudioHandler extends BaseAudioHandler {
         AudioSource.uri(
           Uri.parse(entry.url),
           headers: _authHeaders,
-          tag: _mediaItemForQueueItem(entry.item),
+          tag: _mediaItemForQueueItem(
+            entry.item,
+            streamUrl: entry.url,
+            source: _sourceFromMediaId(entry.item.mediaId),
+          ),
         ),
       );
       _expiries.add(null); // local sources never expire
     }
   }
 
-  Future<void> _recordPlay(ResolvedStream s) async {
-    final db = _db;
-    if (db == null) return;
+  Future<void> _recordSongPlay(Song song) async {
+    _armScrobble(
+      mediaId: song.mediaId,
+      durationMs: song.durationMs ?? 0,
+      queueId: '',
+    );
     try {
-      await db.recordPlay(
-        RecentPlaysCompanion.insert(
-          mediaId: s.mediaId,
-          title: Value(s.title),
-          artistName: Value(s.artists.isEmpty ? '' : s.artists.first),
-          source: Value(s.source),
-          // Only cache replayable (local) URLs; YT URLs expire and are useless
-          // offline.
-          streamUrl:
-              s.source == 'local' ? Value(s.streamUrl) : const Value(null),
-          durationMs: Value(s.durationMs),
+      await _feedback.recordSong(song);
+    } catch (_) {
+      // Local history and feedback are advisory.
+    }
+  }
+
+  Future<void> _recordStreamPlay(ResolvedStream stream) async {
+    _armScrobble(
+      mediaId: stream.mediaId,
+      durationMs: stream.durationMs,
+      queueId: _queueId,
+    );
+    try {
+      await _feedback.recordStream(stream, queueId: _queueId);
+    } catch (_) {
+      // Local history and feedback are advisory.
+    }
+  }
+
+  Future<void> _recordMediaItemPlay(MediaItem item) async {
+    try {
+      final extras = item.extras ?? const <String, dynamic>{};
+      final streamUrl = extras['stream_url'] as String? ?? '';
+      final source = extras['source'] as String? ?? _sourceFromMediaId(item.id);
+      final durationMs =
+          extras['duration_ms'] as int? ?? item.duration?.inMilliseconds ?? 0;
+      _armScrobble(
+        mediaId: item.id,
+        durationMs: durationMs,
+        queueId: _queueId,
+      );
+      await _feedback.recordQueueItem(
+        QueueItem(
+          mediaId: item.id,
+          title: item.title,
+          artists: item.artist == null ? const [] : [item.artist!],
+          durationMs: durationMs,
         ),
+        streamUrl: streamUrl,
+        source: source,
+        queueId: _queueId,
       );
     } catch (_) {
-      // History is advisory.
+      // Local history and feedback are advisory.
     }
+  }
+
+  void _armScrobble({
+    required String mediaId,
+    required int durationMs,
+    required String queueId,
+  }) {
+    _scrobbleGate = PlaybackScrobbleGate(
+      mediaId: mediaId,
+      queueId: queueId,
+      durationMs: durationMs,
+    );
+  }
+
+  void _maybeScrobble() {
+    final gate = _scrobbleGate;
+    if (gate == null) return;
+    final totalPlayedMs = gate.qualify(
+      position: _player.position,
+      playing: _player.playing,
+      completed: _player.processingState == ProcessingState.completed,
+    );
+    if (totalPlayedMs == null) return;
+    _scrobbleGate = null;
+    unawaited(
+      _feedback.scrobble(
+        mediaId: gate.mediaId,
+        queueId: gate.queueId,
+        totalPlayedMs: totalPlayedMs,
+        durationMs: gate.durationMs,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -335,6 +490,10 @@ class SunflowerAudioHandler extends BaseAudioHandler {
     }
     if (index >= _songs.length) return;
     mediaItem.add(_mediaItemFor(_songs[index]));
+    if (_lastRecordedDirectIndex != index) {
+      _lastRecordedDirectIndex = index;
+      unawaited(_recordSongPlay(_songs[index]));
+    }
     _persistLastPlayed();
   }
 
@@ -344,7 +503,13 @@ class SunflowerAudioHandler extends BaseAudioHandler {
   /// unreachable.
   void _onQueueIndexChanged(int index) {
     final tag = _player.sequence?[index].tag as MediaItem?;
-    if (tag != null) mediaItem.add(tag);
+    if (tag != null) {
+      mediaItem.add(tag);
+      if (_lastRecordedQueueIndex != index) {
+        _lastRecordedQueueIndex = index;
+        unawaited(_recordMediaItemPlay(tag));
+      }
+    }
     unawaited(_onQueueAdvance(index));
   }
 
@@ -440,16 +605,35 @@ class SunflowerAudioHandler extends BaseAudioHandler {
       title: s.title.isEmpty ? s.mediaId : s.title,
       artist: s.artists.isEmpty ? null : s.artists.join(', '),
       duration: s.durationMs > 0 ? Duration(milliseconds: s.durationMs) : null,
+      extras: {
+        'source': s.source,
+        'stream_url': s.streamUrl,
+        'duration_ms': s.durationMs,
+      },
     );
   }
 
-  static MediaItem _mediaItemForQueueItem(QueueItem it) {
+  static MediaItem _mediaItemForQueueItem(
+    QueueItem it, {
+    String? streamUrl,
+    String? source,
+  }) {
     return MediaItem(
       id: it.mediaId,
       title: it.title.isEmpty ? it.mediaId : it.title,
       artist: it.artists.isEmpty ? null : it.artists.join(', '),
       duration:
           it.durationMs > 0 ? Duration(milliseconds: it.durationMs) : null,
+      extras: {
+        'source': source ?? _sourceFromMediaId(it.mediaId),
+        if (streamUrl != null) 'stream_url': streamUrl,
+        'duration_ms': it.durationMs,
+      },
     );
   }
+}
+
+String _sourceFromMediaId(String mediaId) {
+  final sep = mediaId.indexOf(':');
+  return sep <= 0 ? '' : mediaId.substring(0, sep);
 }

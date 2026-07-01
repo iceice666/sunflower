@@ -1,5 +1,11 @@
 # M4 — Mixed Catalog + `/api/v1/next` + Lookahead
 
+> **Archive note (2026-07-01):** This milestone is retained as historical
+> build and acceptance context from the original Go `server/` implementation.
+> The canonical implementation is now Rust under `rust/`; use
+> [`../README.md`](../README.md) and [`../architecture.md`](../architecture.md)
+> for current crate layout, migrations, assets, and verification commands.
+
 ## Demo target
 
 - Start playback of a YouTube song in the Flutter app.

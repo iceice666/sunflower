@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:drift/drift.dart' show Value;
 
+import '../api/api_client.dart';
 import '../api/sunflower_api.dart';
 import '../db/database.dart';
 import 'download_worker.dart';
@@ -21,12 +22,14 @@ class DownloadManager {
     required SunflowerApi api,
     required SunflowerDatabase db,
     required String deviceId,
+    BufferedApiClient? bufferedApi,
     IsolateRunner? runner,
     DownloadStorage? storage,
     Verifier? verifier,
   })  : _api = api,
         _db = db,
         _deviceId = deviceId,
+        _bufferedApi = bufferedApi,
         _runner = runner ?? IsolateRunner(),
         _storage = storage ?? DownloadStorage(),
         _verifier = verifier ?? Verifier();
@@ -34,6 +37,7 @@ class DownloadManager {
   final SunflowerApi _api;
   final SunflowerDatabase _db;
   final String _deviceId;
+  final BufferedApiClient? _bufferedApi;
   final IsolateRunner _runner;
   final DownloadStorage _storage;
   final Verifier _verifier;
@@ -83,10 +87,13 @@ class DownloadManager {
   Future<void> enqueuePlaylist(String playlistId) async {
     final pl = await _api.getPlaylist(playlistId);
     for (final item in pl.items) {
+      final streamUrl = item.mediaId.startsWith('yt:')
+          ? (await _api.resolveStream(item.mediaId)).streamUrl
+          : _api.streamUrl(item.mediaId);
       await enqueueTrack(
         mediaId: item.mediaId,
         title: item.title,
-        streamUrl: _api.streamUrl(item.mediaId),
+        streamUrl: streamUrl,
         playlistId: playlistId,
       );
     }
@@ -106,11 +113,12 @@ class DownloadManager {
   Future<void> remove(String mediaId) async {
     await _storage.delete(mediaId);
     await _db.removeDownloadedTrack(mediaId);
-    try {
-      await _api.deleteDownload(_deviceId, mediaId);
-    } catch (_) {
-      // Server may be offline; M7 write-replay reconciles the registry later.
+    final bufferedApi = _bufferedApi;
+    if (bufferedApi != null) {
+      await bufferedApi.removeDownload(_deviceId, mediaId);
+      return;
     }
+    await _api.deleteDownload(_deviceId, mediaId);
   }
 
   Future<void> _dispatch(
@@ -172,15 +180,23 @@ class DownloadManager {
       ),
     );
 
-    // Register with the server (best effort; M7 reconciles if offline).
-    try {
-      await _api.registerDownload(
+    // Register with the server (M7 reconciles if offline).
+    final bufferedApi = _bufferedApi;
+    if (bufferedApi != null) {
+      await bufferedApi.registerDownload(
         deviceId: _deviceId,
         mediaId: mediaId,
         localPath: path,
         bytes: bytes,
       );
-    } catch (_) {}
+      return;
+    }
+    await _api.registerDownload(
+      deviceId: _deviceId,
+      mediaId: mediaId,
+      localPath: path,
+      bytes: bytes,
+    );
   }
 
   Future<void> dispose() async {

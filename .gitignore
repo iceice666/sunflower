@@ -4,11 +4,15 @@ result-*
 .direnv/
 
 # Local Postgres (Nix-driven)
+.dev/pgdata/
+.dev/pgsock/
+
+# Legacy local Postgres data from the removed Go server path.
 server/.pgdata/
 server/.pgsock/
 
-# Go binaries
-server/sunflowerd
+# Rust build artifacts
+rust/target/
 
 # Editor
 .DS_Store
@@ -31,4 +35,3 @@ client/build/smoke-artifacts/
 /client/ios/Flutter/flutter_export_environment.sh
 /client/ios/Flutter/ephemeral/
 /client/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
-

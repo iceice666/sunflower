@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 enum AuthFailureKind {
@@ -78,6 +80,16 @@ AuthFailure classifyAuthFailure(Object error) {
 String? _serverCode(Object? data) {
   if (data is Map && data['error'] is String) {
     return data['error'] as String;
+  }
+  if (data is String) {
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is Map && decoded['error'] is String) {
+        return decoded['error'] as String;
+      }
+    } catch (_) {
+      return null;
+    }
   }
   return null;
 }
