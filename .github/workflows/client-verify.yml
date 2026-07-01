@@ -111,6 +111,15 @@ jobs:
       - name: Run build_runner (codegen — Drift, mockito)
         run: flutter pub run build_runner build --delete-conflicting-outputs
 
+      # flutter_lints is now wired; run analyze so lint regressions surface on
+      # PRs. continue-on-error while the initial lint backlog is triaged.
+      - name: Flutter analyze
+        run: flutter analyze
+        continue-on-error: true
+
+      - name: Run Dart unit tests (non-golden)
+        run: flutter test test/ --exclude-tags golden --reporter=expanded
+
       - name: Run golden tests
         run: flutter test test/goldens/ --reporter=expanded
 
