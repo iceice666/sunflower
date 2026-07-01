@@ -1,0 +1,25 @@
+mod admin;
+mod device_auth;
+mod downloads;
+mod events;
+mod home;
+mod library;
+mod now_playing;
+mod playlists;
+mod queue;
+mod search;
+mod setup;
+mod streams;
+
+pub(crate) use admin::*;
+pub(crate) use device_auth::*;
+pub(crate) use downloads::*;
+pub(crate) use events::*;
+pub(crate) use home::*;
+pub(crate) use library::*;
+pub(crate) use now_playing::*;
+pub(crate) use playlists::*;
+pub(crate) use queue::*;
+pub(crate) use search::*;
+pub(crate) use setup::*;
+pub(crate) use streams::*;
