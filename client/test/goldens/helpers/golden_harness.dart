@@ -134,6 +134,7 @@ ThemeData _sunflowerDarkTheme() => sunflowerTheme();
 List<Override> _baseOverrides() => [
       // Auth: always appear logged-in.
       tokenProvider.overrideWith((ref) async => 'fake-token'),
+      localModeProvider.overrideWith((ref) async => false),
       serverUrlProvider.overrideWith((ref) async => 'http://localhost:8080'),
 
       // API: populated with Fixtures data; no TCP connection opened.

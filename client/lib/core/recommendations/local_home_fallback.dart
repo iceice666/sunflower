@@ -195,6 +195,7 @@ HomeItem _homeItemFromRecentPlay(RecentPlay row) {
     source: row.source.isEmpty ? _sourceFromMediaId(row.mediaId) : row.source,
     artists: row.artistName.isEmpty ? const [] : [row.artistName],
     durationMs: row.durationMs,
+    localPath: _localPathFromUrl(row.streamUrl),
   );
 }
 
@@ -205,6 +206,11 @@ String _sourceFromMediaId(String mediaId) {
 
 bool _isFileUrl(String? url) =>
     url != null && Uri.tryParse(url)?.scheme == 'file';
+
+String? _localPathFromUrl(String? url) {
+  if (!_isFileUrl(url)) return null;
+  return Uri.parse(url!).toFilePath();
+}
 
 bool _hasReusableLocalStream(RecentPlay row) {
   return row.streamUrl != null &&

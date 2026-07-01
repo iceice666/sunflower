@@ -18,7 +18,8 @@ final deviceIdProvider = FutureProvider<String>((ref) async {
 /// Singleton [DownloadManager]. Started lazily; disposed with the provider.
 final downloadManagerProvider = Provider<DownloadManager>((ref) {
   final api = ref.watch(sunflowerApiProvider);
-  final bufferedApi = ref.watch(bufferedApiProvider);
+  final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
+  final bufferedApi = localMode ? null : ref.watch(bufferedApiProvider);
   final db = ref.watch(databaseProvider);
   final deviceId = ref.watch(deviceIdProvider).valueOrNull ?? '';
   final mgr = DownloadManager(
@@ -33,7 +34,7 @@ final downloadManagerProvider = Provider<DownloadManager>((ref) {
 
 /// Live stream of all download jobs for the downloads UI.
 final downloadJobsProvider = StreamProvider<List<DownloadJob>>((ref) {
-  return ref.watch(downloadManagerProvider).watchJobs();
+  return ref.watch(databaseProvider).watchJobs();
 });
 
 /// Prefer-local source resolver for the player layer.

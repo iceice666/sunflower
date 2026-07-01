@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
+import '../../core/auth/token_store.dart';
 import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
 import '../../core/recommendations/local_core.dart';
@@ -85,6 +86,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
     final future = _future;
     return Scaffold(
       appBar: AppBar(title: const Text('Search')),
@@ -94,9 +96,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: TextField(
               controller: _controller,
+              enabled: !localMode,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Songs, albums, artists',
+                hintText: localMode
+                    ? 'Server search unavailable'
+                    : 'Songs, albums, artists',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _query.isEmpty
                     ? null
@@ -113,42 +118,51 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
           ),
           Expanded(
-            child: future == null
+            child: localMode
                 ? const EmptyState(
-                    icon: Icons.manage_search,
-                    title: 'Search YouTube Music',
+                    icon: Icons.offline_bolt_outlined,
+                    title: 'Search needs pairing',
                     message:
-                        'Type at least two characters to find playable songs.',
+                        'Use Library and Downloads for local-mode playback.',
                   )
-                : FutureBuilder<SearchResults>(
-                    future: future,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError) {
-                        return EmptyState(
-                          icon: Icons.cloud_off,
-                          title: 'Search unavailable',
-                          message:
-                              'The server could not reach YouTube Music for this query.',
-                          action: FilledButton(
-                            onPressed: () => _submit(_query),
-                            child: const Text('Retry'),
-                          ),
-                        );
-                      }
-                      final results = snapshot.data;
-                      if (results == null || results.isEmpty) {
-                        return EmptyState(
-                          icon: Icons.search_off,
-                          title: 'No results',
-                          message: 'Nothing matched "$_query".',
-                        );
-                      }
-                      return _Results(results: results, onPlay: _play);
-                    },
-                  ),
+                : future == null
+                    ? const EmptyState(
+                        icon: Icons.manage_search,
+                        title: 'Search YouTube Music',
+                        message:
+                            'Type at least two characters to find playable songs.',
+                      )
+                    : FutureBuilder<SearchResults>(
+                        future: future,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState !=
+                              ConnectionState.done) {
+                            return const Center(
+                                child: CircularProgressIndicator());
+                          }
+                          if (snapshot.hasError) {
+                            return EmptyState(
+                              icon: Icons.cloud_off,
+                              title: 'Search unavailable',
+                              message:
+                                  'The server could not reach YouTube Music for this query.',
+                              action: FilledButton(
+                                onPressed: () => _submit(_query),
+                                child: const Text('Retry'),
+                              ),
+                            );
+                          }
+                          final results = snapshot.data;
+                          if (results == null || results.isEmpty) {
+                            return EmptyState(
+                              icon: Icons.search_off,
+                              title: 'No results',
+                              message: 'Nothing matched "$_query".',
+                            );
+                          }
+                          return _Results(results: results, onPlay: _play);
+                        },
+                      ),
           ),
         ],
       ),

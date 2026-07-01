@@ -406,15 +406,43 @@ pub(crate) async fn admin_cookies_page(
         Some(store) => store.admin_cookie_status().await.ok(),
         None => None,
     };
+    let token_stored = match &state.store {
+        Some(store) => store.has_youtube_innertube_token().await.unwrap_or(false),
+        None => false,
+    };
     admin_html_page(
         "YouTube Cookies",
         csrf.as_deref(),
         query_param(uri.query().unwrap_or_default(), "flash").as_deref(),
         &format!(
-            "<p>Status: {}</p>",
+            r#"
+<p>Status: {}</p>
+<p>InnerTube token: {}</p>
+<section>
+  <h2>Upload YouTube Cookies</h2>
+  <form method="post" action="/admin/cookies/youtube">
+    <input type="hidden" name="csrf_token" value="{{{{csrf}}}}">
+    <label>Cookie export
+      <textarea name="cookies" rows="8" spellcheck="false" autocomplete="off"></textarea>
+    </label>
+    <button type="submit">Save cookies</button>
+  </form>
+</section>
+<section>
+  <h2>InnerTube Token</h2>
+  <form method="post" action="/admin/cookies/youtube">
+    <input type="hidden" name="csrf_token" value="{{{{csrf}}}}">
+    <label>PO token / visitor token
+      <textarea name="innertube_token" rows="4" spellcheck="false" autocomplete="off"></textarea>
+    </label>
+    <button type="submit">Save InnerTube token</button>
+  </form>
+</section>
+"#,
             status
                 .map(|status| escape_html(&status.status))
-                .unwrap_or_else(|| "unknown".to_string())
+                .unwrap_or_else(|| "unknown".to_string()),
+            if token_stored { "stored" } else { "not stored" }
         ),
     )
 }
@@ -447,20 +475,48 @@ pub(crate) async fn admin_upload_youtube_cookies_form(
         );
     };
     let raw = form_value(&form, "cookies").trim().to_string();
-    if raw.is_empty() {
-        return admin_html_error(StatusCode::BAD_REQUEST, "Cookie export is empty");
+    let innertube_token = form_value(&form, "innertube_token").trim().to_string();
+    let token_upload = innertube_token_upload_bytes(&innertube_token, &raw);
+    if raw.is_empty() && token_upload.is_none() {
+        return admin_html_error(
+            StatusCode::BAD_REQUEST,
+            "Paste cookies or an InnerTube token",
+        );
     }
     let Some(store) = &state.store else {
-        return admin_html_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not store cookies");
+        return admin_html_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Could not store YouTube credentials",
+        );
     };
-    if store
-        .store_youtube_cookies(&session, cookie_key, raw.as_bytes())
-        .await
-        .is_err()
+    if !raw.is_empty()
+        && store
+            .store_youtube_cookies(&session, cookie_key, raw.as_bytes())
+            .await
+            .is_err()
     {
         return admin_html_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not store cookies");
     }
-    redirect_found_post("/admin/cookies/youtube?flash=cookies_updated")
+    if let Some(token_upload) = &token_upload
+        && store
+            .store_youtube_innertube_token(&session, cookie_key, token_upload)
+            .await
+            .is_err()
+    {
+        return admin_html_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Could not store InnerTube token",
+        );
+    }
+    let token_stored = token_upload.is_some();
+    let flash = if !raw.is_empty() && token_stored {
+        "youtube_credentials_updated"
+    } else if token_stored {
+        "innertube_token_updated"
+    } else {
+        "cookies_updated"
+    };
+    redirect_found_post(&format!("/admin/cookies/youtube?flash={flash}"))
 }
 
 pub(crate) async fn admin_probe_youtube_cookies_form(
@@ -817,19 +873,34 @@ pub(crate) async fn admin_upload_youtube_cookies(
     }
     let raw = String::from_utf8_lossy(&body);
     let request = match AdminUploadCookiesRequest::parse_json(&raw) {
-        Ok(request) if !request.cookies.trim().is_empty() => request,
+        Ok(request)
+            if !request.cookies.trim().is_empty() || !request.innertube_token.trim().is_empty() =>
+        {
+            request
+        }
         _ => return legacy_json_error(StatusCode::BAD_REQUEST, "invalid_format"),
     };
+    let token_upload = innertube_token_upload_bytes(&request.innertube_token, &request.cookies);
     let Some(store) = &state.store else {
         return legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal");
     };
-    match store
-        .store_youtube_cookies(&session, cookie_key, request.cookies.as_bytes())
-        .await
+    if !request.cookies.trim().is_empty()
+        && store
+            .store_youtube_cookies(&session, cookie_key, request.cookies.as_bytes())
+            .await
+            .is_err()
     {
-        Ok(()) => Json(serde_json::json!({"ok": true})).into_response(),
-        Err(_) => legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal"),
+        return legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal");
     }
+    if let Some(token_upload) = &token_upload
+        && store
+            .store_youtube_innertube_token(&session, cookie_key, token_upload)
+            .await
+            .is_err()
+    {
+        return legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal");
+    }
+    Json(serde_json::json!({"ok": true})).into_response()
 }
 
 pub(crate) async fn admin_probe_youtube_cookies(
@@ -956,6 +1027,36 @@ pub(crate) async fn admin_audit(
     }
 }
 
+fn innertube_token_upload_bytes(explicit_token: &str, cookie_export: &str) -> Option<Vec<u8>> {
+    let explicit_token = explicit_token.trim();
+    if !explicit_token.is_empty() {
+        return Some(normalize_innertube_token_upload(explicit_token));
+    }
+    let cookie_export = cookie_export.trim();
+    if cookie_export.is_empty() {
+        return None;
+    }
+    innertube::parse_innertube_token(cookie_export.as_bytes())
+        .map(|token| serialize_innertube_token(&token).into_bytes())
+}
+
+fn normalize_innertube_token_upload(raw: &str) -> Vec<u8> {
+    innertube::parse_innertube_token(raw.as_bytes())
+        .map(|token| serialize_innertube_token(&token).into_bytes())
+        .unwrap_or_else(|| raw.as_bytes().to_vec())
+}
+
+fn serialize_innertube_token(token: &innertube::InnerTubeToken) -> String {
+    let mut lines = Vec::with_capacity(2);
+    if !token.po_token.is_empty() {
+        lines.push(format!("po_token={}", token.po_token));
+    }
+    if !token.visitor_data.is_empty() {
+        lines.push(format!("visitor_data={}", token.visitor_data));
+    }
+    lines.join("\n")
+}
+
 /// Appends both the session-token cookie and the CSRF cookie to `response`.
 /// Extracted from the two identical cookie-append blocks in `admin_login` and
 /// `admin_login_form` to keep them in sync.
@@ -966,7 +1067,13 @@ fn append_admin_session_cookies(
 ) {
     append_cookie(
         response,
-        admin_cookie(ADMIN_COOKIE_NAME, &login.token, login.expires_at, true, https),
+        admin_cookie(
+            ADMIN_COOKIE_NAME,
+            &login.token,
+            login.expires_at,
+            true,
+            https,
+        ),
     );
     append_cookie(
         response,
@@ -978,4 +1085,32 @@ fn append_admin_session_cookies(
             https,
         ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn innertube_token_upload_derives_metrolist_visitor_data_from_cookie_export() {
+        let upload = innertube_token_upload_bytes(
+            "",
+            "***INNERTUBE COOKIE*** =SID=abc; HSID=def\n***VISITOR DATA*** =visitor-1\n***DATASYNC ID*** =123",
+        )
+        .unwrap();
+
+        assert_eq!(String::from_utf8(upload).unwrap(), "visitor_data=visitor-1");
+    }
+
+    #[test]
+    fn innertube_token_upload_normalizes_explicit_metrolist_token() {
+        let upload =
+            innertube_token_upload_bytes("***PO TOKEN*** =po-1\n***VISITOR DATA*** =visitor-1", "")
+                .unwrap();
+
+        assert_eq!(
+            String::from_utf8(upload).unwrap(),
+            "po_token=po-1\nvisitor_data=visitor-1"
+        );
+    }
 }

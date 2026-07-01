@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/token_store.dart';
 import '../../core/sync/sync_providers.dart';
 
 /// Shows the count of pending offline mutations and a "retry now" action
@@ -10,6 +11,10 @@ class SyncStatusWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final localModeAsync = ref.watch(localModeProvider);
+    if (localModeAsync.isLoading || localModeAsync.valueOrNull == true) {
+      return const SizedBox.shrink();
+    }
     final pending = ref.watch(pendingCountProvider).valueOrNull ?? 0;
     final drops = ref.watch(bufferedApiProvider).overflowDrops;
 

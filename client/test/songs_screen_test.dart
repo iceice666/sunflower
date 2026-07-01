@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:sunflower/core/api/sunflower_api.dart';
+import 'package:sunflower/core/auth/token_store.dart';
 import 'package:sunflower/core/player/player_bootstrap.dart';
 import 'package:sunflower/core/player/sunflower_audio_handler.dart';
 import 'package:sunflower/features/library/songs_screen.dart';
@@ -59,6 +60,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          localModeProvider.overrideWith((ref) async => false),
           sunflowerApiProvider.overrideWithValue(api),
           audioHandlerProvider.overrideWithValue(fakeHandler),
         ],
@@ -81,6 +83,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          localModeProvider.overrideWith((ref) async => false),
           sunflowerApiProvider.overrideWithValue(api),
           audioHandlerProvider.overrideWithValue(fakeHandler),
         ],

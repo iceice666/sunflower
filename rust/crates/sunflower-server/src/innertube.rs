@@ -157,10 +157,21 @@ pub struct HttpInnerTubeClient {
     base_url: String,
     locale: Locale,
     cookie_provider: Option<Arc<dyn CookieProvider>>,
+    token_provider: Option<Arc<dyn InnerTubeTokenProvider>>,
 }
 
 pub trait CookieProvider: Send + Sync {
     fn cookie_header<'a>(&'a self) -> BoxFuture<'a, Option<String>>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InnerTubeToken {
+    pub po_token: String,
+    pub visitor_data: String,
+}
+
+pub trait InnerTubeTokenProvider: Send + Sync {
+    fn innertube_token<'a>(&'a self) -> BoxFuture<'a, Option<InnerTubeToken>>;
 }
 
 impl HttpInnerTubeClient {
@@ -174,6 +185,7 @@ impl HttpInnerTubeClient {
             base_url: base_url.into(),
             locale,
             cookie_provider: None,
+            token_provider: None,
         })
     }
 
@@ -186,17 +198,38 @@ impl HttpInnerTubeClient {
         self
     }
 
+    pub fn with_innertube_token_provider(
+        mut self,
+        provider: Arc<dyn InnerTubeTokenProvider>,
+    ) -> Self {
+        self.token_provider = Some(provider);
+        self
+    }
+
     async fn post(
         &self,
         path: &str,
         profile: ClientProfile,
-        payload: Value,
+        mut payload: Value,
     ) -> Result<Value, InnerTubeError> {
+        let token = match &self.token_provider {
+            Some(provider) => provider.innertube_token().await,
+            None => None,
+        };
+        if let Some(token) = &token {
+            apply_innertube_token(&mut payload, token);
+        }
         let url = format!("{}{}?key={}", self.base_url, path, profile.api_key);
         let body = payload.to_string();
-        let mut response = self.post_once(&url, profile, body.clone()).await?;
+        let visitor_data = token
+            .as_ref()
+            .map(|token| token.visitor_data.as_str())
+            .filter(|value| !value.is_empty());
+        let mut response = self
+            .post_once(&url, profile, body.clone(), visitor_data)
+            .await?;
         if response.status().as_u16() >= 500 {
-            response = self.post_once(&url, profile, body).await?;
+            response = self.post_once(&url, profile, body, visitor_data).await?;
         }
         if response.status() != StatusCode::OK {
             return Err(InnerTubeError::new(format!(
@@ -217,6 +250,7 @@ impl HttpInnerTubeClient {
         url: &str,
         profile: ClientProfile,
         body: String,
+        visitor_data: Option<&str>,
     ) -> Result<reqwest::Response, InnerTubeError> {
         let mut request = self
             .http
@@ -226,6 +260,9 @@ impl HttpInnerTubeClient {
             .header("X-YouTube-Client-Name", profile.client_name_id)
             .header("X-YouTube-Client-Version", profile.client_version)
             .body(body);
+        if let Some(visitor_data) = visitor_data {
+            request = request.header("X-Goog-Visitor-Id", visitor_data);
+        }
         if let Some(provider) = &self.cookie_provider
             && let Some(cookie_header) = provider
                 .cookie_header()
@@ -722,10 +759,8 @@ fn parse_explicit_badge(renderer: &Value) -> bool {
         return false;
     };
     badges.iter().any(|badge| {
-        get_string(
-            badge,
-            &["musicInlineBadgeRenderer", "icon", "iconType"],
-        ) == "MUSIC_EXPLICIT_BADGE"
+        get_string(badge, &["musicInlineBadgeRenderer", "icon", "iconType"])
+            == "MUSIC_EXPLICIT_BADGE"
     })
 }
 
@@ -973,6 +1008,90 @@ fn set_field(value: &mut Value, key: &str, field: Value) {
     }
 }
 
+fn apply_innertube_token(value: &mut Value, token: &InnerTubeToken) {
+    if token.po_token.is_empty() && token.visitor_data.is_empty() {
+        return;
+    }
+    if let Some(client) = value
+        .get_mut("context")
+        .and_then(|context| context.get_mut("client"))
+        .and_then(Value::as_object_mut)
+        && !token.visitor_data.is_empty()
+    {
+        client.insert("visitorData".to_string(), json!(&token.visitor_data));
+    }
+    if let Some(context) = value.get_mut("context").and_then(Value::as_object_mut)
+        && !token.po_token.is_empty()
+    {
+        context.insert(
+            "serviceIntegrityDimensions".to_string(),
+            json!({"poToken": &token.po_token}),
+        );
+    }
+}
+
+pub(crate) fn parse_innertube_token(raw: &[u8]) -> Option<InnerTubeToken> {
+    let text = String::from_utf8_lossy(raw);
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        let po_token = get_json_token_field(&value, &["po_token", "poToken", "potoken"]);
+        let visitor_data = get_json_token_field(&value, &["visitor_data", "visitorData"]);
+        if !po_token.is_empty() || !visitor_data.is_empty() {
+            return Some(InnerTubeToken {
+                po_token,
+                visitor_data,
+            });
+        }
+    }
+
+    let stripped = trimmed
+        .strip_prefix("***INNERTUBE TOKEN***")
+        .map(str::trim)
+        .unwrap_or(trimmed);
+    let mut po_token = String::new();
+    let mut visitor_data = String::new();
+    for part in stripped.split(['\n', '\r', '&', ';', ',']) {
+        let part = part.trim();
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        let normalized_key = normalize_token_key(key);
+        let value = value.trim().trim_matches('"').trim_matches('\'');
+        match normalized_key.as_str() {
+            "innertubetoken" | "potoken" => po_token = value.to_string(),
+            "visitordata" | "visitor" | "visitorid" => visitor_data = value.to_string(),
+            _ => {}
+        }
+    }
+    if po_token.is_empty() && visitor_data.is_empty() && !stripped.contains('=') {
+        po_token = stripped.to_string();
+    }
+    (!po_token.is_empty() || !visitor_data.is_empty()).then_some(InnerTubeToken {
+        po_token,
+        visitor_data,
+    })
+}
+
+fn normalize_token_key(key: &str) -> String {
+    key.trim()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase()
+}
+
+fn get_json_token_field(value: &Value, keys: &[&str]) -> String {
+    keys.iter()
+        .find_map(|key| value.get(*key).and_then(Value::as_str))
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
 fn build_android_music_context(locale: &Locale) -> Value {
     json!({
         "context": {
@@ -1034,7 +1153,7 @@ pub fn expiry_from_url(stream_url: &str) -> Option<DateTime<Utc>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{Json, Router, http::HeaderMap, routing::post};
+    use axum::{Json, Router, body::Bytes, http::HeaderMap, routing::post};
     use futures_util::future::BoxFuture;
     use serde_json::Value;
     use std::sync::{Arc, Mutex};
@@ -1087,6 +1206,19 @@ mod tests {
     impl CookieProvider for StaticCookieProvider {
         fn cookie_header<'a>(&'a self) -> BoxFuture<'a, Option<String>> {
             Box::pin(async { Some("SID=abc; __Secure-3PSID=xyz".into()) })
+        }
+    }
+
+    struct StaticTokenProvider;
+
+    impl InnerTubeTokenProvider for StaticTokenProvider {
+        fn innertube_token<'a>(&'a self) -> BoxFuture<'a, Option<InnerTubeToken>> {
+            Box::pin(async {
+                Some(InnerTubeToken {
+                    po_token: "po-test".into(),
+                    visitor_data: "visitor-test".into(),
+                })
+            })
         }
     }
 
@@ -1172,6 +1304,95 @@ mod tests {
         assert_eq!(
             captured.lock().unwrap().as_deref(),
             Some("SID=abc; __Secure-3PSID=xyz")
+        );
+    }
+
+    #[tokio::test]
+    async fn http_client_attaches_innertube_token_context_and_header() {
+        let captured_visitor = Arc::new(Mutex::new(None::<String>));
+        let captured_body = Arc::new(Mutex::new(None::<Value>));
+        let visitor_for_route = captured_visitor.clone();
+        let body_for_route = captured_body.clone();
+        let app = Router::new().route(
+            "/youtubei/v1/search",
+            post(move |headers: HeaderMap, body: Bytes| {
+                let visitor = visitor_for_route.clone();
+                let captured_body = body_for_route.clone();
+                async move {
+                    *visitor.lock().unwrap() = headers
+                        .get("X-Goog-Visitor-Id")
+                        .and_then(|value| value.to_str().ok())
+                        .map(ToOwned::to_owned);
+                    *captured_body.lock().unwrap() = serde_json::from_slice(&body).ok();
+                    Json(json!({}))
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let client = HttpInnerTubeClient::new(base_url, Locale::default())
+            .unwrap()
+            .with_innertube_token_provider(Arc::new(StaticTokenProvider));
+        client.search("token test").await.unwrap();
+
+        assert_eq!(
+            captured_visitor.lock().unwrap().as_deref(),
+            Some("visitor-test")
+        );
+        let body = captured_body.lock().unwrap().clone().unwrap();
+        assert_eq!(
+            get_string(&body, &["context", "client", "visitorData"]),
+            "visitor-test"
+        );
+        assert_eq!(
+            get_string(&body, &["context", "serviceIntegrityDimensions", "poToken"]),
+            "po-test"
+        );
+    }
+
+    #[test]
+    fn parse_innertube_token_accepts_plain_key_value_and_json() {
+        assert_eq!(
+            parse_innertube_token(b"raw-po-token").unwrap(),
+            InnerTubeToken {
+                po_token: "raw-po-token".into(),
+                visitor_data: String::new(),
+            }
+        );
+        assert_eq!(
+            parse_innertube_token(b"po_token=po-1\nvisitor_data=visitor-1").unwrap(),
+            InnerTubeToken {
+                po_token: "po-1".into(),
+                visitor_data: "visitor-1".into(),
+            }
+        );
+        assert_eq!(
+            parse_innertube_token(br#"{"poToken":"po-2","visitorData":"visitor-2"}"#).unwrap(),
+            InnerTubeToken {
+                po_token: "po-2".into(),
+                visitor_data: "visitor-2".into(),
+            }
+        );
+        assert_eq!(
+            parse_innertube_token(
+                b"***INNERTUBE COOKIE*** =SID=abc; HSID=def\n***VISITOR DATA*** =visitor-3\n***DATASYNC ID*** =123"
+            )
+            .unwrap(),
+            InnerTubeToken {
+                po_token: String::new(),
+                visitor_data: "visitor-3".into(),
+            }
+        );
+        assert_eq!(
+            parse_innertube_token(b"***PO TOKEN*** =po-4\n***VISITOR DATA*** =visitor-4").unwrap(),
+            InnerTubeToken {
+                po_token: "po-4".into(),
+                visitor_data: "visitor-4".into(),
+            }
         );
     }
 
@@ -1363,7 +1584,10 @@ mod tests {
             }]
         });
         let item = parse_song_item(&explicit);
-        assert!(item.is_explicit, "expected is_explicit=true for MUSIC_EXPLICIT_BADGE");
+        assert!(
+            item.is_explicit,
+            "expected is_explicit=true for MUSIC_EXPLICIT_BADGE"
+        );
 
         // Item without any badges array — must default to false.
         let clean = json!({
@@ -1371,7 +1595,10 @@ mod tests {
             "title": { "runs": [{ "text": "Clean Song" }] }
         });
         let item = parse_song_item(&clean);
-        assert!(!item.is_explicit, "expected is_explicit=false when badges absent");
+        assert!(
+            !item.is_explicit,
+            "expected is_explicit=false when badges absent"
+        );
 
         // Item with unrelated badge — must not set explicit.
         let other_badge = json!({
@@ -1383,6 +1610,9 @@ mod tests {
             }]
         });
         let item = parse_song_item(&other_badge);
-        assert!(!item.is_explicit, "expected is_explicit=false for unrelated badge");
+        assert!(
+            !item.is_explicit,
+            "expected is_explicit=false for unrelated badge"
+        );
     }
 }

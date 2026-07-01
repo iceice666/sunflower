@@ -227,6 +227,8 @@ pub struct AdminCookieStatusResponse {
 pub struct AdminUploadCookiesRequest {
     #[serde(default, deserialize_with = "default_on_null")]
     pub cookies: String,
+    #[serde(default, deserialize_with = "default_on_null")]
+    pub innertube_token: String,
 }
 
 impl AdminUploadCookiesRequest {
@@ -1402,6 +1404,11 @@ mod tests {
     fn admin_cookie_upload_request_matches_go_parse_contract() {
         let req = AdminUploadCookiesRequest::parse_json(r#"{"cookies":"netscape"}"#).unwrap();
         assert_eq!(req.cookies, "netscape");
+        assert_eq!(req.innertube_token, "");
+        let token_req =
+            AdminUploadCookiesRequest::parse_json(r#"{"innertube_token":"po-token"}"#).unwrap();
+        assert_eq!(token_req.cookies, "");
+        assert_eq!(token_req.innertube_token, "po-token");
         assert_eq!(
             AdminUploadCookiesRequest::parse_json("{}").unwrap().cookies,
             ""

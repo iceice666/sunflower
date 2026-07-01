@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sunflower/core/api/sunflower_api.dart';
+import 'package:sunflower/core/auth/token_store.dart';
 import 'package:sunflower/core/db/database.dart';
 import 'package:sunflower/core/db/database_provider.dart';
 import 'package:sunflower/core/recommendations/local_core.dart';
@@ -25,6 +26,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sunflowerApiProvider.overrideWithValue(_OfflineHomeApi()),
+        localModeProvider.overrideWith((ref) async => false),
         recommendationApiProvider.overrideWithValue(
           _StaticHomeApi(
             const HomeFeed(
@@ -96,6 +98,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         recommendationApiProvider.overrideWithValue(_OfflineHomeApi()),
+        localModeProvider.overrideWith((ref) async => false),
         databaseProvider.overrideWithValue(db),
         localCoreHandleProvider.overrideWith((ref) async => null),
       ],
@@ -130,6 +133,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         recommendationApiProvider.overrideWithValue(_OfflineHomeApi()),
+        localModeProvider.overrideWith((ref) async => false),
         databaseProvider.overrideWithValue(db),
         localCoreHandleProvider.overrideWith((ref) async => null),
       ],
@@ -141,6 +145,37 @@ void main() {
     expect(feed.stale, isTrue);
     expect(feed.sections.map((section) => section.id), ['local_quick_picks']);
     expect(feed.sections.single.items.single.mediaId, 'local:one');
+  });
+
+  test('local mode home uses local recommendations without remote API',
+      () async {
+    await db.recordPlay(
+      RecentPlaysCompanion.insert(
+        mediaId: 'local:one',
+        title: const Value('One'),
+        artistName: const Value('A'),
+        source: const Value('local'),
+        streamUrl: Value(Uri.file('/tmp/one.mp3').toString()),
+      ),
+    );
+
+    final container = ProviderContainer(
+      overrides: [
+        localModeProvider.overrideWith((ref) async => true),
+        recommendationApiProvider.overrideWithValue(_ExplodingHomeApi()),
+        databaseProvider.overrideWithValue(db),
+        localCoreHandleProvider.overrideWith((ref) async => null),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final feed = await container.read(homeFeedProvider.future);
+
+    expect(feed.stale, isTrue);
+    expect(feed.chips, ['local']);
+    expect(feed.sections.map((section) => section.id), ['local_quick_picks']);
+    expect(feed.sections.single.items.single.mediaId, 'local:one');
+    expect(feed.sections.single.items.single.localPath, '/tmp/one.mp3');
   });
 }
 
@@ -170,5 +205,19 @@ class _OfflineHomeApi extends SunflowerApi {
     bool hideShorts = false,
   }) {
     return Future.error(Exception('offline'));
+  }
+}
+
+class _ExplodingHomeApi extends SunflowerApi {
+  _ExplodingHomeApi()
+      : super(baseUrl: 'http://must-not-be-used.invalid', token: 'token');
+
+  @override
+  Future<HomeFeed> home({
+    bool hideExplicit = false,
+    bool hideVideo = false,
+    bool hideShorts = false,
+  }) {
+    throw StateError('remote home should not be called in local mode');
   }
 }

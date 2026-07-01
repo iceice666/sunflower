@@ -827,9 +827,41 @@ impl PostgresStore {
         .await
     }
 
+    pub async fn store_youtube_innertube_token(
+        &self,
+        session: &AdminSession,
+        key: [u8; 32],
+        raw: &[u8],
+    ) -> Result<(), AuthStoreError> {
+        self.store_encrypted_secret_for_user(session.user_id, "youtube_innertube_token", key, raw)
+            .await?;
+        let session_id_text = session.id.to_string();
+        self.write_audit_event(AuditEventInsert {
+            user_id: Some(session.user_id),
+            actor_type: "admin_session",
+            actor_id: &session_id_text,
+            event: "youtube_innertube_token_updated",
+            target_type: "cookie_store",
+            target_id: "youtube_innertube_token",
+            metadata: serde_json::json!({"bytes": raw.len()}),
+        })
+        .await
+    }
+
     pub async fn store_youtube_cookies_for_user(
         &self,
         user_id: Uuid,
+        key: [u8; 32],
+        raw: &[u8],
+    ) -> Result<(), AuthStoreError> {
+        self.store_encrypted_secret_for_user(user_id, "youtube", key, raw)
+            .await
+    }
+
+    async fn store_encrypted_secret_for_user(
+        &self,
+        user_id: Uuid,
+        provider: &str,
         key: [u8; 32],
         raw: &[u8],
     ) -> Result<(), AuthStoreError> {
@@ -845,7 +877,7 @@ impl PostgresStore {
         sqlx::query(
             r#"
             INSERT INTO encrypted_cookies (user_id, provider, ciphertext, nonce, refreshed_at)
-            VALUES ($1, 'youtube', $2, $3, now())
+            VALUES ($1, $2, $3, $4, now())
             ON CONFLICT (user_id, provider) DO UPDATE
             SET ciphertext = EXCLUDED.ciphertext,
                 nonce = EXCLUDED.nonce,
@@ -853,6 +885,7 @@ impl PostgresStore {
             "#,
         )
         .bind(user_id)
+        .bind(provider)
         .bind(ciphertext)
         .bind(nonce.to_vec())
         .execute(&self.pool)
@@ -865,16 +898,47 @@ impl PostgresStore {
         &self,
         key: [u8; 32],
     ) -> StorageResult<Option<Vec<u8>>> {
+        self.load_first_encrypted_secret("youtube", key).await
+    }
+
+    pub async fn load_first_youtube_innertube_token(
+        &self,
+        key: [u8; 32],
+    ) -> StorageResult<Option<Vec<u8>>> {
+        self.load_first_encrypted_secret("youtube_innertube_token", key)
+            .await
+    }
+
+    pub async fn has_youtube_innertube_token(&self) -> StorageResult<bool> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM encrypted_cookies
+            WHERE provider = 'youtube_innertube_token'
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(map_backend)?;
+        Ok(count > 0)
+    }
+
+    async fn load_first_encrypted_secret(
+        &self,
+        provider: &str,
+        key: [u8; 32],
+    ) -> StorageResult<Option<Vec<u8>>> {
         let Some(row) = sqlx::query(
             r#"
             SELECT ec.ciphertext, ec.nonce
             FROM encrypted_cookies ec
             JOIN users u ON u.id = ec.user_id
-            WHERE ec.provider = 'youtube'
+            WHERE ec.provider = $1
             ORDER BY u.created_at
             LIMIT 1
             "#,
         )
+        .bind(provider)
         .fetch_optional(&self.pool)
         .await
         .map_err(map_backend)?

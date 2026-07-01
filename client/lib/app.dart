@@ -17,19 +17,21 @@ class SunflowerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokenAsync = ref.watch(tokenProvider);
+    final localModeAsync = ref.watch(localModeProvider);
 
     return MaterialApp(
       title: 'Sunflower',
       theme: sunflowerTheme(),
       darkTheme: sunflowerTheme(),
       themeMode: ThemeMode.dark,
-      home: tokenAsync.when(
-        data: (token) =>
-            token != null ? const MainShell() : const ServerSetupScreen(),
-        loading: () =>
-            const Scaffold(body: Center(child: CircularProgressIndicator())),
-        error: (e, _) => const ServerSetupScreen(),
-      ),
+      home: switch ((tokenAsync, localModeAsync)) {
+        (AsyncData(value: final token), AsyncData(value: final localMode)) =>
+          token != null || localMode
+              ? const MainShell()
+              : const ServerSetupScreen(),
+        (AsyncError(), _) || (_, AsyncError()) => const ServerSetupScreen(),
+        _ => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      },
     );
   }
 }

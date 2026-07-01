@@ -39,6 +39,13 @@ final localRecommendationRecorderProvider =
 });
 
 final localFeedbackSyncProvider = Provider<void>((ref) {
+  final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
+  final token = ref.watch(tokenProvider).valueOrNull ?? '';
+  final baseUrl = ref.watch(recommendationBaseUrlProvider);
+  if (localMode || token.isEmpty || baseUrl.isEmpty) {
+    return;
+  }
+
   Future<void> drain() async {
     try {
       final recorder =
@@ -84,6 +91,7 @@ class BridgeLocalRecommendationRecorder implements LocalRecommendationRecorder {
         explicit: false,
         videoOnly: false,
         available: true,
+        localPath: song.localPath,
       ),
     );
     final eventId = await _appendEvent(

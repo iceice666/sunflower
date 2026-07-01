@@ -204,15 +204,13 @@ pub(crate) async fn similar_artist_sections(
     let section_futures: Vec<_> = browse_pairs
         .into_iter()
         .map(|(browse_id, artist_name)| async move {
-            let page = match tokio::time::timeout(
-                Duration::from_secs(8),
-                yt.browse(&browse_id, None),
-            )
-            .await
-            {
-                Ok(Ok(page)) => page,
-                Ok(Err(_)) | Err(_) => return None,
-            };
+            let page =
+                match tokio::time::timeout(Duration::from_secs(8), yt.browse(&browse_id, None))
+                    .await
+                {
+                    Ok(Ok(page)) => page,
+                    Ok(Err(_)) | Err(_) => return None,
+                };
             let candidates = page
                 .sections
                 .into_iter()

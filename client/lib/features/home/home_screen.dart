@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/sunflower_api.dart';
+import '../../core/auth/token_store.dart';
 import '../../core/db/database.dart';
 import '../../core/db/database_provider.dart';
 import '../../core/player/player_bootstrap.dart';
@@ -60,16 +61,29 @@ class _FeedBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
     return ListView(
       children: [
         const SyncStatusWidget(),
         if (feed.stale) const _StaleBanner(),
         ChipBar(chips: feed.chips),
-        for (final section in feed.sections)
-          SectionRail(
-            section: section,
-            onTap: (sec, item, index) => _onTap(ref, sec, item, index),
-          ),
+        if (feed.sections.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 96),
+            child: EmptyState(
+              icon: Icons.offline_bolt_outlined,
+              title: localMode ? 'No local picks yet' : 'No recommendations',
+              message: localMode
+                  ? 'Play downloaded or local tracks to build this view.'
+                  : 'Pull to refresh after your server has recommendations.',
+            ),
+          )
+        else
+          for (final section in feed.sections)
+            SectionRail(
+              section: section,
+              onTap: (sec, item, index) => _onTap(ref, sec, item, index),
+            ),
         const SizedBox(height: 12),
       ],
     );
@@ -84,9 +98,10 @@ class _FeedBody extends ConsumerWidget {
     final api = ref.read(sunflowerApiProvider);
     final db = ref.read(databaseProvider);
     final handler = ref.read(audioHandlerProvider);
-    final bufferedApi = ref.read(bufferedApiProvider);
+    final localMode = ref.read(localModeProvider).valueOrNull ?? false;
+    final bufferedApi = localMode ? null : ref.read(bufferedApiProvider);
     final recommendationFeedback =
-        ref.read(recommendationFeedbackClientProvider);
+        localMode ? null : ref.read(recommendationFeedbackClientProvider);
     final localRecommendations =
         await ref.read(localRecommendationRecorderProvider.future);
 
@@ -109,6 +124,7 @@ class _FeedBody extends ConsumerWidget {
         hasArt: false,
         albumId: item.albumId,
         durationMs: item.durationMs,
+        localPath: item.localPath,
       );
       await handler.loadPlaylist(
         [song],
@@ -153,7 +169,7 @@ void unawaitedLog(Future<void> f) {
 }
 
 Future<void> recordHomeImpression({
-  required RecommendationFeedbackClient recommendationFeedback,
+  required RecommendationFeedbackClient? recommendationFeedback,
   required LocalRecommendationRecorder? localRecommendations,
   required HomeSection section,
   required HomeItem item,
@@ -182,16 +198,19 @@ Future<void> recordHomeImpression({
     // Local recommendation stats are advisory.
   }
 
-  try {
-    final key = await recommendationFeedback.logImpressions(
-      [impression],
-      idempotencyKey: eventId,
-    );
-    if (eventId != null && key != null) {
-      await localRecommendations?.markFeedbackQueued([eventId]);
+  final feedback = recommendationFeedback;
+  if (feedback != null) {
+    try {
+      final key = await feedback.logImpressions(
+        [impression],
+        idempotencyKey: eventId,
+      );
+      if (eventId != null && key != null) {
+        await localRecommendations?.markFeedbackQueued([eventId]);
+      }
+    } catch (_) {
+      // Impression feedback is advisory; playback should continue regardless.
     }
-  } catch (_) {
-    // Impression feedback is advisory; playback should continue regardless.
   }
 }
 

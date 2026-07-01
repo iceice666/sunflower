@@ -113,6 +113,7 @@ class DownloadManager {
   Future<void> remove(String mediaId) async {
     await _storage.delete(mediaId);
     await _db.removeDownloadedTrack(mediaId);
+    if (_deviceId.isEmpty) return;
     final bufferedApi = _bufferedApi;
     if (bufferedApi != null) {
       await bufferedApi.removeDownload(_deviceId, mediaId);
@@ -181,6 +182,7 @@ class DownloadManager {
     );
 
     // Register with the server (M7 reconciles if offline).
+    if (_deviceId.isEmpty) return;
     final bufferedApi = _bufferedApi;
     if (bufferedApi != null) {
       await bufferedApi.registerDownload(

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
+import '../../core/auth/token_store.dart';
 import '../../core/bridge/api.dart' as bridge;
 import '../../core/db/database_provider.dart';
 import '../../core/db/database.dart';
@@ -33,10 +34,16 @@ final homePrefsProvider = StateProvider<HomePrefs>((ref) => const HomePrefs());
 ///   - On failure (server unreachable), the last cached feed is returned with
 ///     stale=true so the UI shows yesterday's sections plus a "stale" banner.
 final homeFeedProvider = FutureProvider.autoDispose<HomeFeed>((ref) async {
-  final api = ref.watch(recommendationApiProvider);
   final db = ref.watch(databaseProvider);
   final prefs = ref.watch(homePrefsProvider);
+  final localMode = await ref.watch(localModeProvider.future);
 
+  if (localMode) {
+    return await _buildLocalFallback(ref, db) ??
+        const HomeFeed(stale: true, chips: ['local'], sections: []);
+  }
+
+  final api = ref.watch(recommendationApiProvider);
   try {
     final feed = await api.home(
       hideExplicit: prefs.hideExplicit,
@@ -133,6 +140,7 @@ Map<String, dynamic> _feedToJson(HomeFeed feed) => {
                   if (it.albumId != null) 'album_id': it.albumId,
                   'duration_ms': it.durationMs,
                   if (it.thumbnailUrl != null) 'thumbnail_url': it.thumbnailUrl,
+                  if (it.localPath != null) 'local_path': it.localPath,
                 },
             ],
           },

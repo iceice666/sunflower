@@ -85,12 +85,22 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
         pairingCode: _pairingController.text.trim(),
       );
       await saveCredentials(ref, url, result.token, deviceId: result.deviceId);
-      // tokenProvider invalidation triggers app re-route to SongsScreen.
+      // Provider invalidation triggers app re-route to the main shell.
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _useLocalMode() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _status = null;
+    });
+    await enableLocalMode(ref);
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -202,6 +212,12 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _loading || _testing ? null : _useLocalMode,
+                  icon: const Icon(Icons.offline_bolt_outlined),
+                  label: const Text('Continue in local mode'),
                 ),
               ],
             ),

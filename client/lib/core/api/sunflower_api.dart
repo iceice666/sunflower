@@ -31,6 +31,7 @@ class Song {
     required this.hasArt,
     this.albumId,
     this.durationMs,
+    this.localPath,
   });
 
   final String mediaId;
@@ -41,6 +42,7 @@ class Song {
   final bool hasArt;
   final String? albumId;
   final int? durationMs;
+  final String? localPath;
 
   factory Song.fromJson(Map<String, dynamic> json) {
     return Song(
@@ -52,6 +54,7 @@ class Song {
       hasArt: json['has_art'] as bool? ?? false,
       albumId: json['album_id'] as String?,
       durationMs: _jsonIntOrNull(json['duration_ms']),
+      localPath: json['local_path'] as String?,
     );
   }
 
@@ -228,6 +231,7 @@ class HomeItem {
     this.albumId,
     this.durationMs = 0,
     this.thumbnailUrl,
+    this.localPath,
   });
 
   final String mediaId;
@@ -237,6 +241,7 @@ class HomeItem {
   final String? albumId;
   final int durationMs;
   final String? thumbnailUrl;
+  final String? localPath;
 
   factory HomeItem.fromJson(Map<String, dynamic> json) {
     return HomeItem(
@@ -247,6 +252,7 @@ class HomeItem {
       albumId: json['album_id'] as String?,
       durationMs: _jsonInt(json['duration_ms']),
       thumbnailUrl: json['thumbnail_url'] as String?,
+      localPath: json['local_path'] as String?,
     );
   }
 }

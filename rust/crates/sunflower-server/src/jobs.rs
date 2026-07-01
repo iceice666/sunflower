@@ -149,16 +149,25 @@ async fn scan_roots(
                         match art_result {
                             Ok(Ok(())) => {}
                             Ok(Err(err)) => {
-                                eprintln!("scan: failed to save cover art for {}: {err}", path.display());
+                                eprintln!(
+                                    "scan: failed to save cover art for {}: {err}",
+                                    path.display()
+                                );
                             }
                             Err(err) => {
-                                eprintln!("scan: cover-art task panicked for {}: {err}", path.display());
+                                eprintln!(
+                                    "scan: cover-art task panicked for {}: {err}",
+                                    path.display()
+                                );
                             }
                         }
                     }
                 }
                 Err(err) => {
-                    eprintln!("scan: failed to extract tags from {}: {err}", path.display());
+                    eprintln!(
+                        "scan: failed to extract tags from {}: {err}",
+                        path.display()
+                    );
                 }
             }
             processed += 1;

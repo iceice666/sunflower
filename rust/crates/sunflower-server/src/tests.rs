@@ -1141,6 +1141,13 @@ fn youtube_cookie_parser_matches_legacy_provider_formats() {
         Some("SID=abc; __Secure-3PSID=xyz")
     );
     assert_eq!(
+        parse_youtube_cookie_header(
+            b"***INNERTUBE COOKIE*** =SID=abc; HSID=def\n***VISITOR DATA*** =visitor-1\n***DATASYNC ID*** =123"
+        )
+        .as_deref(),
+        Some("SID=abc; HSID=def")
+    );
+    assert_eq!(
         parse_youtube_cookie_header(b"SID=abc; __Secure-3PSID=xyz").as_deref(),
         Some("SID=abc; __Secure-3PSID=xyz")
     );
@@ -2385,6 +2392,52 @@ async fn postgres_setup_owner_matches_legacy_enrollment_contract_when_enabled() 
         Some("SID=secret")
     );
 
+    let token_upload = app_with_cookie_key
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/v1/admin/cookies/youtube")
+                .header(header::COOKIE, &cookie_header)
+                .header("x-csrf-token", &csrf)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(body::Body::from(
+                    r#"{"innertube_token":"po_token=po-secret\nvisitor_data=visitor-secret"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(token_upload.status(), StatusCode::OK);
+    assert_eq!(response_json(token_upload).await, json!({"ok": true}));
+    let token_row = sqlx::query(
+        r#"
+        SELECT ciphertext, nonce
+        FROM encrypted_cookies
+        WHERE user_id = $1 AND provider = 'youtube_innertube_token'
+        "#,
+    )
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let token_ciphertext: Vec<u8> = token_row.try_get("ciphertext").unwrap();
+    let token_nonce: Vec<u8> = token_row.try_get("nonce").unwrap();
+    assert!(token_ciphertext.len() > 16);
+    assert_eq!(token_nonce.len(), 24);
+    let loaded_token_raw = PostgresStore::new(pool.clone())
+        .load_first_youtube_innertube_token([7u8; 32])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        innertube::parse_innertube_token(&loaded_token_raw),
+        Some(innertube::InnerTubeToken {
+            po_token: "po-secret".into(),
+            visitor_data: "visitor-secret".into(),
+        })
+    );
+
     let probe_audit_before: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM audit_events WHERE user_id = $1 AND event = 'youtube_cookies_probe_requested'",
     )
@@ -3621,16 +3674,16 @@ async fn search_uses_innertube_backend_like_legacy_handler() {
                     artists: vec!["Artist A".into()],
                     duration_ms: 0,
                     thumbnail_url: "https://img.example/song-a.jpg".into(),
-                                    is_explicit: false,
-},
+                    is_explicit: false,
+                },
                 innertube::SongItem {
                     video_id: "song-b".into(),
                     title: "Song B".into(),
                     artists: vec![],
                     duration_ms: 0,
                     thumbnail_url: String::new(),
-                                    is_explicit: false,
-},
+                    is_explicit: false,
+                },
             ],
             albums: vec![innertube::AlbumItem {
                 browse_id: "album-a".into(),
@@ -4185,24 +4238,24 @@ async fn postgres_home_daily_discover_matches_legacy_related_section_when_enable
                         artists: vec!["Seed Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                     innertube::SongItem {
                         video_id: "daily-a".into(),
                         title: "Daily A".into(),
                         artists: vec!["Daily Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                     innertube::SongItem {
                         video_id: "daily-dupe".into(),
                         title: "Daily Dupe".into(),
                         artists: vec!["Daily Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                 ],
                 continuation: None,
             },
@@ -4214,16 +4267,16 @@ async fn postgres_home_daily_discover_matches_legacy_related_section_when_enable
                         artists: vec!["Daily Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                     innertube::SongItem {
                         video_id: "daily-b".into(),
                         title: "Daily B".into(),
                         artists: vec!["Other Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                 ],
                 continuation: None,
             },
@@ -4344,8 +4397,8 @@ async fn postgres_song_radio_queue_and_next_match_legacy_m4_when_enabled() {
             artists: vec!["Radio Artist".into()],
             duration_ms: 0,
             thumbnail_url: String::new(),
-                    is_explicit: false,
-})
+            is_explicit: false,
+        })
         .collect();
     let yt: Arc<dyn innertube::InnerTubeBackend> = Arc::new(FakeInnerTube {
         home_page: innertube::HomePage::default(),
@@ -4769,16 +4822,16 @@ async fn postgres_home_similar_artist_matches_legacy_top_artist_section_when_ena
                         artists: vec!["Related Artist".into()],
                         duration_ms: 180_000,
                         thumbnail_url: "https://img.example/similar-a.jpg".into(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                     innertube::SongItem {
                         video_id: "similar-b".into(),
                         title: "Similar B".into(),
                         artists: vec!["Other Related Artist".into()],
                         duration_ms: 181_000,
                         thumbnail_url: String::new(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                 ],
             }],
             chips: vec![],
@@ -4897,8 +4950,8 @@ async fn postgres_home_community_playlists_matches_legacy_search_section_when_en
             artists: vec![format!("Artist {idx}")],
             duration_ms: 180_000 + idx,
             thumbnail_url: format!("https://img.example/community-{idx}.jpg"),
-                    is_explicit: false,
-})
+            is_explicit: false,
+        })
         .collect::<Vec<_>>();
     songs.push(innertube::SongItem {
         video_id: "community-3".into(),
@@ -4906,16 +4959,16 @@ async fn postgres_home_community_playlists_matches_legacy_search_section_when_en
         artists: vec!["Duplicate Artist".into()],
         duration_ms: 180_000,
         thumbnail_url: String::new(),
-            is_explicit: false,
-});
+        is_explicit: false,
+    });
     songs.push(innertube::SongItem {
         video_id: String::new(),
         title: "Missing Video ID".into(),
         artists: vec!["Ignored".into()],
         duration_ms: 180_000,
         thumbnail_url: String::new(),
-            is_explicit: false,
-});
+        is_explicit: false,
+    });
 
     let yt: Arc<dyn innertube::InnerTubeBackend> = Arc::new(FakeInnerTube {
         home_page: innertube::HomePage::default(),
@@ -5087,16 +5140,16 @@ async fn postgres_shuffle_liked_queue_http_round_trip_when_enabled() {
                         artists: vec!["Remote Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: "https://img.example/yt-home-a.jpg".into(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                     innertube::SongItem {
                         video_id: "yt-home-b".into(),
                         title: "YT Home B".into(),
                         artists: vec!["Remote Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                                            is_explicit: false,
-},
+                        is_explicit: false,
+                    },
                 ],
             }],
             chips: vec!["Relax".into(), "Workout".into()],

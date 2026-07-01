@@ -5,6 +5,7 @@ const _kServerUrl = 'sunflower_server_url';
 const _kRecommendationServerUrl = 'sunflower_recommendation_server_url';
 const _kToken = 'sunflower_token';
 const _kDeviceId = 'sunflower_device_id';
+const _kLocalMode = 'sunflower_local_mode';
 const _defaultRecommendationServerUrl = String.fromEnvironment(
   'SUNFLOWER_RECOMMENDATION_URL',
 );
@@ -17,6 +18,15 @@ const _storage = FlutterSecureStorage(
 /// Returns null when no token exists (first launch / after logout).
 final tokenProvider = FutureProvider<String?>((ref) async {
   return _storage.read(key: _kToken);
+});
+
+/// True when the app should enter device-local mode without server pairing.
+final localModeProvider = FutureProvider<bool>((ref) async {
+  try {
+    return await _storage.read(key: _kLocalMode) == 'true';
+  } catch (_) {
+    return false;
+  }
 });
 
 /// Reads the stored server base URL (e.g. "http://192.168.1.10:8080").
@@ -59,6 +69,7 @@ Future<void> saveCredentials(
     _storage.write(key: _kServerUrl, value: serverUrl),
     _storage.write(key: _kToken, value: token),
     _storage.write(key: _kDeviceId, value: deviceId),
+    _storage.delete(key: _kLocalMode),
     if (normalizedRecommendationUrl == null)
       _storage.delete(key: _kRecommendationServerUrl)
     else
@@ -68,6 +79,24 @@ Future<void> saveCredentials(
       ),
   ]);
   ref.invalidate(tokenProvider);
+  ref.invalidate(localModeProvider);
+  ref.invalidate(serverUrlProvider);
+  ref.invalidate(recommendationServerUrlProvider);
+  ref.invalidate(recommendationBaseUrlProvider);
+}
+
+/// Enters local-only mode. Server credentials are cleared so later network
+/// access requires explicit pairing.
+Future<void> enableLocalMode(WidgetRef ref) async {
+  await Future.wait([
+    _storage.delete(key: _kServerUrl),
+    _storage.delete(key: _kRecommendationServerUrl),
+    _storage.delete(key: _kToken),
+    _storage.delete(key: _kDeviceId),
+    _storage.write(key: _kLocalMode, value: 'true'),
+  ]);
+  ref.invalidate(tokenProvider);
+  ref.invalidate(localModeProvider);
   ref.invalidate(serverUrlProvider);
   ref.invalidate(recommendationServerUrlProvider);
   ref.invalidate(recommendationBaseUrlProvider);
@@ -101,12 +130,14 @@ Future<void> clearCredentials() async {
     _storage.delete(key: _kRecommendationServerUrl),
     _storage.delete(key: _kToken),
     _storage.delete(key: _kDeviceId),
+    _storage.delete(key: _kLocalMode),
   ]);
 }
 
 Future<void> clearCredentialsAndNotify(Ref ref) async {
   await clearCredentials();
   ref.invalidate(tokenProvider);
+  ref.invalidate(localModeProvider);
   ref.invalidate(serverUrlProvider);
   ref.invalidate(recommendationServerUrlProvider);
   ref.invalidate(recommendationBaseUrlProvider);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/downloads_ui/download_button.dart';
 import '../api/sunflower_api.dart';
+import '../auth/token_store.dart';
 import '../downloads/downloads_providers.dart';
 import '../player/capabilities.dart';
 import '../recommendations/local_core.dart';
@@ -37,11 +38,14 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
         setState(() => _liked = next);
         try {
           final occurredAt = DateTime.now();
-          final key = await ref.read(bufferedApiProvider).like(
-                widget.mediaId,
-                liked: next,
-                occurredAt: occurredAt,
-              );
+          final localMode = ref.read(localModeProvider).valueOrNull ?? false;
+          final key = localMode
+              ? null
+              : await ref.read(bufferedApiProvider).like(
+                    widget.mediaId,
+                    liked: next,
+                    occurredAt: occurredAt,
+                  );
           await _recordLocalPreference(
             ref,
             mediaId: widget.mediaId,
@@ -71,10 +75,18 @@ class MediaDownloadButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
     if (!PlayerCapabilities.offlineDownloads) {
-      return IconButton(
+      return const IconButton(
         tooltip: 'Downloads not supported',
-        icon: const Icon(Icons.cloud_off_outlined),
+        icon: Icon(Icons.cloud_off_outlined),
+        onPressed: null,
+      );
+    }
+    if (localMode) {
+      return const IconButton(
+        tooltip: 'Downloads require server pairing',
+        icon: Icon(Icons.download_outlined),
         onPressed: null,
       );
     }
@@ -124,6 +136,7 @@ class MediaOverflowMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
     return PopupMenuButton<_MediaAction>(
       tooltip: 'More',
       icon: const Icon(Icons.more_vert),
@@ -131,11 +144,13 @@ class MediaOverflowMenu extends ConsumerWidget {
         switch (action) {
           case _MediaAction.like:
             final occurredAt = DateTime.now();
-            final key = await ref.read(bufferedApiProvider).like(
-                  mediaId,
-                  liked: true,
-                  occurredAt: occurredAt,
-                );
+            final key = localMode
+                ? null
+                : await ref.read(bufferedApiProvider).like(
+                      mediaId,
+                      liked: true,
+                      occurredAt: occurredAt,
+                    );
             await _recordLocalPreference(
               ref,
               mediaId: mediaId,
@@ -162,9 +177,10 @@ class MediaOverflowMenu extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _MediaAction.download,
-          child: ListTile(
+          enabled: !localMode,
+          child: const ListTile(
             leading: Icon(Icons.download_outlined),
             title: Text('Download'),
             contentPadding: EdgeInsets.zero,
@@ -172,7 +188,8 @@ class MediaOverflowMenu extends ConsumerWidget {
         ),
         PopupMenuItem(
           value: _MediaAction.addToPlaylist,
-          enabled: enableAddToPlaylist && mediaId.startsWith('local:'),
+          enabled:
+              !localMode && enableAddToPlaylist && mediaId.startsWith('local:'),
           child: const ListTile(
             leading: Icon(Icons.playlist_add),
             title: Text('Add to playlist'),
@@ -232,12 +249,10 @@ Future<void> _recordLocalPreference(
   required String mediaId,
   required bool liked,
   required DateTime occurredAt,
-  required String idempotencyKey,
+  required String? idempotencyKey,
 }) async {
   try {
     final recorder = await ref.read(localRecommendationRecorderProvider.future);
-    // The main server mutation was queued above. Keep the local rec event
-    // unsynced until the recommendation feedback drain reaches the rec server.
     await recorder?.recordPreference(
       mediaId: mediaId,
       liked: liked,

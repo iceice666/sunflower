@@ -24,10 +24,15 @@ pub(crate) fn default_innertube_backend(
     .ok()?;
     if cookie_key.is_some() || cookie_file.is_some() {
         client = client.with_cookie_provider(Arc::new(YoutubeCookieProvider::new(
-            store,
+            store.clone(),
             cookie_key,
             cookie_file,
         )));
+    }
+    if let (Some(store), Some(key)) = (store, cookie_key) {
+        client = client.with_innertube_token_provider(Arc::new(
+            YoutubeInnerTubeTokenProvider::new(store, key),
+        ));
     }
     Some(Arc::new(client))
 }
@@ -75,6 +80,49 @@ impl innertube::CookieProvider for YoutubeCookieProvider {
                 return cached;
             }
             let loaded = self.load_cookie_header().await;
+            if let Ok(mut cache) = self.cache.lock() {
+                *cache = Some((SystemTime::now(), loaded.clone()));
+            }
+            loaded
+        })
+    }
+}
+
+pub(crate) struct YoutubeInnerTubeTokenProvider {
+    store: PostgresStore,
+    key: [u8; 32],
+    cache: Mutex<Option<(SystemTime, Option<innertube::InnerTubeToken>)>>,
+}
+
+impl YoutubeInnerTubeTokenProvider {
+    fn new(store: PostgresStore, key: [u8; 32]) -> Self {
+        Self {
+            store,
+            key,
+            cache: Mutex::new(None),
+        }
+    }
+
+    async fn load_innertube_token(&self) -> Option<innertube::InnerTubeToken> {
+        self.store
+            .load_first_youtube_innertube_token(self.key)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|raw| innertube::parse_innertube_token(&raw))
+    }
+}
+
+impl innertube::InnerTubeTokenProvider for YoutubeInnerTubeTokenProvider {
+    fn innertube_token<'a>(&'a self) -> BoxFuture<'a, Option<innertube::InnerTubeToken>> {
+        Box::pin(async move {
+            if let Some((fetched_at, cached)) =
+                self.cache.lock().ok().and_then(|cache| cache.clone())
+                && fetched_at.elapsed().unwrap_or_default() < Duration::from_secs(60)
+            {
+                return cached;
+            }
+            let loaded = self.load_innertube_token().await;
             if let Ok(mut cache) = self.cache.lock() {
                 *cache = Some((SystemTime::now(), loaded.clone()));
             }

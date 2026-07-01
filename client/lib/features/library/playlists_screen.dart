@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/sunflower_api.dart';
+import '../../core/auth/token_store.dart';
 import '../../core/sync/sync_providers.dart';
 import '../../core/ui/empty_state.dart';
 import 'playlist_detail_screen.dart';
@@ -9,6 +10,8 @@ import 'playlist_detail_screen.dart';
 final playlistsProvider = FutureProvider.autoDispose<List<Playlist>>((
   ref,
 ) async {
+  final localMode = await ref.watch(localModeProvider.future);
+  if (localMode) return const [];
   return ref.watch(sunflowerApiProvider).listPlaylists();
 });
 
@@ -19,13 +22,16 @@ class PlaylistsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistsAsync = ref.watch(playlistsProvider);
+    final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Playlists')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => createPlaylist(context, ref),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: localMode
+          ? null
+          : FloatingActionButton(
+              onPressed: () => createPlaylist(context, ref),
+              child: const Icon(Icons.add),
+            ),
       body: PlaylistsPane(playlistsAsync: playlistsAsync),
     );
   }
@@ -43,15 +49,20 @@ class PlaylistsPane extends ConsumerWidget {
     return async.when(
       data: (playlists) {
         if (playlists.isEmpty) {
+          final localMode = ref.watch(localModeProvider).valueOrNull ?? false;
           return EmptyState(
             icon: Icons.queue_music_outlined,
             title: 'No playlists yet',
-            message: 'Create a playlist for downloaded sets, radios, or moods.',
-            action: FilledButton.icon(
-              onPressed: () => createPlaylist(context, ref),
-              icon: const Icon(Icons.add),
-              label: const Text('New playlist'),
-            ),
+            message: localMode
+                ? 'Server playlists are unavailable in local mode.'
+                : 'Create a playlist for downloaded sets, radios, or moods.',
+            action: localMode
+                ? null
+                : FilledButton.icon(
+                    onPressed: () => createPlaylist(context, ref),
+                    icon: const Icon(Icons.add),
+                    label: const Text('New playlist'),
+                  ),
           );
         }
         return ListView(
@@ -89,6 +100,13 @@ class PlaylistsPane extends ConsumerWidget {
 }
 
 Future<void> createPlaylist(BuildContext context, WidgetRef ref) async {
+  final localMode = ref.read(localModeProvider).valueOrNull ?? false;
+  if (localMode) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pair with a server to create playlists')),
+    );
+    return;
+  }
   final controller = TextEditingController();
   final title = await showDialog<String>(
     context: context,

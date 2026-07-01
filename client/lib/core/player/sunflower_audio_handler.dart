@@ -93,7 +93,10 @@ class SunflowerAudioHandler extends BaseAudioHandler {
 
     final sources = <AudioSource>[];
     for (final s in songs) {
-      final localUri = await _sourceResolver?.localUriFor(s.mediaId);
+      final downloadedUri = await _sourceResolver?.localUriFor(s.mediaId);
+      final embeddedUri =
+          s.localPath == null ? null : Uri.file(s.localPath!).toString();
+      final localUri = downloadedUri ?? embeddedUri;
       final uri = localUri ?? streamUrlBuilder(s.mediaId);
       final headers = localUri == null ? authHeaders : null;
       sources.add(
