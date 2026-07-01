@@ -47,6 +47,9 @@ pub struct SongItem {
     pub artists: Vec<String>,
     pub duration_ms: i32,
     pub thumbnail_url: String,
+    /// Set when the item carries an `MUSIC_EXPLICIT_BADGE` inline badge.
+    /// Defaults to `false` when the badge array is absent (optional-field tolerant).
+    pub is_explicit: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -711,6 +714,21 @@ fn extract_continuation(raw: &Value) -> Option<String> {
     .filter(|token| !token.is_empty())
 }
 
+/// Returns `true` when the renderer carries an `MUSIC_EXPLICIT_BADGE` inline badge.
+/// Follows the AGENTS.md rule: optional-field tolerant, returns `false` on any
+/// missing key rather than erroring.
+fn parse_explicit_badge(renderer: &Value) -> bool {
+    let Some(badges) = get_array(renderer, &["badges"]) else {
+        return false;
+    };
+    badges.iter().any(|badge| {
+        get_string(
+            badge,
+            &["musicInlineBadgeRenderer", "icon", "iconType"],
+        ) == "MUSIC_EXPLICIT_BADGE"
+    })
+}
+
 fn parse_song_item(renderer: &Value) -> SongItem {
     let thumbnail_url = get_array(renderer, &["thumbnail", "thumbnails"])
         .and_then(|thumbnails| thumbnails.last())
@@ -722,6 +740,7 @@ fn parse_song_item(renderer: &Value) -> SongItem {
         artists: subtitle_artists(renderer),
         duration_ms: 0,
         thumbnail_url,
+        is_explicit: parse_explicit_badge(renderer),
     }
 }
 
@@ -747,6 +766,7 @@ fn parse_responsive_list_song(renderer: &Value) -> SongItem {
         artists: responsive_artists(renderer),
         duration_ms: 0,
         thumbnail_url: responsive_thumbnail(renderer),
+        is_explicit: parse_explicit_badge(renderer),
     }
 }
 
@@ -1328,5 +1348,41 @@ mod tests {
         assert_eq!(player.stream.itag, 251);
         assert_eq!(player.all_streams.len(), 2);
         assert!(expiry_from_url(&player.stream.url).is_some());
+    }
+
+    #[test]
+    fn parse_explicit_badge_detected_and_absent() {
+        // Item with MUSIC_EXPLICIT_BADGE — must return true.
+        let explicit = json!({
+            "videoId": "explicit-vid",
+            "title": { "runs": [{ "text": "Explicit Song" }] },
+            "badges": [{
+                "musicInlineBadgeRenderer": {
+                    "icon": { "iconType": "MUSIC_EXPLICIT_BADGE" }
+                }
+            }]
+        });
+        let item = parse_song_item(&explicit);
+        assert!(item.is_explicit, "expected is_explicit=true for MUSIC_EXPLICIT_BADGE");
+
+        // Item without any badges array — must default to false.
+        let clean = json!({
+            "videoId": "clean-vid",
+            "title": { "runs": [{ "text": "Clean Song" }] }
+        });
+        let item = parse_song_item(&clean);
+        assert!(!item.is_explicit, "expected is_explicit=false when badges absent");
+
+        // Item with unrelated badge — must not set explicit.
+        let other_badge = json!({
+            "videoId": "other-vid",
+            "badges": [{
+                "musicInlineBadgeRenderer": {
+                    "icon": { "iconType": "MUSIC_AUDIO_QUALITY_HD" }
+                }
+            }]
+        });
+        let item = parse_song_item(&other_badge);
+        assert!(!item.is_explicit, "expected is_explicit=false for unrelated badge");
     }
 }
