@@ -2618,21 +2618,30 @@ async fn create_queue_tx(
     .map_err(map_backend)?;
 
     let queue_id: Uuid = row.try_get("id").map_err(map_backend)?;
-    for (position, item) in items.iter().enumerate() {
-        let source_data = serde_json::to_value(item).map_err(map_backend)?;
+    if !items.is_empty() {
+        // Collapse all per-item INSERTs into a single round-trip via UNNEST.
+        let mut positions: Vec<i32> = Vec::with_capacity(items.len());
+        let mut media_ids: Vec<&str> = Vec::with_capacity(items.len());
+        let mut source_data: Vec<String> = Vec::with_capacity(items.len());
+        for (position, item) in items.iter().enumerate() {
+            positions.push(position as i32);
+            media_ids.push(&item.media_id.0);
+            source_data.push(serde_json::to_string(item).map_err(map_backend)?);
+        }
         sqlx::query(
             r#"
             INSERT INTO queue_items (queue_id, position, media_id, source_data)
-            VALUES ($1, $2, $3, $4)
+            SELECT $1, pos, mid, sd::jsonb
+            FROM UNNEST($2::int4[], $3::text[], $4::text[]) AS t(pos, mid, sd)
             ON CONFLICT (queue_id, position) DO UPDATE SET
                 media_id = excluded.media_id,
                 source_data = excluded.source_data
             "#,
         )
         .bind(queue_id)
-        .bind(position as i32)
-        .bind(&item.media_id.0)
-        .bind(source_data)
+        .bind(&positions)
+        .bind(&media_ids)
+        .bind(&source_data)
         .execute(&mut **tx)
         .await
         .map_err(map_backend)?;

@@ -3621,14 +3621,16 @@ async fn search_uses_innertube_backend_like_legacy_handler() {
                     artists: vec!["Artist A".into()],
                     duration_ms: 0,
                     thumbnail_url: "https://img.example/song-a.jpg".into(),
-                },
+                                    is_explicit: false,
+},
                 innertube::SongItem {
                     video_id: "song-b".into(),
                     title: "Song B".into(),
                     artists: vec![],
                     duration_ms: 0,
                     thumbnail_url: String::new(),
-                },
+                                    is_explicit: false,
+},
             ],
             albums: vec![innertube::AlbumItem {
                 browse_id: "album-a".into(),
@@ -4183,21 +4185,24 @@ async fn postgres_home_daily_discover_matches_legacy_related_section_when_enable
                         artists: vec!["Seed Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                    },
+                                            is_explicit: false,
+},
                     innertube::SongItem {
                         video_id: "daily-a".into(),
                         title: "Daily A".into(),
                         artists: vec!["Daily Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                    },
+                                            is_explicit: false,
+},
                     innertube::SongItem {
                         video_id: "daily-dupe".into(),
                         title: "Daily Dupe".into(),
                         artists: vec!["Daily Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                    },
+                                            is_explicit: false,
+},
                 ],
                 continuation: None,
             },
@@ -4209,14 +4214,16 @@ async fn postgres_home_daily_discover_matches_legacy_related_section_when_enable
                         artists: vec!["Daily Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                    },
+                                            is_explicit: false,
+},
                     innertube::SongItem {
                         video_id: "daily-b".into(),
                         title: "Daily B".into(),
                         artists: vec!["Other Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                    },
+                                            is_explicit: false,
+},
                 ],
                 continuation: None,
             },
@@ -4337,7 +4344,8 @@ async fn postgres_song_radio_queue_and_next_match_legacy_m4_when_enabled() {
             artists: vec!["Radio Artist".into()],
             duration_ms: 0,
             thumbnail_url: String::new(),
-        })
+                    is_explicit: false,
+})
         .collect();
     let yt: Arc<dyn innertube::InnerTubeBackend> = Arc::new(FakeInnerTube {
         home_page: innertube::HomePage::default(),
@@ -4761,14 +4769,16 @@ async fn postgres_home_similar_artist_matches_legacy_top_artist_section_when_ena
                         artists: vec!["Related Artist".into()],
                         duration_ms: 180_000,
                         thumbnail_url: "https://img.example/similar-a.jpg".into(),
-                    },
+                                            is_explicit: false,
+},
                     innertube::SongItem {
                         video_id: "similar-b".into(),
                         title: "Similar B".into(),
                         artists: vec!["Other Related Artist".into()],
                         duration_ms: 181_000,
                         thumbnail_url: String::new(),
-                    },
+                                            is_explicit: false,
+},
                 ],
             }],
             chips: vec![],
@@ -4887,7 +4897,8 @@ async fn postgres_home_community_playlists_matches_legacy_search_section_when_en
             artists: vec![format!("Artist {idx}")],
             duration_ms: 180_000 + idx,
             thumbnail_url: format!("https://img.example/community-{idx}.jpg"),
-        })
+                    is_explicit: false,
+})
         .collect::<Vec<_>>();
     songs.push(innertube::SongItem {
         video_id: "community-3".into(),
@@ -4895,14 +4906,16 @@ async fn postgres_home_community_playlists_matches_legacy_search_section_when_en
         artists: vec!["Duplicate Artist".into()],
         duration_ms: 180_000,
         thumbnail_url: String::new(),
-    });
+            is_explicit: false,
+});
     songs.push(innertube::SongItem {
         video_id: String::new(),
         title: "Missing Video ID".into(),
         artists: vec!["Ignored".into()],
         duration_ms: 180_000,
         thumbnail_url: String::new(),
-    });
+            is_explicit: false,
+});
 
     let yt: Arc<dyn innertube::InnerTubeBackend> = Arc::new(FakeInnerTube {
         home_page: innertube::HomePage::default(),
@@ -5074,14 +5087,16 @@ async fn postgres_shuffle_liked_queue_http_round_trip_when_enabled() {
                         artists: vec!["Remote Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: "https://img.example/yt-home-a.jpg".into(),
-                    },
+                                            is_explicit: false,
+},
                     innertube::SongItem {
                         video_id: "yt-home-b".into(),
                         title: "YT Home B".into(),
                         artists: vec!["Remote Artist".into()],
                         duration_ms: 0,
                         thumbnail_url: String::new(),
-                    },
+                                            is_explicit: false,
+},
                 ],
             }],
             chips: vec!["Relax".into(), "Workout".into()],

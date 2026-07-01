@@ -12,6 +12,10 @@ pub struct LocalRankerWeights {
     pub novelty: f32,
     pub remote: f32,
     pub skip_penalty: f32,
+    /// Score penalty applied to tracks that appear in the recent-play window to
+    /// suppress immediate repeats. Named here so it is tunable alongside the
+    /// other weights.
+    pub recent_repeat_penalty: f32,
 }
 
 impl Default for LocalRankerWeights {
@@ -23,6 +27,7 @@ impl Default for LocalRankerWeights {
             novelty: 0.15,
             remote: 0.10,
             skip_penalty: 0.20,
+            recent_repeat_penalty: 0.35,
         }
     }
 }
@@ -57,7 +62,7 @@ impl LocalRecommendationEngine {
                 let stat = by_media.get(&candidate.media_id).copied();
                 let mut score = self.score(&candidate, stat);
                 if recent.contains(&candidate.media_id) {
-                    score -= 0.35;
+                    score -= self.weights.recent_repeat_penalty;
                 }
                 (score, candidate)
             })

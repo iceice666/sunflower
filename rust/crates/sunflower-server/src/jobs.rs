@@ -125,11 +125,40 @@ async fn scan_roots(
         let root = absolute_path(Path::new(&root)).map_err(|err| err.to_string())?;
         let files = audio_files_under(&root).map_err(|err| err.to_string())?;
         for path in files {
-            if let Ok(extracted) = extract_tags(&path) {
-                let song = extracted.song;
-                let _ = store.upsert_scanned_local_song(&song).await;
-                if let Some(cover) = extracted.cover_art {
-                    let _ = save_cover_art(&cover, &song.album_media_id, &data_dir);
+            // extract_tags reads the whole file and decodes ID3 tags — blocking CPU/IO;
+            // move it off the async runtime.
+            let path_clone = path.clone();
+            let extracted = tokio::task::spawn_blocking(move || extract_tags(&path_clone))
+                .await
+                .map_err(|err| err.to_string())?;
+
+            match extracted {
+                Ok(extracted) => {
+                    let song = extracted.song;
+                    if let Err(err) = store.upsert_scanned_local_song(&song).await {
+                        eprintln!("scan: failed to persist {}: {err}", path.display());
+                    }
+                    if let Some(cover) = extracted.cover_art {
+                        let album_media_id = song.album_media_id.clone();
+                        let data_dir = data_dir.clone();
+                        // Image decode + thumbnail + three fs::write calls — blocking CPU/IO.
+                        let art_result = tokio::task::spawn_blocking(move || {
+                            save_cover_art(&cover, &album_media_id, &data_dir)
+                        })
+                        .await;
+                        match art_result {
+                            Ok(Ok(())) => {}
+                            Ok(Err(err)) => {
+                                eprintln!("scan: failed to save cover art for {}: {err}", path.display());
+                            }
+                            Err(err) => {
+                                eprintln!("scan: cover-art task panicked for {}: {err}", path.display());
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    eprintln!("scan: failed to extract tags from {}: {err}", path.display());
                 }
             }
             processed += 1;
