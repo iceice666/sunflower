@@ -833,7 +833,7 @@ impl PostgresStore {
         key: [u8; 32],
         raw: &[u8],
     ) -> Result<(), AuthStoreError> {
-        self.store_encrypted_secret_for_user(session.user_id, "youtube_innertube_token", key, raw)
+        self.store_youtube_innertube_token_for_user(session.user_id, key, raw)
             .await?;
         let session_id_text = session.id.to_string();
         self.write_audit_event(AuditEventInsert {
@@ -855,6 +855,16 @@ impl PostgresStore {
         raw: &[u8],
     ) -> Result<(), AuthStoreError> {
         self.store_encrypted_secret_for_user(user_id, "youtube", key, raw)
+            .await
+    }
+
+    pub async fn store_youtube_innertube_token_for_user(
+        &self,
+        user_id: Uuid,
+        key: [u8; 32],
+        raw: &[u8],
+    ) -> Result<(), AuthStoreError> {
+        self.store_encrypted_secret_for_user(user_id, "youtube_innertube_token", key, raw)
             .await
     }
 

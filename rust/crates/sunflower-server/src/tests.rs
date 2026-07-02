@@ -2904,6 +2904,33 @@ async fn postgres_setup_owner_matches_legacy_enrollment_contract_when_enabled() 
     assert!(device_ciphertext.len() > 16);
     assert_eq!(device_nonce.len(), 24);
 
+    let device_token_upload = app_with_cookie_key
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/v1/cookies/youtube")
+                .header(header::AUTHORIZATION, format!("Bearer {device_token}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .header("idempotency-key", Uuid::now_v7().to_string())
+                .body(body::Body::from(
+                    r#"{"innertube_token":"po_token=device-po\nvisitor_data=device-visitor"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(device_token_upload.status(), StatusCode::NO_CONTENT);
+    let loaded_token = PostgresStore::new(pool.clone())
+        .load_first_youtube_innertube_token([7u8; 32])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&loaded_token),
+        "po_token=device-po\nvisitor_data=device-visitor"
+    );
+
     let reuse = app
         .clone()
         .oneshot(

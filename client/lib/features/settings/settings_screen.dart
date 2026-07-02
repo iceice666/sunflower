@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/ws/ws_providers.dart';
 import 'crossfade_setting.dart';
 import 'sync_status_widget.dart';
+import 'youtube_credentials_setting.dart';
 
 /// Settings surface (M8): crossfade config + sync status. Reading this screen
 /// also activates the now-playing socket (tick emission + remote control) via
@@ -21,6 +22,8 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         children: const [
           SyncStatusWidget(),
+          Divider(),
+          YoutubeCredentialsSetting(),
           Divider(),
           CrossfadeSetting(),
         ],

@@ -1,4 +1,5 @@
-// Golden tests — settings: full screen, sync status, crossfade setting.
+// Golden tests — settings: full screen, YouTube credentials, sync status,
+// crossfade setting.
 //
 // SettingsScreen and CrossfadeSetting read crossfadeProvider, which loads
 // from SharedPreferences. Tests for those widgets use raw testGoldens so that
@@ -25,7 +26,8 @@ import 'helpers/golden_harness.dart';
 void main() {
   // ── 6. settings_screen ────────────────────────────────────────────────────
   // Full settings screen: AppBar "Settings", SyncStatusWidget hidden (0
-  // pending), Divider, CrossfadeSetting in disabled state (default prefs).
+  // pending), YouTube credentials, and CrossfadeSetting in disabled state
+  // (default prefs).
   testGoldens('settings screen — default', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await pumpGolden(tester, const SettingsScreen());

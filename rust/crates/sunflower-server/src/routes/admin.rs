@@ -1027,7 +1027,10 @@ pub(crate) async fn admin_audit(
     }
 }
 
-fn innertube_token_upload_bytes(explicit_token: &str, cookie_export: &str) -> Option<Vec<u8>> {
+pub(crate) fn innertube_token_upload_bytes(
+    explicit_token: &str,
+    cookie_export: &str,
+) -> Option<Vec<u8>> {
     let explicit_token = explicit_token.trim();
     if !explicit_token.is_empty() {
         return Some(normalize_innertube_token_upload(explicit_token));

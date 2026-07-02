@@ -41,11 +41,15 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
     this.feedError,
     SearchResults? searchResults,
     this.searchError,
+    YoutubeCredentialStatus? credentialStatus,
+    this.credentialStatusError,
   })  : songs = songs ?? Fixtures.songs,
         playlists = playlists ?? Fixtures.playlists,
         playlist = playlist ?? Fixtures.playlistWithItems('pl-001'),
         feed = feed ?? Fixtures.homeFeed,
-        searchResults = searchResults ?? Fixtures.searchResults;
+        searchResults = searchResults ?? Fixtures.searchResults,
+        credentialStatus = credentialStatus ??
+            const YoutubeCredentialStatus(status: 'unknown');
 
   /// Loading state: every async call returns a Completer that never resolves.
   FakeSunflowerApi.loading()
@@ -56,7 +60,9 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
         feed = null,
         feedError = null,
         searchResults = null,
-        searchError = null;
+        searchError = null,
+        credentialStatus = null,
+        credentialStatusError = null;
 
   final List<Song>? songs;
   final Object? songsError;
@@ -66,6 +72,8 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
   final Object? feedError;
   final SearchResults? searchResults;
   final Object? searchError;
+  final YoutubeCredentialStatus? credentialStatus;
+  final Object? credentialStatusError;
 
   // ─── Library ─────────────────────────────────────────────────────────────
 
@@ -114,6 +122,23 @@ class FakeSunflowerApi extends Fake implements SunflowerApi {
     final p = playlist;
     return p != null ? Future.value(p) : Completer<Playlist>().future;
   }
+
+  @override
+  Future<YoutubeCredentialStatus> youtubeCredentialStatus() {
+    if (credentialStatusError != null) {
+      return Future.error(credentialStatusError!);
+    }
+    final status = credentialStatus;
+    return status != null
+        ? Future.value(status)
+        : Completer<YoutubeCredentialStatus>().future;
+  }
+
+  @override
+  Future<void> uploadYoutubeCredentials({
+    String cookies = '',
+    String innertubeToken = '',
+  }) async {}
 
   // ─── URL builders (no network) ───────────────────────────────────────────
 

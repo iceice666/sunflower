@@ -114,21 +114,44 @@ pub(crate) async fn device_upload_youtube_cookies(
         let Some(cookie_key) = state.cookie_key else {
             return legacy_json_error(StatusCode::SERVICE_UNAVAILABLE, "cookies_disabled");
         };
+        if body.len() > (1 << 20) {
+            return legacy_json_error(StatusCode::BAD_REQUEST, "invalid_format");
+        }
         let raw = String::from_utf8_lossy(&body);
         let request = match AdminUploadCookiesRequest::parse_json(&raw) {
-            Ok(request) if !request.cookies.is_empty() => request,
+            Ok(request)
+                if !request.cookies.trim().is_empty()
+                    || !request.innertube_token.trim().is_empty() =>
+            {
+                request
+            }
             _ => return legacy_json_error(StatusCode::BAD_REQUEST, "invalid_format"),
         };
+        let token_upload = innertube_token_upload_bytes(&request.innertube_token, &request.cookies);
         let Some(store) = &state.store else {
             return legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal");
         };
-        match store
-            .store_youtube_cookies_for_user(auth.user_id, cookie_key, request.cookies.as_bytes())
-            .await
+        if !request.cookies.trim().is_empty()
+            && store
+                .store_youtube_cookies_for_user(
+                    auth.user_id,
+                    cookie_key,
+                    request.cookies.as_bytes(),
+                )
+                .await
+                .is_err()
         {
-            Ok(()) => StatusCode::NO_CONTENT.into_response(),
-            Err(_) => legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal"),
+            return legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal");
         }
+        if let Some(token_upload) = &token_upload
+            && store
+                .store_youtube_innertube_token_for_user(auth.user_id, cookie_key, token_upload)
+                .await
+                .is_err()
+        {
+            return legacy_json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal");
+        }
+        StatusCode::NO_CONTENT.into_response()
     })
     .await
 }

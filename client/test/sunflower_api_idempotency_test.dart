@@ -321,6 +321,57 @@ void main() {
     expect(seen.uri.path, '/api/v1/auth/register-device');
     expectUuidV7(seen.headers.value('idempotency-key'));
   });
+
+  test('youtubeCredentialStatus parses status response', () async {
+    final request = Completer<HttpRequest>();
+    final server = await _oneShotServer(
+      request,
+      responseBody:
+          '{"status":"ok","checked_at":"2026-07-01T00:00:00Z","detail":"probe ok"}',
+    );
+    addTearDown(server.close);
+
+    final api = SunflowerApi(
+      baseUrl: 'http://127.0.0.1:${server.port}',
+      token: 'test-token',
+    );
+
+    final status = await api.youtubeCredentialStatus();
+
+    final seen = await request.future;
+    expect(seen.method, 'GET');
+    expect(seen.uri.path, '/api/v1/cookies/youtube/status');
+    expect(status.status, 'ok');
+    expect(status.checkedAt, DateTime.utc(2026, 7, 1));
+    expect(status.detail, 'probe ok');
+  });
+
+  test('uploadYoutubeCredentials sends token and UUIDv7 Idempotency-Key',
+      () async {
+    final request = Completer<HttpRequest>();
+    final body = Completer<String>();
+    final server = await _oneShotServer(request, bodyText: body);
+    addTearDown(server.close);
+
+    final api = SunflowerApi(
+      baseUrl: 'http://127.0.0.1:${server.port}',
+      token: 'test-token',
+    );
+
+    await api.uploadYoutubeCredentials(
+      innertubeToken: 'po_token=po\nvisitor_data=visitor',
+    );
+
+    final seen = await request.future;
+    expect(seen.method, 'POST');
+    expect(seen.uri.path, '/api/v1/cookies/youtube');
+    expect(seen.headers.value('authorization'), 'Bearer test-token');
+    expectUuidV7(seen.headers.value('idempotency-key'));
+    expect(jsonDecode(await body.future), {
+      'cookies': '',
+      'innertube_token': 'po_token=po\nvisitor_data=visitor',
+    });
+  });
 }
 
 void expectUuidV7(String? value) {

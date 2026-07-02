@@ -465,6 +465,28 @@ class SongHash {
   }
 }
 
+/// Current server-side YouTube credential probe state.
+class YoutubeCredentialStatus {
+  const YoutubeCredentialStatus({
+    required this.status,
+    this.checkedAt,
+    this.detail,
+  });
+
+  final String status;
+  final DateTime? checkedAt;
+  final String? detail;
+
+  factory YoutubeCredentialStatus.fromJson(Map<String, dynamic> json) {
+    final rawCheckedAt = json['checked_at'] as String?;
+    return YoutubeCredentialStatus(
+      status: json['status'] as String? ?? 'unknown',
+      checkedAt: rawCheckedAt == null ? null : DateTime.tryParse(rawCheckedAt),
+      detail: json['detail'] as String?,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // API client
 // ---------------------------------------------------------------------------
@@ -739,6 +761,31 @@ class SunflowerApi {
   Future<void> deleteDownload(String deviceId, String mediaId) async {
     await _dio.delete<void>(
       '/api/v1/devices/${_pathSegment(deviceId)}/downloads/${_pathSegment(mediaId)}',
+      options: _idempotencyOptions(),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // YouTube credentials
+  // -------------------------------------------------------------------------
+
+  Future<YoutubeCredentialStatus> youtubeCredentialStatus() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/cookies/youtube/status',
+    );
+    return YoutubeCredentialStatus.fromJson(response.data ?? const {});
+  }
+
+  Future<void> uploadYoutubeCredentials({
+    String cookies = '',
+    String innertubeToken = '',
+  }) async {
+    await _dio.post<void>(
+      '/api/v1/cookies/youtube',
+      data: {
+        'cookies': cookies,
+        'innertube_token': innertubeToken,
+      },
       options: _idempotencyOptions(),
     );
   }

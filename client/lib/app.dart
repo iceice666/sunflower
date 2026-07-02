@@ -10,6 +10,7 @@ import 'features/library/library_screen.dart';
 import 'features/onboarding/server_setup_screen.dart';
 import 'features/player_ui/mini_player.dart';
 import 'features/search/search_screen.dart';
+import 'features/settings/settings_screen.dart';
 
 class SunflowerApp extends ConsumerWidget {
   const SunflowerApp({super.key});
@@ -51,6 +52,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     HomeScreen(),
     SearchScreen(),
     LibraryScreen(),
+    SettingsScreen(),
   ];
 
   @override
@@ -84,6 +86,11 @@ class _MainShellState extends ConsumerState<MainShell> {
                 icon: Icon(Icons.library_music_outlined),
                 selectedIcon: Icon(Icons.library_music),
                 label: 'Library',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: 'Settings',
               ),
             ],
           ),
